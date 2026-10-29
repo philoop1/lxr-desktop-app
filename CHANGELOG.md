@@ -15,6 +15,8 @@ are recorded here. The upstream project keeps its own Git history.
   audio-block processing load over each half-second interval.
 - Added the 1.6-era SD-card data backup to version control. The local
   `bootloader.img` is excluded from Git and is not part of this backup commit.
+- Named the experimental update image `LXR_V2_V1.7_Mutador0.1.img` and archived
+  it beside the unchanged 1.7 baseline image with SHA-256 hashes.
 
 ### Development workflow
 

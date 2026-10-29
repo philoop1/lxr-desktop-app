@@ -21,7 +21,7 @@ desktop STM32F765 single-processor firmware.
 
 - ARM GCC 14.3 syntax checks passed for the changed C translation units.
 - Full release build: ARM GCC 14.3, Ninja 34/34 steps after approval. The new
-  `build/release/LXR_V2_V1.7.img` is 275,132 bytes, SHA-256
+  `build/release/LXR_V2_V1.7_Mutador0.1.img` is 275,132 bytes, SHA-256
   `C5D2AE5C0F07C0A06AC888457AA051448B2380111373A7CA7E09D126853B983F`.
 - MIDI behavior, CPU percentage and legacy SD loading on hardware: pending.
 

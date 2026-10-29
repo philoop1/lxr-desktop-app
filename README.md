@@ -22,7 +22,7 @@ work; its checkboxes do not claim that a feature has already been ported.
 Every LXR has a built-in updater (the bootloader) that installs new firmware from the SD card. You
 don't need any extra hardware:
 
-1. [Build the firmware](#building-the-firmware). This creates the update file `LXR_V2_V<version>.img`.
+1. [Build the firmware](#building-the-firmware). This fork creates `LXR_V2_V1.7_Mutador0.1.img`.
 2. [Copy it to the SD card and install it](#installing-the-update) on the LXR.
 
 ### Building the firmware
@@ -70,16 +70,19 @@ When the build has finished it shows where the update file is and how to install
 ```
 ======================================================================
   Firmware update file:
-    .../lxr_desktop_app/build/release/LXR_V2_V1.7.img
+    .../lxr2-Mutador/build/release/LXR_V2_V1.7_Mutador0.1.img
   ...
 ```
 
-The version in the file name, and on the LXR's start-up screen, is set by `project(VERSION ...)` in
-[CMakeLists.txt](CMakeLists.txt).
+The base version `1.7` comes from `project(VERSION ...)` in
+[CMakeLists.txt](CMakeLists.txt). The `Mutador0.1` suffix identifies this
+experimental fork image. The startup screen still shows the base version.
+Two verified build artifacts and their hashes are in the
+[firmware image archive](firmware-archive/README.md).
 
 ### Installing the update
 
-1. Copy `LXR_V2_V<version>.img` from `build/release/` to the top folder of the SD card. Delete any
+1. Copy `LXR_V2_V1.7_Mutador0.1.img` from `build/release/` to the top folder of the SD card. Delete any
    older `LXR*.img` files from the card: the updater installs the first one it finds.
    On a Mac, eject the card in Finder before you take it out. Finder also leaves hidden files starting
    with `._` on the card; the updater ignores them.
@@ -121,7 +124,7 @@ All files the build creates (in `build/<preset>/`):
 
 | File                     | Purpose                                                        |
 |--------------------------|----------------------------------------------------------------|
-| `LXR_V2_V<version>.img`  | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
+| `LXR_V2_V1.7_Mutador0.1.img` | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
 | `LXR_V2_STM32F765.elf`   | Firmware with debug information, for a debugger               |
 | `LXR_V2_STM32F765.bin`   | Raw firmware image (from 0x08008000)                          |
 | `LXR_V2_STM32F765.hex`   | Intel HEX of the same                                         |
