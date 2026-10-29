@@ -13,6 +13,7 @@ session logs are not history of this fork.
 | [004](004-mutador-import-plan.md) | 2026-10-29 | Plan mutador import sessions |
 | [005](005-p00-baseline-audit.md) | 2026-10-29 | P00 build attempt and feature matrix |
 | [006](006-p01-midi-comparison.md) | 2026-10-29 | Compare mutador and desktop MIDI contracts |
+| [007](007-pch-cpu-sd-backup.md) | 2026-10-29 | Add Pch, CPU meter and SD-card data backup |
 
 For each new session, copy [TEMPLATE.md](TEMPLATE.md), use the next number,
 and record the source commit or branch, changed files, build result, hardware

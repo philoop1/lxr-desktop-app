@@ -7,11 +7,12 @@ The routing and sync combinations still need a check on the instrument.
 ## Open global settings
 
 Press **SHIFT + CONFIG** (sequencer button 12). The CONFIG LED flashes. The
-first global-settings page contains `bpm`, `shu`, `ch`, `ssv`, `mtx`, `mrx`,
+first global-settings page contains `bpm`, `shu`, `ch`, `Pch`, `mtx`, `mrx`,
 `mrt` and `flw`. Pressing the same CONFIG combination again cycles to the
-second page, which includes pattern mode, `cki` and `cko`.
+second page, which includes pattern mode, `cki`, `cko`, `ssv` and `CPU`.
 
-Global settings are saved with the project. Save the project to the SD card
+Global settings, including `Pch`, are saved with the project. `CPU` is a live
+read-only meter and is not saved. Save the project to the SD card
 if you want the settings to survive a power cycle; see
 [Saving and loading](04_saving_and_loading.md).
 
@@ -29,6 +30,16 @@ Program Change on this channel selects a pattern; the new pattern is queued
 when the sequencer is playing. MIDI CC messages can control parameters when
 the receive filter permits CC. Channel numbers shown in the menu run from
 1 to 16.
+
+`Pch` is a separate performance-control channel (default: 2). On this first
+import slice, CC 2 on `Pch` controls kit morph from 0 to 255. This applies
+only when `Pch` is distinct from every voice channel and the global `ch`;
+overlapping channels retain the existing MIDI mapping. The receive filter
+must include `C`. Other mutador performance controls are not imported yet.
+
+The `CPU` value shows the peak audio-block calculation time as a percentage
+of the available block time, sampled every 500 ms. It does not include all
+background work and is not a complete measure of total MCU usage.
 
 ## Receive and transmit filters
 

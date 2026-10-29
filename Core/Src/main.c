@@ -45,6 +45,7 @@ typedef struct ImageFileHeaderStruct
 #include "IO/adcPots.h"
 #include "Preset/PresetManager.h"
 #include "Soundengine/Soundengine.h"
+#include "Soundengine/AudioCodecManager.h"
 #include "Soundengine/DSPAudio/random.h"
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/MIDI/Uart.h"
@@ -468,6 +469,7 @@ if(sd_card_ok)
 	}
 }
 
+	audioCodec_initCpuMeter();
 	soundengine_init();
 
 	if(sd_card_ok)
@@ -949,6 +951,7 @@ lcd_process_display_interrupt = 1;
 	//  menu_tick();
 	  adc_checkPots();
 	  soundengine_process();
+	  menu_updateCpuUse();
 	//  menu_tick();
     checkMainLoc = -12;
 	  buttonHandler_tick();

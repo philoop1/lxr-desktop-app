@@ -74,5 +74,6 @@ enum TxRxFilterValues
 
 // high nibble is TX low nibble is RX. see above (midiParser_setFilter) for bitmap
 extern uint8_t midiParser_txRxFilter;
+extern uint8_t midi_ControlChannel;
 
 #endif /* MIDIPARSER_H_ */

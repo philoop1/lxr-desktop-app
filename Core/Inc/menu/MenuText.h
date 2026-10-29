@@ -480,6 +480,8 @@ const char shortNames[][4]  =
 	{"kcm"},
 	{"flm"},
 	{"shf"},
+	{"Pch"},
+	{"CPU"},
 
 };
 //-----------------------------------------------------------------
@@ -610,6 +612,8 @@ const char longNames[][16] =
 	{"KitChMde"},
 	{"Flam"},
 	{"Shift"},
+	{"CtrlChan"},
+	{"CPU use"},
 };
 
 

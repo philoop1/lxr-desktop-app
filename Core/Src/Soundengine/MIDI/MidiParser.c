@@ -29,6 +29,7 @@
 #include "Soundengine/USB/usb_manager.h"
 #include "menu/menu.h"
 #include "Soundengine/FxBus.h"
+#include "Preset/PresetManager.h"
 
 #include "Soundengine/MIDI/MidiMessages.h"
 
@@ -102,6 +103,7 @@ static inline float calcPitchModAmount(uint8_t data2)
 // vars
 //-----------------------------------------------------------
 uint8_t midi_MidiChannels[8];	// the currently selected midi channel for each voice (element 7 is global channel)
+uint8_t midi_ControlChannel = 1; // displayed as Pch 2 by default
 
 // note overrides for each voice
 //uint8_t midi_NoteOverride[7];
@@ -1837,6 +1839,16 @@ void midiParser_parseMidiMessage(MidiMsg msg)
   { // channel specific message
 		const uint8_t msgonly = msg.status & 0xF0;
 		const uint8_t chanonly= msg.status & 0x0F;
+		// First performance control: morph on CC 2. Keep the existing global/voice
+		// CC map unchanged when Pch overlaps a legacy channel.
+		if(msgonly == MIDI_CC && chanonly == midi_ControlChannel &&
+		   !midiParser_isValidChannel(chanonly) && msg.data1 == 2 &&
+		   (midiParser_txRxFilter & MIDI_FILTER_CC)) {
+			uint8_t morph = msg.data2 == 127 ? 255 : (uint8_t)(msg.data2 * 2u);
+			activeParameters[PAR_MORPH] = morph;
+			preset_morph(morph);
+			return;
+		}
 
     msg.lastNonSysStatus = msg.status;
 

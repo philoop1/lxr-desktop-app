@@ -21,5 +21,9 @@
 #define DMA_MODE_ACTIVE 1
 //-----------------------------------
 int CodecInit();
+void audioCodec_initCpuMeter(void);
+void audioCodec_beginCpuMeter(void);
+void audioCodec_endCpuMeter(void);
+uint8_t audioCodec_getCpuUsePercent(void);
 
 #endif /* AUDIOCODECMANAGER_H_ */

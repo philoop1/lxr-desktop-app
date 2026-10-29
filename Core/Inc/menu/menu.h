@@ -270,6 +270,8 @@ enum NamesEnum
 	TEXT_FX_P3,
 	TEXT_FX_P4,
 	TEXT_PATTERN_MODE,
+	TEXT_MIDI_CHAN_PC,
+	TEXT_CPU_USE,
 
 
 	NUM_NAMES
@@ -379,7 +381,9 @@ enum shortNamesEnum
 	SHORT_P4,
 	SHORT_KCM,
 	SHORT_FLAM,
-	SHORT_SHIFT
+	SHORT_SHIFT,
+	SHORT_PCH,
+	SHORT_CPU_USE
 
 	
 };
@@ -508,7 +512,9 @@ enum longNamesEnum
 	LONG_P4,
 	LONG_PATTERN_MODE,
 	LONG_FLAM,
-	LONG_SHIFT
+	LONG_SHIFT,
+	LONG_CONTROL_CHANNEL,
+	LONG_CPU_USE
 	
 };
 
@@ -652,6 +658,7 @@ void menu_repaint();
 //-----------------------------------------------------------------
 //For nonblocking display refreshs
 void menu_tick();
+void menu_updateCpuUse(void);
 //-----------------------------------------------------------------
 //blocking display refresh
 //void menu_fastRefreshDisplay();

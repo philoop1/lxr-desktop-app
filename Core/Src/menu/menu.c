@@ -32,6 +32,8 @@
 
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Soundengine.h"
+#include "Soundengine/AudioCodecManager.h"
+#include "Soundengine/MIDI/MidiParser.h"
 
 
 uint8_t display_refresh_state = 0;
@@ -249,6 +251,8 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_P3, CAT_FX, LONG_P3},/*TEXT_FX_P3*/
 		{SHORT_P4, CAT_FX, LONG_P4},/*TEXT_FX_P4*/
 		{SHORT_KCM, CAT_GLOBAL, LONG_PATTERN_MODE},/*TEXT_AUTO_SWITCH_KIT*/
+		{SHORT_PCH, CAT_MIDI, LONG_CONTROL_CHANNEL}, // TEXT_MIDI_CHAN_PC
+		{SHORT_CPU_USE, CAT_GLOBAL, LONG_CPU_USE}, // TEXT_CPU_USE
 
 
 };
@@ -565,6 +569,8 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_MIDI_NOTE6*/		DTYPE_NOTE_NAME,
 	    /*PAR_MIDI_NOTE7*/		DTYPE_NOTE_NAME,
 		/*PAR_PATTERN_MODE*/ DTYPE_MENU | (MENU_PAT_MODE<<8),
+	    /*PAR_MIDI_CHAN_PC*/ DTYPE_1B16,
+	    /*PAR_CPU_USE*/ DTYPE_0B100,
 };
 
 
@@ -980,6 +986,18 @@ uint8_t sendDisplayBuffer()
 #endif
 
 	return display_refresh_state;
+}
+//-----------------------------------------------------------------
+void menu_updateCpuUse(void)
+{
+	static uint32_t lastUpdate;
+	if((uint32_t)(systick_ticks - lastUpdate) < 2000u) return;
+	lastUpdate = systick_ticks;
+	uint8_t value = audioCodec_getCpuUsePercent();
+	if(activeParameters[PAR_CPU_USE] == value) return;
+	activeParameters[PAR_CPU_USE] = value;
+	if(menu_activePage == MENU_MIDI_PAGE && (menuIndex >> PAGE_SHIFT) == 1)
+		menu_repaint();
 }
 //-----------------------------------------------------------------
 void menu_tick()
@@ -2841,6 +2859,7 @@ static void menu_encoderChangeParameter(int8_t inc)
 
 	//get address from top1-8 from activeParameter (base adress top1 + offset)
 	uint16_t paramNr		= pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter);
+	if(paramNr == PAR_CPU_USE) return;
 	//uint8_t *paramValue = &mainParameters[paramNr];
 	uint8_t *paramValue;
 
@@ -3444,6 +3463,9 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 		frontPanel_sendData(SEQ_CC,SEQ_MIDI_CHAN,(uint8_t)((voice<<4) | channel ));
 	}
 	break;
+	case PAR_MIDI_CHAN_PC:
+		midi_ControlChannel = (uint8_t)((value >= 1 && value <= 16 ? value : 2) - 1);
+		break;
 
 
 	case UNUSED_PAR_GLO_SAT:
@@ -3924,6 +3946,7 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 	const uint8_t isOn2ndPage		= ( activeParameter > 3) * 4;
 	uint16_t paramNr				= pgm_read_word(&menuPages[menu_activePage][activePage].bot1 +
 										potNr + isOn2ndPage);
+	if(paramNr == PAR_CPU_USE) return 0;
 
 	//-------------------------------------------------
 

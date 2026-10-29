@@ -931,7 +931,7 @@ static void preset_writeGlobalData()
 {
 	unsigned int bytesWritten;
 	int i;
-	for(i=PAR_BEGINNING_OF_GLOBALS;(i<NUM_PARAMS);i++)
+	for(i=PAR_BEGINNING_OF_GLOBALS;(i<PAR_CPU_USE);i++)
 	{
 		f_write((FIL*)&SDFile,&activeParameters[i],1,&bytesWritten);
 	}
@@ -980,10 +980,16 @@ static uint8_t preset_readGlobalData()
 		return 0;
 	return 1;
 #else
-	const uint8_t numGlobals = NUM_PARAMS - PAR_BEGINNING_OF_GLOBALS;
-	f_read((FIL*)&SDFile,&activeParameters[PAR_BEGINNING_OF_GLOBALS],numGlobals,&bytesRead);
-	if(bytesRead != numGlobals)	return 0;
-	else return 1;
+	const uint8_t legacyGlobals = PAR_MIDI_CHAN_PC - PAR_BEGINNING_OF_GLOBALS;
+	const uint8_t storedGlobals = PAR_CPU_USE - PAR_BEGINNING_OF_GLOBALS;
+	activeParameters[PAR_MIDI_CHAN_PC] = 2;
+	f_read((FIL*)&SDFile,&activeParameters[PAR_BEGINNING_OF_GLOBALS],storedGlobals,&bytesRead);
+	if(bytesRead < legacyGlobals) return 0;
+	// Old glo.cfg ends here; old project files contain 0xFF padding instead.
+	if(bytesRead == legacyGlobals || activeParameters[PAR_MIDI_CHAN_PC] < 1 ||
+	   activeParameters[PAR_MIDI_CHAN_PC] > 16)
+		activeParameters[PAR_MIDI_CHAN_PC] = 2;
+	return 1;
 
 #endif
 #endif
@@ -1067,6 +1073,8 @@ void preset_loadDefaultGlobals()
 	activeParameters[PAR_MIDI_CHAN_GLOBAL] = 0; //all
 
 	activeParameters[PAR_PATTERN_MODE] = 1; //auto
+	activeParameters[PAR_MIDI_CHAN_PC] = 2;
+	activeParameters[PAR_CPU_USE] = 0;
 
 }
 //----------------------------------------------------
@@ -2507,7 +2515,7 @@ FRESULT preset_saveProject(uint8_t presetNr)
 
 		// write some padding (we'll allocate 64 bytes for globals, right now we have +/- 18) so that
 		// we don't need to change the file format later
-		remain=	64- (NUM_PARAMS - PAR_BEGINNING_OF_GLOBALS);
+		remain=	64- (PAR_CPU_USE - PAR_BEGINNING_OF_GLOBALS);
 
 	} else {
 		// write the bpm
@@ -2933,7 +2941,7 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 		if(!preset_readGlobalData())
 			goto closeFile;
 		// size of padding after globals
-		remain=	64- (NUM_PARAMS - PAR_BEGINNING_OF_GLOBALS);
+		remain=	64- (PAR_CPU_USE - PAR_BEGINNING_OF_GLOBALS);
 
 	} else {
 		// read bpm

@@ -61,6 +61,7 @@ presets and the resulting `LXR_V2_V1.7.img`.
 | 2026-10-29 | `docs/development-notes` | Documentation setup only | Build not run for this change | Not run |
 | 2026-10-29 | Firmware source identical to `main` `a43cd4f`; GCC 10.2.1 (DaisyToolchain) | Configure and release build | Configure passed; 120/122 compile steps passed; link failed at `.ARM.extab` with `non constant or forward reference address expression` in `STM32F765VGTX_FLASH.ld:86`. No image produced. | Not run |
 | 2026-10-29 | Same source; ARM GCC 14.3.rel1 | User ran the fresh release configure/build from the PowerShell instructions above. CMake cache confirms the 14.3 toolchain; output verified locally. | `LXR_V2_V1.7.img`: 274,704 bytes, SHA-256 `B34C0C3A946D02C5CEE624351A44C2597694B4832FDAA9CBAEB3627F84979AFE`. ELF `text=273828`, `data=852`, `bss=340572` bytes. | IMG-live Euclid smoke test passed; physical device not tested. |
+| 2026-10-29 | `feature/pch-cpu`; ARM GCC 14.3.rel1 | Six modified C translation units passed `-fsyntax-only`; release Ninja build completed 34/34 steps. The sandbox build stalled, then the approved build completed. | `LXR_V2_V1.7.img`: 275,132 bytes including 16-byte update header; SHA-256 `C5D2AE5C0F07C0A06AC888457AA051448B2380111373A7CA7E09D126853B983F`. ELF `text=274252`, `data=856`, `bss=340572` bytes. | Pch CC 2, CPU meter and old SD data have not been tested on hardware. |
 
 The GCC 14.3 build image exactly matches the SHA-256 of the previously
 validated 1.7 source image used by `Lxr2Menu` IMG-live. With its optional

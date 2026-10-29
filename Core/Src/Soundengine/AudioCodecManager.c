@@ -19,6 +19,39 @@ INDTCMZ int16_t dma_buffer2[OUTPUT_DMA_SIZE*4];
 #endif
 
 volatile INDTCMZ uint8_t bCurrentSampleValid = 0;
+static uint32_t cpuBlockBudget = 1;
+static uint32_t cpuBlockStart;
+static volatile uint8_t cpuUsePercent;
+static volatile uint8_t cpuUsePeakPercent;
+
+void audioCodec_initCpuMeter(void)
+{
+	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+	cpuBlockBudget = (uint32_t)(((float)SystemCoreClock * OUTPUT_DMA_SIZE) / REAL_FS);
+	if(cpuBlockBudget == 0) cpuBlockBudget = 1;
+}
+
+void audioCodec_beginCpuMeter(void)
+{
+	cpuBlockStart = DWT->CYCCNT;
+}
+
+void audioCodec_endCpuMeter(void)
+{
+	uint32_t cycles = DWT->CYCCNT - cpuBlockStart;
+	uint32_t percent = (cycles * 100u + cpuBlockBudget / 2u) / cpuBlockBudget;
+	if(percent > 100u) percent = 100u;
+	cpuUsePercent = (uint8_t)percent;
+	if(cpuUsePercent > cpuUsePeakPercent) cpuUsePeakPercent = cpuUsePercent;
+}
+
+uint8_t audioCodec_getCpuUsePercent(void)
+{
+	uint8_t peak = cpuUsePeakPercent;
+	cpuUsePeakPercent = cpuUsePercent;
+	return peak;
+}
 //int16_t audioOutBuffer[2];
 //------------------------------------------------------------------
 int CodecInit()

@@ -6,6 +6,16 @@ are recorded here. The upstream project keeps its own Git history.
 
 ## Unreleased
 
+### CONFIG and SD card
+
+- Added saved `Pch` beside global `ch` on the first CONFIG page. It defaults to
+  MIDI channel 2 and accepts CC 2 for kit morph when its channel does not
+  overlap a voice or global channel. Other performance CCs are still planned.
+- Added a read-only CPU meter on the second CONFIG page. It shows the peak
+  audio-block processing load over each half-second interval.
+- Added the 1.6-era SD-card data backup to version control. The local
+  `bootloader.img` is excluded from Git and is not part of this backup commit.
+
 ### Development workflow
 
 - Added build notes, a fork changelog, and a numbered session log for planned
@@ -16,12 +26,11 @@ are recorded here. The upstream project keeps its own Git history.
   parser, including code-specific sync modes and routing choices.
 - Added a staged mutador import plan with dependencies and validation gates.
 - Recorded the P00 baseline build attempt and a source-to-target feature
-  matrix; no mutador firmware feature has been imported.
+  matrix.
 - Verified a GCC 14.3 desktop baseline image and a Rust-accelerated Euclid
   emulator smoke test; official 1.71 parity and hardware testing remain open.
 - Documented the mutador versus desktop MIDI contract and CC collision risks
   before any P01 firmware change.
 
-No LXR2BC or mutador firmware feature has been imported into this fork yet.
-When one is merged, describe its user-visible behavior here and link the
-relevant session record and validation.
+The Pch/CPU work is an initial, experimental slice. Hardware validation is
+still pending; see session 007.

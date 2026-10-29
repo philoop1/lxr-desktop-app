@@ -425,6 +425,8 @@ enum ParamEnums
 		PAR_MIDI_NOTE7,
 
 		PAR_PATTERN_MODE,
+		PAR_MIDI_CHAN_PC, // performance/control channel (1..16)
+		PAR_CPU_USE,      // live display only; never stored on SD
 
 	NUM_PARAMS	
 };
