@@ -3,6 +3,10 @@
 Firmware for the LXR V2 desktop drum machine: an STM32F765 (Cortex-M7, 216 MHz) running the
 drum voices, FX bus, step sequencer, MIDI (DIN + USB), SD-card preset storage and the LCD/button UI.
 
+This fork's development notes are in [BUILD_NOTES.md](BUILD_NOTES.md), its
+user-facing changes in [CHANGELOG.md](CHANGELOG.md), and its numbered work
+records in [docs/sessions](docs/sessions/README.md).
+
 > **Licence and trademarks:** the firmware source code is free software under the GNU GPL version 3
 > ([LICENSE](LICENSE)). You're welcome to study, change and share it, for example to write your own
 > updates for your LXR. The names **"Erica Synths" and "LXR"** and the **LXR hardware** are the property
