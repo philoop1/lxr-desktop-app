@@ -9,6 +9,7 @@ session logs are not history of this fork.
 | --- | --- | --- |
 | [001](001-development-workflow.md) | 2026-10-29 | Set up development documentation |
 | [002](002-desktop-manual.md) | 2026-10-29 | Add chapter-based desktop manual |
+| [003](003-midi-manual.md) | 2026-10-29 | Expand MIDI and clock chapter |
 
 For each new session, copy [TEMPLATE.md](TEMPLATE.md), use the next number,
 and record the source commit or branch, changed files, build result, hardware
