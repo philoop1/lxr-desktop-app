@@ -16,7 +16,9 @@ are recorded here. The upstream project keeps its own Git history.
   parser, including code-specific sync modes and routing choices.
 - Added a staged mutador import plan with dependencies and validation gates.
 - Recorded the P00 baseline build attempt and a source-to-target feature
-  matrix; no firmware feature or successful baseline image is claimed.
+  matrix; no mutador firmware feature has been imported.
+- Verified a GCC 14.3 desktop baseline image and a Rust-accelerated Euclid
+  emulator smoke test; official 1.71 parity and hardware testing remain open.
 
 No LXR2BC or mutador firmware feature has been imported into this fork yet.
 When one is merged, describe its user-visible behavior here and link the

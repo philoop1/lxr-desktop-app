@@ -4,10 +4,11 @@ Status: planning only. No mutador firmware feature has been ported here.
 The [P00 feature matrix](MUTADOR_FEATURE_MATRIX.md) records the first
 source-to-target comparison and its unresolved checks.
 
-P00 progress (2026-10-29): source equivalence to target `main` confirmed;
-GCC 10.2 compiled the sources but failed at the linker script. A GCC 14.3
-retry was rejected by the command approval system. No baseline image or
-hardware result is available yet. See [build notes](../BUILD_NOTES.md) and
+P00 progress (2026-10-29): source equivalence to target `main` confirmed.
+GCC 10.2 failed at link; the user then built with GCC 14.3. The image hash,
+size and basic Euclid behavior were checked in the Rust-accelerated IMG-live
+emulator. Official 1.71 fix parity and physical hardware remain open. See
+[build notes](../BUILD_NOTES.md) and
 [session 005](sessions/005-p00-baseline-audit.md).
 
 Source snapshot: `I:/Github/mutador` at commit `7319e19b1435dc5a127108367f812c4187f7c025`.
@@ -60,7 +61,8 @@ listed so work can be reordered without pretending it is complete.
 
 ## Immediate TODO
 
-- [ ] P00: build and test the untouched desktop baseline.
+- [x] P00: build the untouched desktop baseline with GCC 14.3 and run an
+      emulator Euclid smoke test. Physical hardware testing is still open.
 - [ ] P00: determine whether the Euclid fix from official 1.71 is present;
       do not infer this from the `1.7` version label alone.
 - [x] P00: create a first source-to-target feature matrix with concrete

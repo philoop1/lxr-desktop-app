@@ -12,7 +12,7 @@ inventory; **unknown** needs behavioral or binary verification.
 
 | Area / plan ID | mutador source and IDs | Desktop target and IDs | MIDI CC / storage fields | Status and next check |
 | --- | --- | --- | --- | --- |
-| Baseline Euclid / P00 | `mainboard/LxrStm32/src/Sequencer/EuklidGenerator.c`; old AVR menu path | `Core/Src/Soundengine/Sequencer/EuklidGenerator.c`, `Core/Src/menu/menu.c`, `Core/Src/buttonHandler.c`; `PAR_EUKLID_LENGTH`, `PAR_EUKLID_STEPS`, `PAR_EUKLID_ROTATION` | Pattern step bits and track length in `.pat` | **Unknown:** official 1.71 fixes Euclid, but source is labelled 1.7 and has no later Euclid commit. Compare identical length/steps/rotation cases with official 1.71 image and current built image. |
+| Baseline Euclid / P00 | `mainboard/LxrStm32/src/Sequencer/EuklidGenerator.c`; old AVR menu path | `Core/Src/Soundengine/Sequencer/EuklidGenerator.c`, `Core/Src/menu/menu.c`, `Core/Src/buttonHandler.c`; `PAR_EUKLID_LENGTH`, `PAR_EUKLID_STEPS`, `PAR_EUKLID_ROTATION` | Pattern step bits and track length in `.pat` | **Basic behavior passed in IMG-live:** 16/5 generates five steps; rotation moves them; length 15 retains five. **Official 1.71 fix parity remains unknown** because that image needs a separate emulator profile or hardware comparison. |
 | MIDI channels and note recording / P01 | `mainboard/LxrStm32/src/MIDI/MidiParser.c`, `front/LxrAvr/Parameters.h`; `PAR_MIDI_CHAN_PC`, `PAR_MIDI_CHAN_GLOBAL`, `PAR_MIDI_CHAN_1..7` | `Core/Src/Soundengine/MIDI/MidiParser.c`, `Core/Src/Soundengine/MIDI/CortexParser.c`, `Core/Inc/Parameters.h`; global and voice channels/notes already exist, `PAR_MIDI_CHAN_PC` not found | mutador Control/PC CC1..83, voice CC map; desktop has its own MIDI CC map | **Different:** compare channel precedence, Kit note-map, recording and MIDI echo before allocating a Control/PC channel. Existing USB/DIN routing must survive. |
 | Step probability and copy / P02 | `front/LxrAvr/Parameters.h`, `mainboard/LxrStm32/src/Sequencer/sequencer.c`, `front/LxrAvr/copyClearTools.c`; `PAR_STEP_PROB`, `PAR_PERF_NOTE_PROB`, `PAR_PERF_NOTE_REPEAT_CHANCE`, `PAR_PERF_RANDOM_VELO` | `Core/Inc/Parameters.h`, `Core/Src/Soundengine/Sequencer/sequencer.c`, `Core/Src/menu/copyClearTools.c`; `PAR_STEP_PROB` already present | mutador Control/PC CC6..9, CC45; desktop `.pat` has per-step data, main-step bitsets and lengths | **Present + missing:** basic probability exists; extra repeat/chance/random-velocity behavior and copy scope require comparison. Do not overwrite step layout blindly. |
 | Groove and scale / P03 | `front/LxrAvr/Parameters.h`, `mainboard/LxrStm32/src/Sequencer/sequencer.c`; `PAR_SHUFFLE`, `PAR_GROOVE_SH2..SH4`, `PAR_GLOBAL_SCALE`, `PAR_SHUFFLE_LOAD` | `Core/Inc/Parameters.h`, `Core/Src/Soundengine/Sequencer/sequencer.c`, `Core/Src/Preset/presetManager.c`; `PAR_SHUFFLE`, `seq_patternSet.shuffle[]` | mutador Control/PC CC40..43 and CC80..83; mutador `glo.cfg` extension v6 and Performance/All groove fields; desktop `.pat` stores shuffle byte | **Different + missing:** desktop shuffle exists; four-step groove, global scale and load policy not found. Map old project behavior before new persistent fields. |
@@ -42,8 +42,10 @@ inventory; **unknown** needs behavioral or binary verification.
 
 ## Next evidence needed
 
-1. Successful untouched desktop image with a supported compiler.
-2. Same Euclid input cases run on official 1.71 and the built desktop image.
+1. ~~Successful untouched desktop image with a supported compiler.~~ Done:
+   ARM GCC 14.3, image SHA-256 `B34C0C3A946D02C5CEE624351A44C2597694B4832FDAA9CBAEB3627F84979AFE`.
+2. Same Euclid input cases run on official 1.71 and the built desktop image;
+   current desktop IMG-live smoke test is complete, official comparison open.
 3. Hardware smoke test for audio, save/load, DIN/USB MIDI and analogue sync.
 4. For P01, a checked numeric CC table and channel-precedence test before
    source changes.
