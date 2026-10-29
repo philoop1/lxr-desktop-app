@@ -9,12 +9,27 @@ The routing and sync combinations still need a check on the instrument.
 Press **SHIFT + CONFIG** (sequencer button 12). The CONFIG LED flashes. The
 first global-settings page contains `bpm`, `shu`, `ch`, `Pch`, `mtx`, `mrx`,
 `mrt` and `flw`. Pressing the same CONFIG combination again cycles to the
-second page, which includes pattern mode, `cki`, `cko`, `ssv` and `CPU`.
+second page, which includes pattern mode, `cki`, `cko`, `ssv`, `CPU`, `lsh`
+and `lmp`.
 
 Global settings, including `Pch`, are saved with the project. `CPU` is a live
 read-only meter and is not saved. Save the project to the SD card
 if you want the settings to survive a power cycle; see
 [Saving and loading](04_saving_and_loading.md).
+
+## Pattern and kit load settings
+
+`KCM` remains the kit-change mode: `Aut` loads a pattern's associated kit when
+that pattern becomes active; `off` keeps the current kit. `lsh` controls a
+separate choice: when `on` (the default), a pattern change also loads that
+pattern's shuffle value. With `lsh=off`, the current shuffle is retained.
+
+`lmp` controls what happens when a kit is loaded, whether manually or through
+`KCM=Aut`. With `lmp=on`, the kit's saved Morph-target slot is selected as the
+Morph kit. With `lmp=off` (the default), the previously selected Morph kit is
+kept. Use LOAD + MORPH to choose a target and save the source kit/project to
+keep that association. These two switches are global settings; older settings
+files load with `lsh=on` and `lmp=off`.
 
 ## MIDI channels and notes
 

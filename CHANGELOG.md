@@ -6,6 +6,16 @@ are recorded here. The upstream project keeps its own Git history.
 
 ## Unreleased
 
+### Mutador 0.1.2 (hardware test pending)
+
+- Added `lsh` and `lmp` immediately after the CPU meter on the second CONFIG
+  page. `lsh` chooses whether a pattern change loads that pattern's shuffle;
+  `lmp` chooses whether loading a kit also selects its saved Morph target.
+- Kept `KCM` as the existing kit-on-pattern-change switch; the proposed `lki`
+  would have duplicated it and was omitted.
+- Loading a Morph kit now marks the current kit as changed so its Morph-target
+  slot can be saved with the kit/project.
+
 ### Mutador 0.1.1 (hardware retest pending)
 
 - SHIFT + Step 1 enters pattern selection from PERF while keeping the PERF

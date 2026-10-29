@@ -426,6 +426,8 @@ enum ParamEnums
 
 		PAR_PATTERN_MODE,
 		PAR_MIDI_CHAN_PC, // performance/control channel (1..16)
+		PAR_SHUFFLE_LOAD, // load the pattern's shuffle on pattern change
+		PAR_LOAD_MORPH,   // load the kit's saved morph target with the kit
 		PAR_CPU_USE,      // live display only; never stored on SD
 
 	NUM_PARAMS	

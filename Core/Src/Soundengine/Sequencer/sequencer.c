@@ -636,8 +636,11 @@ IN_ITCM_RAM void seq_setPendingPatternActive()
 
 		seq_activePattern = seq_pendingPattern;
 
-		activeParameters[PAR_SHUFFLE] = seq_patternSet.shuffle[seq_activePattern];
-		seq_setShuffle(activeParameters[PAR_SHUFFLE]/127.f);
+		if(activeParameters[PAR_SHUFFLE_LOAD])
+		{
+			activeParameters[PAR_SHUFFLE] = seq_patternSet.shuffle[seq_activePattern];
+			seq_setShuffle(activeParameters[PAR_SHUFFLE]/127.f);
+		}
 
 		//A new pattern is activated here -> Load corresponding drumkit
 		if(activeParameters[PAR_PATTERN_MODE] == SKIP_NEXT_KIT_AUTOLOAD)

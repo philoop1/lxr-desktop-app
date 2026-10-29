@@ -253,6 +253,8 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_KCM, CAT_GLOBAL, LONG_PATTERN_MODE},/*TEXT_AUTO_SWITCH_KIT*/
 		{SHORT_PCH, CAT_MIDI, LONG_CONTROL_CHANNEL}, // TEXT_MIDI_CHAN_PC
 		{SHORT_CPU_USE, CAT_GLOBAL, LONG_CPU_USE}, // TEXT_CPU_USE
+		{SHORT_SHUFFLE_LOAD, CAT_GLOBAL, LONG_SHUFFLE_LOAD},
+		{SHORT_LOAD_MORPH, CAT_GLOBAL, LONG_LOAD_MORPH},
 
 
 };
@@ -570,6 +572,8 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_MIDI_NOTE7*/		DTYPE_NOTE_NAME,
 		/*PAR_PATTERN_MODE*/ DTYPE_MENU | (MENU_PAT_MODE<<8),
 	    /*PAR_MIDI_CHAN_PC*/ DTYPE_1B16,
+	    /*PAR_SHUFFLE_LOAD*/ DTYPE_ON_OFF,
+	    /*PAR_LOAD_MORPH*/ DTYPE_ON_OFF,
 	    /*PAR_CPU_USE*/ DTYPE_0B100,
 };
 
@@ -2235,6 +2239,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 					preset_loadDrumsetRam(menu_selectedPresetNr[menu_saveOptions.category],1, 0);
 					activeParameters[PAR_MORPH_KIT_DEST] = menu_selectedPresetNr[menu_saveOptions.category];
 					menu_loadedPresetNr[CURRENT_MORPH] = menu_selectedPresetNr[menu_saveOptions.category];
+					preset_touchTimer(PRESET_KIT_TIMER);
 #else
 					//load to morph buffer
 					preset_loadDrumset(menu_selectedPresetNr[menu_saveOptions.category],1);

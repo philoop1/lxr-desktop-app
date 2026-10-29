@@ -15,6 +15,7 @@ session logs are not history of this fork.
 | [006](006-p01-midi-comparison.md) | 2026-10-29 | Compare mutador and desktop MIDI contracts |
 | [007](007-pch-cpu-sd-backup.md) | 2026-10-29 | Add Pch, CPU meter and SD-card data backup |
 | [008](008-perf-pattern-morph.md) | 2026-10-29 | PERF pattern shortcut and morph correction |
+| [009](009-global-load-switches.md) | 2026-10-29 | Shuffle and Morph load switches |
 
 For each new session, copy [TEMPLATE.md](TEMPLATE.md), use the next number,
 and record the source commit or branch, changed files, build result, hardware

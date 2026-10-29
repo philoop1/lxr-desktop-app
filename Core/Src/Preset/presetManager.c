@@ -842,10 +842,15 @@ void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmedi
 	{
 		//copy parameters to edit buffer
 		memcpy(activeParameters, mainParameters[presetNr], sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
-		//if(activeParameters[PAR_PATTERN_MODE] = 1)
-		//load asociated morph kit as well
-
-		// morphParameters = mainParameters[activeParameters[PAR_MORPH_KIT_DEST]];
+		if(activeParameters[PAR_LOAD_MORPH])
+		{
+			uint8_t morphKit = activeParameters[PAR_MORPH_KIT_DEST];
+			if(morphKit >= NUM_KIT_SLOTS) morphKit = 0;
+			activeParameters[PAR_MORPH_KIT_DEST] = morphKit;
+			morphParameters = mainParameters[morphKit];
+			menu_selectedPresetNr[SAVE_TYPE_MORPH] = morphKit;
+			menu_loadedPresetNr[CURRENT_MORPH] = morphKit;
+		}
 
 
 	}
@@ -854,6 +859,8 @@ void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmedi
 	if(sendImmediate)
 	{
 		preset_sendDrumsetParametersImmediate();
+		if(!isMorph && activeParameters[PAR_LOAD_MORPH] && activeParameters[PAR_MORPH])
+			preset_morph(activeParameters[PAR_MORPH]);
 	}
 	else
 	{
@@ -983,12 +990,18 @@ static uint8_t preset_readGlobalData()
 	const uint8_t legacyGlobals = PAR_MIDI_CHAN_PC - PAR_BEGINNING_OF_GLOBALS;
 	const uint8_t storedGlobals = PAR_CPU_USE - PAR_BEGINNING_OF_GLOBALS;
 	activeParameters[PAR_MIDI_CHAN_PC] = 2;
+	activeParameters[PAR_SHUFFLE_LOAD] = 1;
+	activeParameters[PAR_LOAD_MORPH] = 0;
 	f_read((FIL*)&SDFile,&activeParameters[PAR_BEGINNING_OF_GLOBALS],storedGlobals,&bytesRead);
 	if(bytesRead < legacyGlobals) return 0;
 	// Old glo.cfg ends here; old project files contain 0xFF padding instead.
 	if(bytesRead == legacyGlobals || activeParameters[PAR_MIDI_CHAN_PC] < 1 ||
 	   activeParameters[PAR_MIDI_CHAN_PC] > 16)
 		activeParameters[PAR_MIDI_CHAN_PC] = 2;
+	if(activeParameters[PAR_SHUFFLE_LOAD] > 1)
+		activeParameters[PAR_SHUFFLE_LOAD] = 1;
+	if(activeParameters[PAR_LOAD_MORPH] > 1)
+		activeParameters[PAR_LOAD_MORPH] = 0;
 	return 1;
 
 #endif
@@ -1074,6 +1087,8 @@ void preset_loadDefaultGlobals()
 
 	activeParameters[PAR_PATTERN_MODE] = 1; //auto
 	activeParameters[PAR_MIDI_CHAN_PC] = 2;
+	activeParameters[PAR_SHUFFLE_LOAD] = 1;
+	activeParameters[PAR_LOAD_MORPH] = 0;
 	activeParameters[PAR_CPU_USE] = 0;
 
 }
