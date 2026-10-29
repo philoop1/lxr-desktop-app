@@ -14,6 +14,7 @@ are recorded here. The upstream project keeps its own Git history.
   marked for later hardware checking.
 - Expanded the MIDI and clock chapter using the current desktop menus and
   parser, including code-specific sync modes and routing choices.
+- Added a staged mutador import plan with dependencies and validation gates.
 
 No LXR2BC or mutador firmware feature has been imported into this fork yet.
 When one is merged, describe its user-visible behavior here and link the

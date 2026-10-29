@@ -7,6 +7,8 @@ This fork's development notes are in [BUILD_NOTES.md](BUILD_NOTES.md), its
 user-facing changes in [CHANGELOG.md](CHANGELOG.md), and its numbered work
 records in [docs/sessions](docs/sessions/README.md). The chapter-based
 [manual](manual/README.md) describes the current desktop firmware.
+The proposed [mutador import plan](docs/IMPORT_MUTADOR_PLAN.md) tracks future
+work; its checkboxes do not claim that a feature has already been ported.
 
 > **Licence and trademarks:** the firmware source code is free software under the GNU GPL version 3
 > ([LICENSE](LICENSE)). You're welcome to study, change and share it, for example to write your own
