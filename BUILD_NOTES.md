@@ -22,7 +22,7 @@ cmake --build --preset release
 ```
 
 The update image is written under `build/release/` as
-`LXR_V2_V1.7_Mutador0.1.img`. The base version comes from
+`LXR_V2_V1.7_Mutador0.1.1.img`. The base version comes from
 `project(VERSION ...)` in `CMakeLists.txt`; the fork suffix is set separately
 there. For a debug build, use the `debug` preset in both commands.
 
@@ -53,7 +53,7 @@ own emulator-profile validation.
 The BC/mutador build notes document separate AVR + STM32F4 binaries and a
 combined `FIRMWARE.BIN`. Those commands, flash limits and output file are not
 valid for the desktop STM32F765 image. For this repository use its CMake
-presets and the resulting `LXR_V2_V1.7_Mutador0.1.img`.
+presets and the resulting `LXR_V2_V1.7_Mutador0.1.1.img`.
 
 ## Build record
 
@@ -64,6 +64,7 @@ presets and the resulting `LXR_V2_V1.7_Mutador0.1.img`.
 | 2026-10-29 | Same source; ARM GCC 14.3.rel1 | User ran the fresh release configure/build from the PowerShell instructions above. CMake cache confirms the 14.3 toolchain; output verified locally. | `LXR_V2_V1.7.img`: 274,704 bytes, SHA-256 `B34C0C3A946D02C5CEE624351A44C2597694B4832FDAA9CBAEB3627F84979AFE`. ELF `text=273828`, `data=852`, `bss=340572` bytes. | IMG-live Euclid smoke test passed; physical device not tested. |
 | 2026-10-29 | `feature/pch-cpu`; ARM GCC 14.3.rel1 | Six modified C translation units passed `-fsyntax-only`; release Ninja build completed 34/34 steps. The sandbox build stalled, then the approved build completed. | `LXR_V2_V1.7.img`: 275,132 bytes including 16-byte update header; SHA-256 `C5D2AE5C0F07C0A06AC888457AA051448B2380111373A7CA7E09D126853B983F`. ELF `text=274252`, `data=856`, `bss=340572` bytes. | Pch CC 2, CPU meter and old SD data have not been tested on hardware. |
 | 2026-10-29 | `feature/pch-cpu` `af7feb3`; naming/archive | Reconfigured CMake and rebuilt 2/2 steps. The new name has the same image bytes as the Pch/CPU build above. | `LXR_V2_V1.7_Mutador0.1.img`: 275,132 bytes, SHA-256 `C5D2AE5C0F07C0A06AC888457AA051448B2380111373A7CA7E09D126853B983F`. Baseline and fork images are archived in `firmware-archive/`. | Not run. |
+| 2026-10-29 | `fix/perf-pattern-morph`; GCC 14.3.rel1 | Changed button handler, morph walk and image suffix. Syntax checks passed; approved Ninja release build passed 4/4 steps, then a final 3/3 rebuild after correcting the Euclid request index. | `LXR_V2_V1.7_Mutador0.1.1.img`: 275,220 bytes, SHA-256 `047992BA5A9EEDEA29A05A33DA6E0D79C6C1D7268EE8A33A2CA59AE2DD18B9B8`; ELF `text=274340`, `data=856`, `bss=340564` bytes. | Awaiting hardware retest. 0.1 booted and showed 67% CPU, but Morph had no audible effect despite another kit being loaded and value changing. |
 
 The GCC 14.3 build image exactly matches the SHA-256 of the previously
 validated 1.7 source image used by `Lxr2Menu` IMG-live. With its optional

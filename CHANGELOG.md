@@ -6,6 +6,19 @@ are recorded here. The upstream project keeps its own Git history.
 
 ## Unreleased
 
+### Mutador 0.1.1 (hardware retest pending)
+
+- SHIFT + Step 1 enters pattern selection from PERF while keeping the PERF
+  display with BPM and the other live settings visible. SHIFT + PATTERN still
+  opens the dedicated pattern-selection display.
+- Pattern selection requests Euclid data for the active voice, avoiding a
+  menu-page index outside the voice range.
+- Changed the morph update to use kit-load parameter order and skip placeholder
+  CC 0 and non-morphable target selectors. This addresses code defects found
+  after an on-device report that the Morph value changed but the sound did not.
+- Archived the new `LXR_V2_V1.7_Mutador0.1.1.img` separately from 0.1 for
+  straightforward rollback.
+
 ### CONFIG and SD card
 
 - Added saved `Pch` beside global `ch` on the first CONFIG page. It defaults to

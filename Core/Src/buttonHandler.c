@@ -832,7 +832,6 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 		switch(seqButtonPressed)
 		{
 
-		case SEQ_DRUM1:
 		case SEQ_DRUM2:
 		case SEQ_DRUM3:
 		case SEQ_SNARE:
@@ -864,6 +863,12 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			//--> enter song mode
 			buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_SONG;
 			menu_switchPage(SONG_MODE_PAGE);
+			break;
+		case SEQ_DRUM1: // SHIFT + Step 1: pattern select, keep PERF display
+			if(menu_getActivePage() == PERF_PAGE) {
+				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_PATTERN;
+				led_initPatternSelectLeds();
+			}
 			break;
 		case SEQ_PATTERN: //Pattern
 
@@ -1191,7 +1196,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_setBlinkLed(led_idx2StepLed(seqButtonPressed), 1);
 
 				frontPanel_sendData(SEQ_CC, SEQ_REQUEST_EUKLID_PARAMS,
-						menu_activePage/*menu_getActiveVoice()*/);
+						menu_getActiveVoice());
 				//update autosave pattern on manual pattern change
 				preset_touchTimer(PRESET_PAT_TIMER);
 

@@ -2135,71 +2135,40 @@ FRESULT preset_loadPatternRAM(uint8_t presetNr)
 //called periodically to process non blocking morph
 void preset_morph_tick()
 {
-	//morph_state = 0;
-	//return;
-	if(morph_state)
+	if(!morph_state) return;
+
+	// A kit load uses parameterOrder because some settings depend on others.
+	// Morph must use the same order and must not send placeholder CC 0.
+	const uint8_t paramNr = parameterOrder[morph_index];
+	const uint8_t isTargetSelector =
+		(paramNr >= PAR_VEL_DEST_1 && paramNr <= PAR_VEL_DEST_6) ||
+		(paramNr >= PAR_VOICE_LFO1 && paramNr <= PAR_VOICE_LFO6) ||
+		(paramNr >= PAR_TARGET_LFO1 && paramNr <= PAR_TARGET_LFO6);
+	if(paramNr != PAR_NONE && paramNr != PAR_BANK_CHANGE &&
+	   paramNr != PAR_MORPH_KIT_DEST && !isTargetSelector)
 	{
-
-		uint8_t morph;
-
-		//Do not morph audio routing
-		if((morph_index >= PAR_AUDIO_OUT1) && (morph_index <= PAR_AUDIO_OUT6)) //morph_index++;
+		// Audio routing always comes from the source kit.
+		const uint8_t morph = (paramNr >= PAR_AUDIO_OUT1 &&
+			paramNr <= PAR_AUDIO_OUT6) ? 0 : activeParameters[PAR_MORPH];
+		const uint8_t val = interpolate(activeParameters[paramNr],
+			morphParameters[paramNr], morph);
+		MidiMsg msg = {0};
+		msg.data2 = val;
+		if(paramNr < 128)
 		{
-			//always use source kit (morph = 0) for audio routing
-			morph = 0;
-		}
-		else
-		{
-			morph = activeParameters[PAR_MORPH];
-		}
-
-		static MidiMsg msg = {0};
-
-
-		const uint8_t val = interpolate(activeParameters[morph_index],morphParameters[morph_index],morph);
-
-
-		if(morph_index < 128)
-		{
-			/* comes from cortex midi handler
-			 * stupid offset!
-			 * TODO fix this stupid offset			 *
-			 * 		frontParser_midiMsg.data1 += 1;
-
-					//because hh slope on front is 127 and on cortex is 0 wrap data1 at 127
-					frontParser_midiMsg.data1 &= 0x7f;
-			 *
-			 */
 			msg.status = MIDI_CC;
-			msg.data1 = morph_index;
-			msg.data2 = val;
-
-			msg.data1 += 1;
-			msg.data1 &= 0x7f;
-			midiParser_ccHandler(msg,1, 0, 0.f);
-
-
+			msg.data1 = (uint8_t)(paramNr + 1);
 		}
 		else
 		{
 			msg.status = CC_2;
-			msg.data1 = morph_index-128; //stupid offset only in CC not CC2
-			msg.data2 = val;
-
-		//	msg.data1 += 1;
-			msg.data1 &= 0x7f;
-			midiParser_ccHandler(msg,1, 0, 0.f);
-
+			msg.data1 = (uint8_t)(paramNr - 128);
 		}
-
-
-		morph_index++;
-		if(morph_index >= END_OF_SOUND_PARAMETERS)
-		{
-			//finished morphing
-			morph_state = 0;
-		}
+		midiParser_ccHandler(msg,1,0,0.f);
 	}
+
+	if(++morph_index >= END_OF_SOUND_PARAMETERS)
+		morph_state = 0;
 }
 //----------------------------------------------------
 // This will determine an interpolated value between parameters

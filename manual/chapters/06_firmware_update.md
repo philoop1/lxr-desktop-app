@@ -6,7 +6,7 @@ The complete build instructions and error-message table are in the
 
 1. Build the firmware with `cmake --preset release` followed by
    `cmake --build --preset release`.
-2. Copy `build/release/LXR_V2_V1.7_Mutador0.1.img` to the top folder of the SD
+2. Copy `build/release/LXR_V2_V1.7_Mutador0.1.1.img` to the top folder of the SD
    card. Remove older `LXR*.img` update files from the card.
 3. Turn the LXR off, insert the card, hold the encoder button and turn it on.
    Keep holding until `LXR Updater` appears.
