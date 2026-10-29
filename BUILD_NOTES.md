@@ -25,11 +25,41 @@ The update image is written under `build/release/` as
 `LXR_V2_V<version>.img`. The version comes from `project(VERSION ...)` in
 `CMakeLists.txt`. For a debug build, use the `debug` preset in both commands.
 
+### Exact Windows commands on this machine
+
+The CMake and Ninja executables come from Visual Studio 2022. The locally
+available ARM GNU Toolchain 14.3 is under `I:/Github/Lxr2rea/build/`.
+PowerShell commands from `I:/Github/lxr2-Mutador`:
+
+```powershell
+$cmake = 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+$ninjaDir = 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja'
+$armDir = 'I:\Github\Lxr2rea\build\arm-gnu-toolchain-14.3.rel1\bin'
+$env:PATH = "$ninjaDir;$armDir;$env:PATH"
+
+& $cmake --preset release --fresh -DARM_TOOLCHAIN_DIR='I:/Github/Lxr2rea/build/arm-gnu-toolchain-14.3.rel1/bin'
+& $cmake --build --preset release
+```
+
+`--fresh` matters after switching compilers: CMake otherwise keeps the old
+compiler recorded in `build/release/CMakeCache.txt`. Confirm the configure
+output names GCC 14.3 before building. The `mkimage.py` step also needs a
+working Python 3 on PATH; the build output shows which Python was selected.
+These are reproducibility instructions, **not a claim that the GCC 14.3 build
+has completed**.
+
+The BC/mutador build notes document separate AVR + STM32F4 binaries and a
+combined `FIRMWARE.BIN`. Those commands, flash limits and output file are not
+valid for the desktop STM32F765 image. For this repository use its CMake
+presets and the resulting `LXR_V2_V1.7.img`.
+
 ## Build record
 
 | Date | Branch / commit | Command | Result | Hardware check |
 | --- | --- | --- | --- | --- |
 | 2026-10-29 | `docs/development-notes` | Documentation setup only | Build not run for this change | Not run |
+| 2026-10-29 | Firmware source identical to `main` `a43cd4f`; GCC 10.2.1 (DaisyToolchain) | Configure and release build | Configure passed; 120/122 compile steps passed; link failed at `.ARM.extab` with `non constant or forward reference address expression` in `STM32F765VGTX_FLASH.ld:86`. No image produced. | Not run |
+| 2026-10-29 | Same source; GCC 14.3 planned | `cmake --preset release --fresh` with ARM_TOOLCHAIN_DIR above, then release build | Not run: the outside-sandbox command was rejected by the approval system. Existing `build/release` cache still points at GCC 10.2.1. | Not run |
 
 For each firmware change, add the exact commit, toolchain version, build
 result, image filename and size, and any test performed on the instrument.

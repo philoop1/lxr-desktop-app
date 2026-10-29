@@ -1,6 +1,14 @@
 # mutador → LXR V2 desktop: import TODO
 
 Status: planning only. No mutador firmware feature has been ported here.
+The [P00 feature matrix](MUTADOR_FEATURE_MATRIX.md) records the first
+source-to-target comparison and its unresolved checks.
+
+P00 progress (2026-10-29): source equivalence to target `main` confirmed;
+GCC 10.2 compiled the sources but failed at the linker script. A GCC 14.3
+retry was rejected by the command approval system. No baseline image or
+hardware result is available yet. See [build notes](../BUILD_NOTES.md) and
+[session 005](sessions/005-p00-baseline-audit.md).
 
 Source snapshot: `I:/Github/mutador` at commit `7319e19b1435dc5a127108367f812c4187f7c025`.
 Target baseline: `I:/Github/lxr2-Mutador` main at commit
@@ -55,8 +63,10 @@ listed so work can be reordered without pretending it is complete.
 - [ ] P00: build and test the untouched desktop baseline.
 - [ ] P00: determine whether the Euclid fix from official 1.71 is present;
       do not infer this from the `1.7` version label alone.
-- [ ] P00: make a source-to-target feature matrix with exact files,
-      parameter IDs, MIDI CCs and storage fields before choosing P01/P02.
+- [x] P00: create a first source-to-target feature matrix with concrete
+      files, symbolic parameter IDs, MIDI CC ranges and storage fields.
+- [ ] P00: validate the matrix's unknown behavior and numeric CC collisions
+      before choosing P01/P02.
 - [ ] Decide the first feature batch after that matrix. P01 (MIDI contract)
       or a narrowed P02 (step tools) are reasonable starting points.
 

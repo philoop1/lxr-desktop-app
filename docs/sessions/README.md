@@ -11,6 +11,7 @@ session logs are not history of this fork.
 | [002](002-desktop-manual.md) | 2026-10-29 | Add chapter-based desktop manual |
 | [003](003-midi-manual.md) | 2026-10-29 | Expand MIDI and clock chapter |
 | [004](004-mutador-import-plan.md) | 2026-10-29 | Plan mutador import sessions |
+| [005](005-p00-baseline-audit.md) | 2026-10-29 | P00 build attempt and feature matrix |
 
 For each new session, copy [TEMPLATE.md](TEMPLATE.md), use the next number,
 and record the source commit or branch, changed files, build result, hardware
