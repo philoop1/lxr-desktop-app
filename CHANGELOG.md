@@ -10,6 +10,8 @@ are recorded here. The upstream project keeps its own Git history.
 
 - Added build notes, a fork changelog, and a numbered session log for planned
   work from LXR2BC and mutador.
+- Added a chapter-based desktop manual, with unverified procedures clearly
+  marked for later hardware checking.
 
 No LXR2BC or mutador firmware feature has been imported into this fork yet.
 When one is merged, describe its user-visible behavior here and link the
