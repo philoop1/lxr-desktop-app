@@ -3,6 +3,8 @@
 Status: planning only. No mutador firmware feature has been ported here.
 The [P00 feature matrix](MUTADOR_FEATURE_MATRIX.md) records the first
 source-to-target comparison and its unresolved checks.
+The [P01 MIDI comparison](P01_MIDI_COMPARISON.md) identifies channel,
+note, CC and storage differences before implementation.
 
 P00 progress (2026-10-29): source equivalence to target `main` confirmed.
 GCC 10.2 failed at link; the user then built with GCC 14.3. The image hash,

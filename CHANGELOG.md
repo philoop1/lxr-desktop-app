@@ -19,6 +19,8 @@ are recorded here. The upstream project keeps its own Git history.
   matrix; no mutador firmware feature has been imported.
 - Verified a GCC 14.3 desktop baseline image and a Rust-accelerated Euclid
   emulator smoke test; official 1.71 parity and hardware testing remain open.
+- Documented the mutador versus desktop MIDI contract and CC collision risks
+  before any P01 firmware change.
 
 No LXR2BC or mutador firmware feature has been imported into this fork yet.
 When one is merged, describe its user-visible behavior here and link the
