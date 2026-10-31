@@ -746,6 +746,10 @@ static void frontParser_handleSeqCC()
 	case FRONT_SEQ_FLAM:
 		seq_patternSet.seq_stepTiming[frontParser_shownPattern][frontParser_activeTrack][frontParser_activeStep].flam = (cortex_midiMsg.data2);//seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][frontParser_activeStep].prob = (cortex_midiMsg.data2);
 		break;
+	case FRONT_SEQ_FLAM_PROB:
+		seq_patternSet.flamProbability[frontParser_shownPattern][frontParser_activeTrack][frontParser_activeStep] =
+			cortex_midiMsg.data2>100 ? 100 : cortex_midiMsg.data2;
+		break;
 
 	case FRONT_SEQ_SHIFT:
 		seq_patternSet.seq_stepTiming[frontParser_shownPattern][frontParser_activeTrack][frontParser_activeStep].shift = (cortex_midiMsg.data2);
@@ -941,6 +945,10 @@ static void frontParser_handleSeqCC()
 		uart_sendFrontpanelByte(FRONT_SEQ_CC);
 		uart_sendFrontpanelByte(FRONT_SEQ_FLAM);
 		uart_sendFrontpanelByte(seq_patternSet.seq_stepTiming[frontParser_shownPattern][frontParser_activeTrack][cortex_midiMsg.data2].flam);
+
+		uart_sendFrontpanelByte(FRONT_SEQ_CC);
+		uart_sendFrontpanelByte(FRONT_SEQ_FLAM_PROB);
+		uart_sendFrontpanelByte(seq_patternSet.flamProbability[frontParser_shownPattern][frontParser_activeTrack][cortex_midiMsg.data2]);
 
 		uart_sendFrontpanelByte(FRONT_SEQ_CC);
 		uart_sendFrontpanelByte(FRONT_SEQ_SHIFT);

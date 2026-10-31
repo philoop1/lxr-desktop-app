@@ -37,6 +37,7 @@ session logs are not history of this fork.
 | [028](028-velocity-and-any-mode-shortcut.md) | 2026-10-31 | Any-mode SHIFT+1, rvl/avl and versioned persistence |
 | [029](029-velocity-headroom-proportional-gain.md) | 2026-10-31 | Default 100, backed-up card migration and proportional positive AVL |
 | [030](030-pattern-bank-freeze-investigation.md) | 2026-10-31 | MIDI-running pattern freeze fixed in 0.1.28; targeted device retest passed |
+| [031](031-random-step-lfo-flam-probability.md) | 2026-10-31 | Random Step LFO, Flam Probability and Mutador 0.2 |
 
 For each new session, copy [TEMPLATE.md](TEMPLATE.md), use the next number,
 and record the source commit or branch, changed files, build result, hardware

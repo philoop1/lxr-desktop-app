@@ -46,7 +46,12 @@ static PerfStep plan(PerfTrack *track, uint8_t timeline, uint8_t length,
     }
     // BC Scarcity: one decision per Main Step, shared by all its sub-events.
     step.drop=(uint8_t)(psc<100 && randomValue()%100u >= psc);
-    step.probability=(uint8_t)(randomValue()%100u + 1u);
+    uint32_t roll=randomValue();
+    step.probability=(uint8_t)(roll%100u + 1u);
+    step.flamRoll=(uint8_t)((roll/100u)%100u + 1u);
+    static uint32_t nextEventId=0;
+    step.eventId=++nextEventId;
+    if(!step.eventId) step.eventId=++nextEventId;
     return step;
 }
 

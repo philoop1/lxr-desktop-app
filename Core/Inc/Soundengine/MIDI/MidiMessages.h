@@ -469,6 +469,7 @@ extern Param2EnumsDefinition Param2Enums;
 #define FRONT_SEQ_REC_ON_OFF			0x1B	/**< start(data2=1) or stop(data2=0) recording mode */
 //#define FRONT_SEQ_REQUEST_PATTERN_PARAMS 0x1C 	/**< the sequencer sends back the data of the active pattern */
 #define FRONT_SEQ_SHIFT					0x1C
+#define FRONT_SEQ_FLAM_PROB			0x3A
 //#define FRONT_SEQ_SET_PAT_BEAT			0x1D	/**< on every Nth bar the pattern will change to the next pattern*/
 //#define FRONT_SEQ_SET_PAT_NEXT			0x1E	/**< the next pattern that will be played when the current finishes*/
 #define FRONT_SEQ_CLEAR_TRACK			0x1f

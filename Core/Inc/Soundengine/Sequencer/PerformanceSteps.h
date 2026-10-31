@@ -4,7 +4,8 @@
 #include <stdint.h>
 
 typedef struct {
-    uint8_t source, probability, drop, timeline;
+    uint8_t source, probability, drop, timeline, flamRoll;
+    uint32_t eventId;
 } PerfStep;
 typedef struct {
     PerfStep prev, current, next;

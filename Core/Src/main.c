@@ -355,7 +355,7 @@ lcd_clear();
 lcd_string("LXR2 Mutador");
 //goto 2nd line
 lcd_setcursor(0,2);
-lcd_string("Mutador 0.1.28");
+lcd_string("Mutador 0.2");
 #endif
 
 lcd_showSplash();

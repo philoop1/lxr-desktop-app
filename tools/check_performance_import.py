@@ -80,6 +80,7 @@ struct {
   uint16_t seq_mainSteps[4][64][7];
   Step seq_subStepPattern[64][7][64];
   struct {uint8_t shift,flam;} seq_stepTiming[64][7][64];
+  uint8_t flamProbability[64][7][64];
 } seq_patternSet;
 uint8_t seq_stepIndex[7],seq_activePattern,seq_running=1,seq_mutedTracks;
 uint8_t lastWasNoteOn[7],chokeCurrent,chokeNext;
@@ -120,6 +121,10 @@ void seq_setBpm(uint16_t bpm){seq_tempo=bpm;}
 
 uint8_t activeParameters[NUM_PARAMS],midi_MidiChannels[8];
 uint8_t seq_triggerSourceStep[7]={255,255,255,255,255,255,255};
+uint32_t seq_triggerEventId,seq_lastLfoEventId[7];
+uint8_t seq_patternSwitchActive;
+unsigned lfoTriggers[7];
+void lfo_stepTrigger(uint8_t voice){if(voice<7)lfoTriggers[voice]++;}
 const PerfTrack *seq_perfTracks[7];
 PerfTrack seq_scaledTracks[7];
 struct {uint8_t prev,current,next;} seq_rndValue[7];
@@ -209,6 +214,7 @@ static void check(int ok,const char *what){checks++;if(!ok){fprintf(stderr,"FAIL
 static void clearSpies(void){hits=outputs=off=automations=0;}
 static void setup(uint64_t active){
  memset(&seq_patternSet,0,sizeof(seq_patternSet));for(int t=0;t<7;t++)seq_perfTracks[t]=0;
+ memset(lfoTriggers,0,sizeof(lfoTriggers));memset(seq_lastLfoEventId,0,sizeof(seq_lastLfoEventId));seq_triggerEventId=0;
  memset(lastWasNoteOn,0,sizeof(lastWasNoteOn));memset(activeParameters,0,sizeof(activeParameters));activeParameters[PAR_PERF_RANDOM_VELO]=100;activeParameters[PAR_PERF_AVL]=100;
  seq_scaleBarFrame=0;seq_scaleRestart=0;captureFine=0;externalSync=0;fineHits=0;boundaryCalls=midiClocks=clockTicks=groovePulses=0;
  perf_grooveConfigure(&seq_groove,0,63,63,63);perf_delaySetGroove(&seq_groove);seq_usesFineClock=0;seq_finePhase=0;seq_prescaleCounter=0;
@@ -221,6 +227,7 @@ static void setup(uint64_t active){
    for(int s=0;s<64;s++){
      seq_patternSet.seq_subStepPattern[0][t][s]=(Step){(uint8_t)(40+s),(uint8_t)(20+s),100,(uint8_t)s};
      seq_patternSet.seq_stepTiming[0][t][s].shift=7;
+     seq_patternSet.flamProbability[0][t][s]=100;
    }
  }
  clearSpies();
@@ -255,6 +262,21 @@ static void runFrames(unsigned count) {
 }
 
 int main(void){
+ setup(1);perf_configure(0,0,100,100);
+ seq_patternSet.seq_stepTiming[0][0][0].flam=5;
+ seq_perfAdvance(0,0,16);
+ seq_patternSet.flamProbability[0][0][0]=0;
+ check(seq_getShiftFlamPattern(0,0,STEP_CURRENT)==(1u<<23),"FPR0 keeps main hit only");
+ seq_patternSet.flamProbability[0][0][0]=100;
+ check(seq_getShiftFlamPattern(0,0,STEP_CURRENT)==flamIdxToPattern(5),"FPR100 keeps all flam hits");
+ for(unsigned frame=0;frame<24;frame++)seq_processFlam((uint8_t)frame);
+ check(lfoTriggers[0]==1,"played flam group triggers step random once");
+ setup(1);seq_mutedTracks=127;seq_perfAdvance(0,0,16);
+ for(unsigned frame=0;frame<24;frame++)seq_processFlam((uint8_t)frame);
+ check(lfoTriggers[0]==0,"muted step does not trigger random LFO");
+ setup(1);seq_patternSet.seq_subStepPattern[0][0][0].prob=0;seq_perfAdvance(0,0,16);
+ for(unsigned frame=0;frame<24;frame++)seq_processFlam((uint8_t)frame);
+ check(lfoTriggers[0]==0,"probability-skipped step does not trigger random LFO");
  for(int length=1;length<=64;length++) {
    perf_configure(0,0,100,100);perf_resetSteps();
    for(int tick=0;tick<length*4;tick++){

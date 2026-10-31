@@ -95,6 +95,9 @@ void lfo_init(Lfo *lfo)
 	lfo->freq			= 1;
 	lfo->rnd=0.5f;
 	lfo->rndTarget=0.5f;
+	lfo->stepValue=0.5f;
+	lfo->stepSlew=0;
+	lfo->stepPolarity=2;
 	lfo->modNodeValue	= 1;
 
 	modNode_init(&lfo->modTarget);
@@ -162,6 +165,15 @@ IN_ITCM_RAM float lfo_calc(Lfo *lfo)
             if(overflow)lfo_advanceSmoothRandom(lfo);
             return lfo_calcSmoothRandom(lfo);
         break;
+	case LFO_RANDOM_STEP: {
+		if(!lfo->stepSlew) lfo->stepValue=lfo->rndTarget;
+		else {
+			const float tau=(lfo->stepSlew/127.f)*2.f;
+			const float alpha=1.f/(1.f+tau*LFO_SR);
+			lfo->stepValue+=(lfo->rndTarget-lfo->stepValue)*alpha;
+		}
+		return lfo->stepValue;
+	}
 		default:
 		return 0;
 		break;
@@ -175,7 +187,12 @@ void lfo_dispatchNextValue(Lfo* lfo)
     if(lfo->waveform==LFO_STRAY || lfo->waveform==LFO_GLIDE) {
         // Mutador bias returns 0..2; desktop modulation accepts 0..1.
         modNode_updateValue(&lfo->modTarget,lfo_applySmoothRandomBias(lfo,source)*0.5f);
-    } else modNode_updateValue(&lfo->modTarget,source);
+    } else if(lfo->waveform==LFO_RANDOM_STEP) {
+		float value=source;
+		if(lfo->stepPolarity==0) value=source*0.5f;
+		else if(lfo->stepPolarity==1) value=0.5f+source*0.5f;
+		modNode_updateValue(&lfo->modTarget,value);
+	} else modNode_updateValue(&lfo->modTarget,source);
 }
 //-------------------------------------------------------------
 IN_ITCM_RAM uint32_t lfo_calcPhaseInc(float freq, uint8_t sync)
@@ -264,7 +281,7 @@ IN_ITCM_RAM void lfo_setFreq(Lfo *lfo, float f)
 //-------------------------------------------------------------
 void lfo_setWaveform(Lfo *lfo, uint8_t waveform)
 {
-	if(waveform > LFO_GLIDE)
+	if(waveform > LFO_RANDOM_STEP)
 		waveform = LFO_SINE;
 
 	if((waveform != lfo->waveform)
@@ -272,6 +289,10 @@ void lfo_setWaveform(Lfo *lfo, uint8_t waveform)
 	{
 		lfo->rnd = 0.5f;
 		lfo_setSmoothRandomTarget(lfo,waveform);
+	}
+	if(waveform!=lfo->waveform && waveform==LFO_RANDOM_STEP) {
+		lfo->stepValue=0.5f;
+		lfo->rndTarget=0.5f;
 	}
 
 	lfo->waveform = waveform;
@@ -312,6 +333,7 @@ void lfo_recalcSync()
 //-------------------------------------------------------------
 static inline void lfo_retriggerVoice(Lfo *lfo)
 {
+	if(lfo->waveform==LFO_RANDOM_STEP) return;
 	if((lfo->waveform == LFO_STRAY) || (lfo->waveform == LFO_GLIDE))
 		lfo->phase = 0; // phaseOffset is the bipolar bias for smooth random modes.
 	else
@@ -344,6 +366,38 @@ void lfo_retrigger(uint8_t voice)
 	if(hatVoice.lfo.retrigger == voice+1)
 	{
 		lfo_retriggerVoice(&hatVoice.lfo);
+	}
+}
+static Lfo *lfo_byVoice(uint8_t voice)
+{
+	if(voice<3)return &voiceArray[voice].lfo;
+	if(voice==3)return &snareVoice.lfo;
+	if(voice==4)return &cymbalVoice.lfo;
+	if(voice==5)return &hatVoice.lfo;
+	return 0;
+}
+void lfo_setStepSlew(uint8_t voice,uint8_t value)
+{
+	Lfo *lfo=lfo_byVoice(voice);
+	if(lfo)lfo->stepSlew=value>127 ? 127 : value;
+}
+void lfo_setStepPolarity(uint8_t voice,uint8_t value)
+{
+	Lfo *lfo=lfo_byVoice(voice);
+	if(lfo)lfo->stepPolarity=value>2 ? 2 : value;
+}
+void lfo_stepTrigger(uint8_t sourceVoice)
+{
+	if(sourceVoice==6)sourceVoice=5; /* both hi-hat tracks use voice 6 */
+	for(uint8_t voice=0;voice<6;voice++) {
+		Lfo *lfo=lfo_byVoice(voice);
+		if(lfo->waveform!=LFO_RANDOM_STEP || lfo->retrigger!=sourceVoice+1u)continue;
+		float value=lfo_random01();
+		if(lfo->phaseOffset) value+=(lfo->phaseOffset/(float)UINT32_MAX)*2.f-1.f;
+		if(value<0.f)value=0.f;
+		if(value>1.f)value=1.f;
+		lfo->rndTarget=value;
+		if(!lfo->stepSlew)lfo->stepValue=value;
 	}
 }
 //-------------------------------------------------------------

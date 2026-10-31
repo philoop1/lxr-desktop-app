@@ -336,3 +336,7 @@ Previous 0.1.27 image backed up and hash-verified before removing only
 that old root image. Device installation and lki=aut retest pending.
 
 0.1.28 device result (2026-10-31): user reports pattern selection works again after installing the verified image. This confirms the targeted kit-load freeze retest; other imported functions still need broader testing. Membrane was not imported. Release headroom: FLASH 749040 bytes, ITCM 2056 bytes, DTCM 23408 bytes, RAM 118332 bytes.
+
+Mutador 0.2 candidate (2026-10-31): ARM GCC 14.3 release build passed with Random Step LFO, Flam Probability, LFX1 kit and FLP1 pattern extensions. Host checks: Pattern Scale/FLP1 1106, grouped Step editing 148257, performance/Flam 56951 assertions; LFO source routing passed. Memory ITCM 14400/16384, DTCM 107672/131072, RAM 305388/393216, FLASH 271688/1015808. Device testing pending.
+
+Mutador 0.2 final image: 323084 bytes, SHA256 F58CF6793F27726F51FD504494E62571B41694213F0D7F837745DEE4A8A4D0AF. Copied and hash-verified as F:/LXR_V2_V1.7_Mutador0.2.img. The old card image 0.1.28 was hash-verified and backed up to build/card-image-backups/20261031-mutador-0.2/ before removal from the card. The card now has only the 0.2 LXR update image. Final build: ITCM 14400/16384, DTCM 107672/131072, RAM 305388/393216, FLASH 271672/1015808. Hardware installation and sound/save-load verification remain pending.

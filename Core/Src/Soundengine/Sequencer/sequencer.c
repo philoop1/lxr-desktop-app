@@ -114,6 +114,8 @@ struct
 static const PerfTrack *seq_perfTracks[NUM_TRACKS];
 static PerfTrack seq_scaledTracks[NUM_TRACKS];
 static uint8_t seq_triggerSourceStep[NUM_TRACKS]={255,255,255,255,255,255,255};
+static uint32_t seq_triggerEventId;
+static uint32_t seq_lastLfoEventId[NUM_TRACKS];
 static uint32_t seq_perfRandom(void) { return GetRngValue(); }
 static void seq_perfAdvance(uint8_t track, uint8_t timeline, uint8_t length)
 {
@@ -263,6 +265,7 @@ void seq_copyPatternToBackupBuffer(uint8_t patternNr)
 {
 	memcpy(&patternBackupBuffer.seq_subStepPattern, &seq_patternSet.seq_subStepPattern[patternNr],  sizeof(Step)*NUM_TRACKS*NUM_STEPS);
 	memcpy(&patternBackupBuffer.seq_stepTiming, &seq_patternSet.seq_stepTiming[patternNr],  sizeof(uint8_t)*NUM_TRACKS*NUM_STEPS);
+	memcpy(&patternBackupBuffer.flamProbability, &seq_patternSet.flamProbability[patternNr], NUM_TRACKS*NUM_STEPS);
 	for(uint8_t i=0; i<NUM_BARS; i++)
 	{
 		memcpy(&patternBackupBuffer.seq_mainSteps[i], &seq_patternSet.seq_mainSteps[i][patternNr],  sizeof(uint16_t)*NUM_TRACKS);
@@ -281,6 +284,7 @@ void seq_copyBackupBufferToPattern(uint8_t patternNr)
 {
 	memcpy(&seq_patternSet.seq_subStepPattern[patternNr], &patternBackupBuffer.seq_subStepPattern,  sizeof(Step)*NUM_TRACKS*NUM_STEPS);
 	memcpy(&seq_patternSet.seq_stepTiming[patternNr]    , &patternBackupBuffer.seq_stepTiming,      sizeof(uint8_t)*NUM_TRACKS*NUM_STEPS);
+	memcpy(&seq_patternSet.flamProbability[patternNr], &patternBackupBuffer.flamProbability, NUM_TRACKS*NUM_STEPS);
 	for(uint8_t i=0; i<NUM_BARS; i++)
 	{
 		memcpy(&seq_patternSet.seq_mainSteps[i][patternNr], &patternBackupBuffer.seq_mainSteps[i],  sizeof(uint16_t)*NUM_TRACKS);
@@ -507,6 +511,10 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 	uint8_t midiNote; // which midi note to send
 
 	if(voiceNr > 6) return;
+	if(seq_triggerEventId && seq_lastLfoEventId[voiceNr]!=seq_triggerEventId) {
+		seq_lastLfoEventId[voiceNr]=seq_triggerEventId;
+		lfo_stepTrigger(voiceNr);
+	}
 
 
 #if USE_PATTERN_EDIT_BUFFER
@@ -1036,6 +1044,13 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 
 		//add step pattern for active steps
 		stepPattern = flamIdxToPattern(flamCurrentStep);
+		/* One decision for the whole flam group; the main hit survives. */
+		const PerfTrack *flamTrack=seq_perfTracks[track];
+		uint8_t roll=flamTrack ?
+			(stepPos==STEP_PREV ? flamTrack->prev.flamRoll :
+			 stepPos==STEP_NEXT ? flamTrack->next.flamRoll : flamTrack->current.flamRoll) : 1;
+		if(roll>seq_patternSet.flamProbability[seq_activePattern][track][step])
+			stepPattern &= (1UL<<23);
 
 		//we have 24 pulses per step (96ppq) but only 8 possible shift values (0-7)
 		shiftCurrentStep *= 3;
@@ -1184,7 +1199,9 @@ void seq_processFlam(uint8_t idx)
 					delaySources[track]=nextStep;
 					delayLanes[track]=state->next.timeline;
 					seq_triggerSourceStep[track]=nextStep;
+					seq_triggerEventId=state->next.eventId;
 					seq_triggerVoice(track,vol,note);
+					seq_triggerEventId=0;
 					seq_triggerSourceStep[track]=255;
 				}
 			}
@@ -1199,7 +1216,9 @@ void seq_processFlam(uint8_t idx)
 					delaySources[track]=currentStep;
 					delayLanes[track]=state->current.timeline;
 					seq_triggerSourceStep[track]=currentStep;
+					seq_triggerEventId=state->current.eventId;
 					seq_triggerVoice(track,vol,note);
+					seq_triggerEventId=0;
 					seq_triggerSourceStep[track]=255;
 				}
 			}
@@ -1213,7 +1232,9 @@ void seq_processFlam(uint8_t idx)
 					delaySources[track]=prevStep;
 					delayLanes[track]=state->prev.timeline;
 					seq_triggerSourceStep[track]=prevStep;
+					seq_triggerEventId=state->prev.eventId;
 					seq_triggerVoice(track,vol,note);
+					seq_triggerEventId=0;
 					seq_triggerSourceStep[track]=255;
 				}
 			}
@@ -1326,11 +1347,15 @@ static void seq_processGrooveFine(uint8_t frame)
             const Step *step=&seq_patternSet.seq_subStepPattern[seq_activePattern][track][source];
             if(planned->probability>perf_scaleProbability(step->prob)) continue;
             uint32_t pattern=flamIdxToPattern(seq_patternSet.seq_stepTiming[seq_activePattern][track][source].flam);
+            if(planned->flamRoll>seq_patternSet.flamProbability[seq_activePattern][track][source])
+                pattern &= (1UL<<23);
             int8_t shift=getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][source].shift);
             if(!perf_grooveDue(&seq_groove,pattern,shift,planned->timeline,n,frame)) continue;
             if(perf_allowHit(seq_perfRandom)) {
                 seq_triggerSourceStep[track]=source;
+                seq_triggerEventId=planned->eventId;
                 seq_triggerVoice(track,step->volume&STEP_VOLUME_MASK,step->note);
+                seq_triggerEventId=0;
                 seq_triggerSourceStep[track]=255;
                 lastWasNoteOn[track]=1;
                 seq_grooveNoteOff[track]=2;
@@ -2540,6 +2565,7 @@ void seq_clearTrack(uint8_t trackNr, uint8_t pattern)
 
 		seq_patternSet.seq_stepTiming[pattern][trackNr][k].flam = 0;
 		seq_patternSet.seq_stepTiming[pattern][trackNr][k].shift = 7;   // 7 = no shift
+		seq_patternSet.flamProbability[pattern][trackNr][k] = 100;
 
 		//every 1st step in a substep pattern active
 		if( (k%8) == 0)
@@ -2612,6 +2638,7 @@ void seq_copyTrack(uint8_t srcNr, uint8_t dstNr, uint8_t pattern)
 		dst->volume		= src->volume;
 
 		seq_patternSet.seq_stepTiming[pattern][dstNr][k] = seq_patternSet.seq_stepTiming[pattern][srcNr][k];
+		seq_patternSet.flamProbability[pattern][dstNr][k] = seq_patternSet.flamProbability[pattern][srcNr][k];
 	}
 
 	// copy which main steps are on/off
@@ -2642,6 +2669,7 @@ void seq_copyPattern(uint8_t src, uint8_t dst)
 			pdst->volume		= psrc->volume;
 
 			seq_patternSet.seq_stepTiming[dst][j][k] = seq_patternSet.seq_stepTiming[src][j][k];
+			seq_patternSet.flamProbability[dst][j][k] = seq_patternSet.flamProbability[src][j][k];
 		}
 
 		for( uint8_t i=0;i<NUM_BARS;i++)
@@ -2663,6 +2691,7 @@ void seq_copyTrackPattern(uint8_t track,uint8_t srcPattern,uint8_t dstPattern)
 	for(uint8_t step=0;step<NUM_STEPS;step++) {
 		seq_patternSet.seq_subStepPattern[dstPattern][track][step]=seq_patternSet.seq_subStepPattern[srcPattern][track][step];
 		seq_patternSet.seq_stepTiming[dstPattern][track][step]=seq_patternSet.seq_stepTiming[srcPattern][track][step];
+		seq_patternSet.flamProbability[dstPattern][track][step]=seq_patternSet.flamProbability[srcPattern][track][step];
 	}
 	for(uint8_t bar=0;bar<NUM_BARS;bar++)
 		seq_patternSet.seq_mainSteps[bar][dstPattern][track]=seq_patternSet.seq_mainSteps[bar][srcPattern][track];
@@ -2673,6 +2702,7 @@ void seq_copyStep(uint8_t track,uint8_t pattern,uint8_t src,uint8_t dst)
 	if(track>=NUM_TRACKS || pattern>=NUM_PATTERN || src>=NUM_STEPS || dst>=NUM_STEPS)return;
 	seq_patternSet.seq_subStepPattern[pattern][track][dst]=seq_patternSet.seq_subStepPattern[pattern][track][src];
 	seq_patternSet.seq_stepTiming[pattern][track][dst]=seq_patternSet.seq_stepTiming[pattern][track][src];
+	seq_patternSet.flamProbability[pattern][track][dst]=seq_patternSet.flamProbability[pattern][track][src];
 	const uint16_t srcBit=(uint16_t)(1u<<(src%16u));
 	const uint16_t dstBit=(uint16_t)(1u<<(dst%16u));
 	if(seq_patternSet.seq_mainSteps[src/16u][pattern][track]&srcBit)

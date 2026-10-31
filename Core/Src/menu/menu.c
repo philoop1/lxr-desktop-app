@@ -37,6 +37,7 @@
 
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Soundengine.h"
+#include "Soundengine/DSPAudio/lfo.h"
 #include "Soundengine/AudioCodecManager.h"
 #include "Soundengine/MIDI/MidiParser.h"
 
@@ -339,6 +340,9 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_PATTERN_SCALE,CAT_GLOBAL,LONG_PATTERN_SCALE},
 		{SHORT_PERF_RANDOM_VELO,CAT_GLOBAL,LONG_PERF_RANDOM_VELO},
 		{SHORT_PERF_AVL,CAT_GLOBAL,LONG_PERF_AVL},
+		{SHORT_STEP_FLAM_PROB,CAT_STEP,LONG_STEP_FLAM_PROB},
+		{SHORT_LFO_SLEW,CAT_LFO,LONG_LFO_SLEW},
+		{SHORT_LFO_POL,CAT_LFO,LONG_LFO_POL},
 
 
 
@@ -725,6 +729,11 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 		/*PAR_PATTERN_SCALE*/ DTYPE_MENU | (MENU_PATTERN_SCALE<<8),
 		/*PAR_PERF_RANDOM_VELO*/ DTYPE_0B100,
 		/*PAR_PERF_AVL*/ DTYPE_0B255,
+		/*PAR_STEP_FLAM_PROB*/ DTYPE_0B100,
+		/*PAR_LFO_SLEW1..6*/ DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,
+		/*PAR_LFO_POL1..6*/ DTYPE_MENU | (MENU_LFO_POL<<8),DTYPE_MENU | (MENU_LFO_POL<<8),
+			DTYPE_MENU | (MENU_LFO_POL<<8),DTYPE_MENU | (MENU_LFO_POL<<8),
+			DTYPE_MENU | (MENU_LFO_POL<<8),DTYPE_MENU | (MENU_LFO_POL<<8),
 
 
 };
@@ -964,6 +973,10 @@ void menu_init()
 	activeParameters[PAR_MASTER_FILTER_ENABLE]=0;
 	activeParameters[PAR_GLOBAL_SCALE]=0;
 	activeParameters[PAR_FX_SEND_MODE]=0;
+	for(uint8_t voice=0;voice<6;voice++) {
+		activeParameters[PAR_LFO_SLEW1+voice]=0;
+		activeParameters[PAR_LFO_POL1+voice]=2;
+	}
 	performance_resetExtended();
 
 
@@ -2819,6 +2832,8 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 		return syncRateNames[0][0];
 	case MENU_LFO_WAVES:
 		return lfoWaveNames[0][0];
+	case MENU_LFO_POL:
+		return lfoPolarityNames[0][0];
 	case MENU_RETRIGGER:
 		return retriggerNames[0][0];
 	case MENU_FOLLOW:
@@ -2919,6 +2934,9 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 		break;
 	case MENU_LFO_WAVES:
 		p=lfoWaveNames[curParmVal+1];
+		break;
+	case MENU_LFO_POL:
+		p=lfoPolarityNames[curParmVal+1];
 		break;
 	case MENU_RETRIGGER:
 		p=retriggerNames[curParmVal+1];
@@ -3718,6 +3736,15 @@ void menu_openPatternScale(void)
     activeParameters[PAR_PATTERN_SCALE]=perf_scaleIndex(seq_patternSet.scale[menu_scalePattern]);
     menu_repaintAll();
 }
+void menu_openLfoExtra(uint8_t secondScreen)
+{
+	uint8_t voice=menu_getActiveVoice();
+	if(voice>5)voice=5; /* open and closed hi-hat share LFO 6 */
+	menu_activePage=(uint8_t)(LFO_EXTRA1_PAGE+voice);
+	editModeActive=0;
+	menuIndex=secondScreen ? 4 : 0;
+	menu_repaintAll();
+}
 void menu_openPerformanceLayer(uint8_t subPage)
 {
 	if(subPage>=NUM_SUB_PAGES) return;
@@ -3732,7 +3759,8 @@ void menu_sendAllGlobals()
 	uint16_t i;
 	for(i=PAR_BEGINNING_OF_GLOBALS;(i<NUM_PARAMS);i++)
 	{
-		if(i!=PAR_PATTERN_SCALE)menu_parseGlobalParam(i,activeParameters[i]);
+		if(i!=PAR_PATTERN_SCALE && i!=PAR_STEP_FLAM_PROB)
+			menu_parseGlobalParam(i,activeParameters[i]);
 	}
 };
 //-----------------------------------------------------------------
@@ -3740,6 +3768,14 @@ void menu_sendAllGlobals()
 // This includes values for the currently active step in the sequencer
 void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 {
+	if(paramNr>=PAR_LFO_SLEW1 && paramNr<=PAR_LFO_SLEW6) {
+		lfo_setStepSlew((uint8_t)(paramNr-PAR_LFO_SLEW1),value);
+		return;
+	}
+	if(paramNr>=PAR_LFO_POL1 && paramNr<=PAR_LFO_POL6) {
+		lfo_setStepPolarity((uint8_t)(paramNr-PAR_LFO_POL1),value);
+		return;
+	}
     if(paramNr==PAR_PATTERN_SCALE) {
         activeParameters[PAR_PATTERN_SCALE]=value>7 ? 7 : value;
         return;
@@ -4030,6 +4066,9 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 
 	case PAR_STEP_FLAM:
 		frontPanel_sendData(SEQ_CC,SEQ_FLAM,value);
+		break;
+	case PAR_STEP_FLAM_PROB:
+		frontPanel_sendData(SEQ_CC,SEQ_FLAM_PROB,value);
 		break;
 
 	case PAR_STEP_SHIFT:

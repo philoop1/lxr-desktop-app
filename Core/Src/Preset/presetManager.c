@@ -55,6 +55,47 @@ char currentFolder[13];
 #define SNARE_NOISE_KIT_BYTES 4u
 static const uint8_t snareNoiseKitMagic[SNARE_NOISE_KIT_BYTES]={'S','N','E','2'};
 static const uint8_t oldSnareNoiseKitMagic[SNARE_NOISE_KIT_BYTES]={'S','N','E','1'};
+#define LFO_EXTRA_BYTES 16u
+static uint8_t mainLfoExtras[NUM_KIT_SLOTS][12];
+static void preset_defaultLfoExtras(uint8_t *data)
+{
+	for(uint8_t voice=0;voice<6;voice++) { data[voice]=0; data[6+voice]=2; }
+}
+static void preset_captureLfoExtras(uint8_t *data)
+{
+	for(uint8_t voice=0;voice<6;voice++) {
+		data[voice]=activeParameters[PAR_LFO_SLEW1+voice];
+		data[6+voice]=activeParameters[PAR_LFO_POL1+voice];
+	}
+}
+static void preset_applyLfoExtras(const uint8_t *data)
+{
+	for(uint8_t voice=0;voice<6;voice++) {
+		activeParameters[PAR_LFO_SLEW1+voice]=data[voice];
+		activeParameters[PAR_LFO_POL1+voice]=data[6+voice];
+		menu_parseGlobalParam(PAR_LFO_SLEW1+voice,data[voice]);
+		menu_parseGlobalParam(PAR_LFO_POL1+voice,data[6+voice]);
+	}
+}
+static void preset_writeLfoExtras(const uint8_t *data)
+{
+	UINT written;
+	f_write((FIL*)&SDFile,"LFX1",4,&written);
+	f_write((FIL*)&SDFile,data,12,&written);
+}
+static void preset_readLfoExtras(uint8_t *data)
+{
+	UINT bytes=0;
+	uint8_t block[LFO_EXTRA_BYTES]={0};
+	preset_defaultLfoExtras(data);
+	if(f_read((FIL*)&SDFile,block,sizeof(block),&bytes)!=FR_OK ||
+	   bytes!=sizeof(block) || memcmp(block,"LFX1",4))return;
+	memcpy(data,block+4,12);
+	for(uint8_t voice=0;voice<6;voice++) {
+		if(data[voice]>127)data[voice]=127;
+		if(data[6+voice]>2)data[6+voice]=2;
+	}
+}
 static void preset_writePatternScale(uint8_t pattern)
 {
     UINT written;
@@ -71,6 +112,30 @@ static void preset_readPatternScale(uint8_t pattern)
     if(f_read((FIL*)&SDFile,data,sizeof(data),&bytes)==FR_OK && bytes==sizeof(data) &&
        !memcmp(data,"SCL2",4) && data[4]==perf_scaleDivision(perf_scaleIndex(data[4])) && data[5]==(uint8_t)(data[4]^0xa5))
         seq_patternSet.scale[pattern]=data[4];
+}
+/* Added after SCL2 so the original packed Step/StepTiming layout stays intact. */
+static void preset_writeFlamProbability(uint8_t pattern)
+{
+    UINT written;
+    static const uint8_t magic[4]={'F','L','P','1'};
+    f_write((FIL*)&SDFile,magic,sizeof(magic),&written);
+    f_write((FIL*)&SDFile,seq_patternSet.flamProbability[pattern],
+            NUM_TRACKS*NUM_STEPS,&written);
+}
+static void preset_readFlamProbability(uint8_t pattern)
+{
+    UINT bytes=0;
+    uint8_t magic[4]={0};
+    memset(seq_patternSet.flamProbability[pattern],100,NUM_TRACKS*NUM_STEPS);
+    if(f_read((FIL*)&SDFile,magic,sizeof(magic),&bytes)!=FR_OK ||
+       bytes!=sizeof(magic) || memcmp(magic,"FLP1",4)) return;
+    if(f_read((FIL*)&SDFile,seq_patternSet.flamProbability[pattern],
+              NUM_TRACKS*NUM_STEPS,&bytes)!=FR_OK || bytes!=NUM_TRACKS*NUM_STEPS)
+        memset(seq_patternSet.flamProbability[pattern],100,NUM_TRACKS*NUM_STEPS);
+    for(uint8_t track=0;track<NUM_TRACKS;track++)
+        for(uint8_t step=0;step<NUM_STEPS;step++)
+            if(seq_patternSet.flamProbability[pattern][track][step]>100)
+                seq_patternSet.flamProbability[pattern][track][step]=100;
 }
 static void preset_defaultSnareLayer(uint8_t *parameters)
 {
@@ -278,6 +343,9 @@ FRESULT preset_saveTmpKit()
 	//write the preset data
 	f_write((FIL*)&SDFile,activeParameters,END_OF_SOUND_PARAMETERS,&bytesWritten);
 	f_write((FIL*)&SDFile,snareNoiseKitMagic,SNARE_NOISE_KIT_BYTES,&bytesWritten);
+	uint8_t lfoExtras[12];
+	preset_captureLfoExtras(lfoExtras);
+	preset_writeLfoExtras(lfoExtras);
 
 	//close the file
 	f_close((FIL*)&SDFile);
@@ -326,6 +394,9 @@ FRESULT preset_LoadTmpKit()
 			UINT magicBytes=0;
 			f_read((FIL*)&SDFile,magic,sizeof(magic),&magicBytes);
 			preset_validateSnareExtension(para,bytesRead,magic,magicBytes);
+			uint8_t lfoExtras[12];
+			preset_readLfoExtras(lfoExtras);
+			preset_applyLfoExtras(lfoExtras);
 
 			//special case mod targets. normalize.
 			const uint8_t nmt=getNumModTargets();
@@ -504,6 +575,7 @@ FRESULT preset_LoadTmpPat()
 		{
 			f_read((FIL*)&SDFile,(void*)&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesRead);
 		preset_readPatternScale(patternNr);
+		preset_readFlamProbability(patternNr);
 			if(bytesRead == 0) success = 0;
 
 		}
@@ -632,6 +704,7 @@ FRESULT preset_saveTmpPat()
 		//write associated kit nr
 		f_write((FIL*)&SDFile,&seq_patternSet.kitNr[presetNr],sizeof(uint8_t),&bytesWritten);
 		preset_writePatternScale(presetNr);
+		preset_writeFlamProbability(presetNr);
 
 #endif
 
@@ -832,6 +905,7 @@ void preset_init(uint8_t presetNr)
 		para[i-8] = i<INIT_KIT_SIZE ? initKit[i] : 0;
 	}
 	preset_defaultSnareNoise(para);
+	preset_defaultLfoExtras(mainLfoExtras[presetNr]);
 
 	//special case mod targets. normalize.
 	const uint8_t nmt=getNumModTargets();
@@ -846,6 +920,7 @@ void preset_init(uint8_t presetNr)
 
 	//copy parameters to edit buffer
 	memcpy(activeParameters, mainParameters[presetNr], sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
+	preset_applyLfoExtras(mainLfoExtras[presetNr]);
 	preset_sendDrumsetParameters();
 	//frontPanel_sendData(PRESET,PRESET_LOAD,presetNr);
 
@@ -886,6 +961,7 @@ static void preset_writeDrumsetData(uint8_t presetNr, uint8_t isMorph)
 		}
 	}
 	f_write((FIL*)&SDFile,snareNoiseKitMagic,SNARE_NOISE_KIT_BYTES,&bytesWritten);
+	preset_writeLfoExtras(mainLfoExtras[presetNr]);
 }
 
 //----------------------------------------------------
@@ -901,6 +977,7 @@ void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmedi
 		// Keep the live master sample rate when kit loading is disabled for it.
 		const uint8_t masterSampleRate = activeParameters[PAR_VOICE_DECIMATION_ALL];
 		memcpy(activeParameters, mainParameters[presetNr], sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
+		preset_applyLfoExtras(mainLfoExtras[presetNr]);
 		if(!activeParameters[PAR_LOAD_SAMPLE_RATE])
 			activeParameters[PAR_VOICE_DECIMATION_ALL] = masterSampleRate;
 		if(activeParameters[PAR_LOAD_MORPH])
@@ -960,6 +1037,7 @@ void preset_saveDrumsetRam(uint8_t presetNr, uint8_t isMorph)
 	{
 		//copy edit buffer to parameter array
 		memcpy(mainParameters[presetNr], activeParameters, sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
+		preset_captureLfoExtras(mainLfoExtras[presetNr]);
 	}
 }
 //----------------------------------------------------
@@ -1432,6 +1510,7 @@ static FRESULT preset_readDrumsetData(uint8_t presetNr, uint8_t isMorph)
 		UINT magicBytes=0;
 		FRESULT magicResult=f_read((FIL*)&SDFile,magic,sizeof(magic),&magicBytes);
 		preset_validateSnareExtension(para,bytesRead,magic,magicResult==FR_OK?magicBytes:0);
+		if(!isMorph)preset_readLfoExtras(mainLfoExtras[presetNr]);
 		
 		//special case mod targets. normalize.
 		const uint8_t nmt=getNumModTargets();
@@ -1907,6 +1986,7 @@ static void preset_writePatternData(uint8_t patternNr)
 		//write associated kit nr
 		f_write((FIL*)&SDFile,&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesWritten);
 		preset_writePatternScale(patternNr);
+		preset_writeFlamProbability(patternNr);
 
 #endif
 }
@@ -2250,6 +2330,7 @@ static uint8_t preset_readPatternData(uint8_t patternNr, uint8_t dataVersion)
 	{
 		f_read((FIL*)&SDFile,(void*)&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesRead);
 		preset_readPatternScale(patternNr);
+		preset_readFlamProbability(patternNr);
 		if(bytesRead == 0) success = 0;
 
 	}
@@ -2793,7 +2874,7 @@ FRESULT preset_saveProject(uint8_t presetNr)
 
 	// write some more padding (we'll allocate 512 bytes for kit data. This should be more than
 	// we'll ever need. Right now we use about 228 bytes).
-	remain = 512 - (END_OF_SOUND_PARAMETERS + SNARE_NOISE_KIT_BYTES);
+	remain = 512 - (END_OF_SOUND_PARAMETERS + SNARE_NOISE_KIT_BYTES + LFO_EXTRA_BYTES);
 	while(remain){
 		if(remain < GEN_BUF_LEN)
 			siz=(uint8_t)remain;
@@ -3244,7 +3325,7 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 		goto closeFile;
 
 	// read padding
-	remain = 512 - (END_OF_SOUND_PARAMETERS + SNARE_NOISE_KIT_BYTES);
+	remain = 512 - (END_OF_SOUND_PARAMETERS + SNARE_NOISE_KIT_BYTES + LFO_EXTRA_BYTES);
 	while(remain){
 		if(remain < GEN_BUF_LEN)
 			siz=(uint8_t)remain;

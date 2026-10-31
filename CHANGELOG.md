@@ -6,6 +6,12 @@ are recorded here. The upstream project keeps its own Git history.
 
 ## Unreleased
 
+### Mutador 0.2 (hardware test pending)
+
+- Added the rps LFO waveform: a played Step from the selected trigger voice changes the held random value once, independently of the target voice. A third and fourth LFO view expose trigger, destination, amount, offset, slew and Helicase-style neg/pos/bi polarity.
+- Added per-Step fpr (Flam Probability). It gates the repeat hits after the main Step passes its normal probability; 0 leaves only the main hit and 100 preserves every Flam hit.
+- New FLP1 Pattern and LFX1 Kit extensions retain these controls while older files load with compatible defaults. The new LFO extras are not morphed. ARM build and targeted host checks passed; device sound and save/load tests are pending.
+
 ### Mutador 0.1.28 (pattern selection hardware retest passed)
 
 - Immediate kit loading now sends translated modulation destinations once. Its generic CC loop skips stored destination indices and LFO voice selectors, which the imported CC map otherwise interpreted as parameter IDs. This fixes a concrete kit-load encoding error associated with the ongoing freeze investigation. Production loader audit and ARM release build passed. The user confirmed pattern selection works again on the physical unit with 0.1.28; other changes need broader device checks.

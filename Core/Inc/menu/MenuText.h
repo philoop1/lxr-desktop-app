@@ -49,6 +49,7 @@
 #define MENU_FX_OUTPUT_MODE 31
 #define MENU_SNARE_LAYER_MODE 32
 #define MENU_PATTERN_SCALE 33
+#define MENU_LFO_POL 34
 #define MENU_AUDIO_OUT_FX	26
 
 //-----------------------------------------------------------------
@@ -262,7 +263,7 @@ const char retriggerNames[][4]  =
 //-----------------------------------------------------------------
 const char lfoWaveNames[][4]  =
 {
-	{10},		//number of entries
+	{11},		//number of entries
 	{"sin"},
 	{"tri"},
 	{"sup"},
@@ -273,7 +274,9 @@ const char lfoWaveNames[][4]  =
 	{"xdn"},
 	{"str"},
 	{"gld"},
+	{"rps"},
 };
+const char lfoPolarityNames[][4]={{3},{"neg"},{"pos"},{"bi "}};
 //-----------------------------------------------------------------
 const char repeatSyncNames[][4]={{16},{"1"},{"2d"},{"2"},{"4d"},{"3"},{"4"},{"8d"},{"6"},{"8"},{"16d"},{"12"},{"16"},{"24"},{"32"},{"64"},{"128"}};
 const char delayModeNames[][4]={{2},{"mon"},{"pol"}};
@@ -567,6 +570,9 @@ const char shortNames[][4]  =
 	{"scl"},
 	{"rvl"},
 	{"avl"},
+	{"fpr"},
+	{"slw"},
+	{"pol"},
 
 
 
@@ -766,6 +772,9 @@ const char longNames[][16] =
 	{"Pattern Scale"},
 	{"Random Velocity"},
 	{"Velocity Gain"},
+	{"Flam Probability"},
+	{"LFO Slew"},
+	{"LFO Polarity"},
 
 
 

@@ -26,7 +26,7 @@ static void check(int ok,const char *what){checks++;if(!ok){fprintf(stderr,"FAIL
 '''
 prelude+=read(ROOT/'Core/Inc/Preset/SeqStep.h')
 prelude+=r'''
-struct {Step seq_subStepPattern[64][7][64];StepTiming seq_stepTiming[64][7][64];struct{uint8_t scale;}seq_patternSettings[64];}seq_patternSet;
+struct {Step seq_subStepPattern[64][7][64];StepTiming seq_stepTiming[64][7][64];uint8_t flamProbability[64][7][64];struct{uint8_t scale;}seq_patternSettings[64];}seq_patternSet;
 typedef struct {uint16_t param;} ModTarg;
 const ModTarg modTargets[3]={{0},{5},{130}};
 uint8_t getNumModTargets(void){return 3;}
@@ -93,16 +93,16 @@ int main(void){
  check(stepEdit_mask(2,3)==expected,"selection remains latched after release");
  memset(&seq_patternSet,0,sizeof(seq_patternSet));
  for(int i=0;i<64;i++)seq_patternSet.seq_subStepPattern[2][3][i].volume=133;
- const uint16_t parameters[9]={PAR_STEP_NOTE,PAR_STEP_VOLUME,PAR_STEP_PROB,PAR_STEP_FLAM,PAR_STEP_SHIFT,PAR_P1_DEST,PAR_P2_DEST,PAR_P1_VAL,PAR_P2_VAL};
- const uint8_t values[9]={72,42,80,5,14,1,2,91,92};
- for(int p=0;p<9;p++)check(stepEdit_apply(2,3,parameters[p],values[p]),"all nine group-edit fields handled");
+ const uint16_t parameters[10]={PAR_STEP_NOTE,PAR_STEP_VOLUME,PAR_STEP_PROB,PAR_STEP_FLAM_PROB,PAR_STEP_FLAM,PAR_STEP_SHIFT,PAR_P1_DEST,PAR_P2_DEST,PAR_P1_VAL,PAR_P2_VAL};
+ const uint8_t values[10]={72,42,80,37,5,14,1,2,91,92};
+ for(int p=0;p<10;p++)check(stepEdit_apply(2,3,parameters[p],values[p]),"all ten group-edit fields handled");
  for(unsigned i=0;i<64;i++) {
    Step*x=&seq_patternSet.seq_subStepPattern[2][3][i];int selected=(expected>>i)&1;
    check(x->volume==(selected?170:133),"group volume preserves active flag and unselected steps");
    check(x->note==(selected?72:0)&&x->prob==(selected?80:0),"group note/probability");
    check(x->param1Nr==(selected?6:0)&&x->param2Nr==(selected?130:0),"group destination storage encoding");
    check(x->param1Val==(selected?91:0)&&x->param2Val==(selected?92:0),"group automation values");
-   check(seq_patternSet.seq_stepTiming[2][3][i].flam==(selected?5:0)&&seq_patternSet.seq_stepTiming[2][3][i].shift==(selected?14:0),"group timing");
+   check(seq_patternSet.seq_stepTiming[2][3][i].flam==(selected?5:0)&&seq_patternSet.seq_stepTiming[2][3][i].shift==(selected?14:0)&&seq_patternSet.flamProbability[2][3][i]==(selected?37:0),"group timing and flam probability");
  }
  check(!stepEdit_apply(2,3,PAR_BPM,120)&&!stepEdit_apply(2,4,PAR_STEP_NOTE,1),"group never edits globals or another voice");
  check(stepEdit_press(2,3,5,5)&&stepEdit_mask(2,3)==((uint64_t)1<<5),"new unheld press replaces latched group");

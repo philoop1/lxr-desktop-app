@@ -32,6 +32,10 @@ working `build/` directory. They are **not** full-flash or bootloader images.
 | `LXR_V2_V1.7_Mutador0.1.25.img` | Proportional AVL gain after RVL; card hash verified | 318,260 bytes | `6DFB73370CAD9E8EC5E87C05F6E8B74EA29CD7D800917F1851C3B4A214D0F492` |
 | `LXR_V2_V1.7_Mutador0.1.26.img` | CC bounds, MIDI reentry protection, project loading name; device retest pending | 318,260 bytes | `462432BA7278419494974FA9181EBB23D009E3837726A298711A31E924443E8E` |
 
+| `LXR_V2_V1.7_Mutador0.1.27.img` | Kit-loader bounds guard; hardware freeze persisted | 318,084 bytes | `10A5980FD81A1B2C2A4B9C2C88C5BD63EF738DD16BBBA38FB65B9A44F0929EF1` |
+| `LXR_V2_V1.7_Mutador0.1.28.img` | Immediate kit selector fix; targeted hardware retest passed | 318,108 bytes | `08FD79C072EE4B068913E5563CD70565689DC028C3596879E278564715325C03` |
+| `LXR_V2_V1.7_Mutador0.2.img` | Random per played Step LFO, Flam Probability, compatible pattern/kit extensions; card verified | 323,084 bytes | `F58CF6793F27726F51FD504494E62571B41694213F0D7F837745DEE4A8A4D0AF` |
+
 To install one version, copy **only that one `.img`** to the root of an SD
 card and remove older `LXR*.img` update files from the card first. Keep this
 archive off the card. Mutador 0.1 booted on physical hardware and showed a

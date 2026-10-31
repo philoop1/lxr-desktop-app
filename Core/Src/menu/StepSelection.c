@@ -31,7 +31,7 @@ uint8_t stepEdit_apply(uint8_t pattern,uint8_t voice,uint16_t parameter,uint8_t 
     uint64_t mask=stepEdit_mask(pattern,voice);
     if(!mask)return 0;
     switch(parameter) {
-    case PAR_STEP_NOTE:case PAR_STEP_VOLUME:case PAR_STEP_PROB:
+    case PAR_STEP_NOTE:case PAR_STEP_VOLUME:case PAR_STEP_PROB:case PAR_STEP_FLAM_PROB:
     case PAR_STEP_FLAM:case PAR_STEP_SHIFT:case PAR_P1_DEST:case PAR_P2_DEST:
     case PAR_P1_VAL:case PAR_P2_VAL:break;
     default:return 0;
@@ -47,6 +47,7 @@ uint8_t stepEdit_apply(uint8_t pattern,uint8_t voice,uint16_t parameter,uint8_t 
         case PAR_STEP_NOTE:step->note=value;break;
         case PAR_STEP_VOLUME:step->volume=(uint8_t)((step->volume&128u)|(value&127u));break;
         case PAR_STEP_PROB:step->prob=value;break;
+        case PAR_STEP_FLAM_PROB:seq_patternSet.flamProbability[pattern][voice][i]=value;break;
         case PAR_STEP_FLAM:seq_patternSet.seq_stepTiming[pattern][voice][i].flam=value;break;
         case PAR_STEP_SHIFT:seq_patternSet.seq_stepTiming[pattern][voice][i].shift=value;break;
         case PAR_P1_DEST:step->param1Nr=value;break;

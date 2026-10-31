@@ -99,6 +99,7 @@ typedef struct PatternSetStruct
 {
 	Step seq_subStepPattern[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];	//contains step data
 	StepTiming seq_stepTiming[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
+	uint8_t flamProbability[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
 	uint16_t seq_mainSteps[NUM_BARS][NUM_PATTERN][NUM_TRACKS];		//bits represent if step is active
 	//PatternSetting seq_patternSettings[NUM_PATTERN];				//pattern chaining info
 	uint8_t length[NUM_PATTERN][NUM_TRACKS];	//only used in euklid generator?
@@ -111,6 +112,7 @@ typedef struct PatternBackupBufferStruct
 {
 	Step seq_subStepPattern[NUM_TRACKS][NUM_STEPS];	//contains step data
 	uint8_t seq_stepTiming[NUM_TRACKS][NUM_STEPS];
+	uint8_t flamProbability[NUM_TRACKS][NUM_STEPS];
 	uint16_t seq_mainSteps[NUM_BARS][NUM_TRACKS];		//bits represent if step is active
 	//PatternSetting seq_patternSettings[NUM_PATTERN];				//pattern chaining info
 	uint8_t length[NUM_TRACKS];	//only used in euklid generator?

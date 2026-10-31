@@ -36,7 +36,7 @@ uint8_t disk[65536];unsigned size,cursor;
 int f_write(FIL *f,const void *src,unsigned count,UINT *done){(void)f;if(cursor+count>sizeof(disk))abort();memcpy(disk+cursor,src,count);cursor+=count;if(cursor>size)size=cursor;*done=count;return 0;}
 int f_read(FIL *f,void *dst,unsigned count,UINT *done){(void)f;*done=size-cursor<count?size-cursor:count;memcpy(dst,disk+cursor,*done);cursor+=*done;return 0;}
 """
-for name in ['preset_writePatternScale','preset_readPatternScale','preset_writePatternData','preset_readPatternData']:
+for name in ['preset_writePatternScale','preset_readPatternScale','preset_writeFlamProbability','preset_readFlamProbability','preset_writePatternData','preset_readPatternData']:
  code+=function(preset,name)+'\n'
 for name in ['seq_copyPatternToBackupBuffer','seq_copyBackupBufferToPattern','seq_copyPattern']:
  code+=function(seq,name)+'\n'
@@ -110,18 +110,21 @@ int main(void){
  for(unsigned mode=0;mode<8;mode++){
   memset(&seq_patternSet,0,sizeof(seq_patternSet));
   seq_patternSet.scale[3]=divisions[mode];seq_patternSet.kitNr[3]=17;
+  seq_patternSet.flamProbability[3][2][5]=37;
   for(unsigned t=0;t<7;t++){seq_patternSet.length[3][t]=64;seq_patternSet.seq_mainSteps[3][3][t]=0xabcd;}
   size=cursor=0;preset_writePatternData(3);unsigned modernSize=size;
-  check(size>6&&memcmp(disk+size-6,"SCL2",4)==0,"tagged pattern trailer");
+  check(size>458&&memcmp(disk+size-458,"SCL2",4)==0&&memcmp(disk+size-452,"FLP1",4)==0,"tagged pattern trailers");
   cursor=0;check(preset_readPatternData(4,3),"modern pattern load succeeds");
   check(seq_patternSet.scale[4]==divisions[mode]&&seq_patternSet.kitNr[4]==17&&seq_patternSet.seq_mainSteps[3][4][0]==0xabcd,"scale and legacy pattern data roundtrip");
-  size=modernSize-6;cursor=0;seq_patternSet.scale[4]=32;
-  check(preset_readPatternData(4,3)&&seq_patternSet.scale[4]==16,"legacy pattern defaults to 16");
-  size=modernSize;disk[size-1]^=1;cursor=0;
+  check(seq_patternSet.flamProbability[4][2][5]==37,"flam probability roundtrip");
+  size=modernSize-458;cursor=0;seq_patternSet.scale[4]=32;
+  check(preset_readPatternData(4,3)&&seq_patternSet.scale[4]==16&&seq_patternSet.flamProbability[4][2][5]==100,"legacy pattern defaults safely");
+  size=modernSize;disk[size-453]^=1;cursor=0;
   check(preset_readPatternData(4,3)&&seq_patternSet.scale[4]==16,"bad trailer checksum defaults safely");
-  seq_copyPattern(3,5);check(seq_patternSet.scale[5]==divisions[mode],"copy retains scale");
-  seq_copyPatternToBackupBuffer(3);seq_patternSet.scale[3]=0;seq_copyBackupBufferToPattern(3);
-  check(seq_patternSet.scale[3]==divisions[mode],"backup retains scale");
+  disk[size-453]^=1;
+  seq_copyPattern(3,5);check(seq_patternSet.scale[5]==divisions[mode]&&seq_patternSet.flamProbability[5][2][5]==37,"copy retains scale and flam probability");
+  seq_copyPatternToBackupBuffer(3);seq_patternSet.scale[3]=0;seq_patternSet.flamProbability[3][2][5]=0;seq_copyBackupBufferToPattern(3);
+  check(seq_patternSet.scale[3]==divisions[mode]&&seq_patternSet.flamProbability[3][2][5]==37,"backup retains scale and flam probability");
  }
  seq_activePattern=3;seq_patternSet.scale[3]=12;
  systick_ticks=100;pressButton(BUT_MODE2);systick_ticks=2099;buttonHandler_tick();check(!opened,"short PERF does not open Scale");

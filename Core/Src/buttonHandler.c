@@ -640,7 +640,17 @@ static void buttonHandler_handleSelectButton(uint8_t buttonNr) {
 		case SELECT_MODE_VOICE:
 
 			//change sub page -> osc, filter, mod etc...
-			menu_switchSubPage(buttonNr, 1);
+			if(menu_getActivePage()>=LFO_EXTRA1_PAGE && menu_getActivePage()<=LFO_EXTRA6_PAGE) {
+				if(buttonNr==6 && (getMenuIndx()&MASK_PARAMETER)<4)
+					menu_openLfoExtra(1);
+				else {
+					menu_switchPage(menu_getActiveVoice());
+					menu_switchSubPage(buttonNr,0);
+				}
+			} else if(buttonNr==6 && menu_getActivePage()==menu_getActiveVoice() &&
+				menu_getSubPage()==6 && (getMenuIndx()&MASK_PARAMETER)>=4)
+				menu_openLfoExtra(0);
+			else menu_switchSubPage(buttonNr, 1);
 			//go to 1st parameter on sub page
 			menu_resetActiveParameter();
 			led_setActiveSelectButton(buttonNr);

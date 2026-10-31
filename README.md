@@ -12,7 +12,7 @@ work; its checkboxes do not claim that a feature has already been ported.
 
 ## Experimental Mutador changes
 
-Current preview: **Mutador 0.1.28**, experimental and awaiting broader physical-device
+Current preview: **Mutador 0.2**, experimental and awaiting broader physical-device
 checks of its new controls. The startup display identifies this version.
 
 - **SHIFT+Step 1 from every mode:** opens pattern selection with the first PERF view.
@@ -20,6 +20,8 @@ checks of its new controls. The startup display identifies this version.
 - **rvl then avl after cnt:** Mutador Random Velocity plus a -100 to +100 percent proportional velocity gain for all sequencer voices and MIDI output: +50 is x1.5, +100 is x2, clipped at 127. Both persist with project settings; pbr moves to the last field.
 - **Pattern Scale 2/4/6/8/12/16/24/32:** hold PERFORMANCE, turn the encoder to preview, then click to confirm. A running change starts Step 1 on the next transport bar; stopped changes apply immediately. Confirmation enables `scl=pat`. Save the pattern/project to retain it.
 - At **12**, each 16-step page plays slots 1-12; slots 13-16 remain stored. Other divisions retain all 64 steps. At **32**, 64 steps take two bars; **6** and **24** provide triplet timing.
+- **Random per played Step LFO (`rps`):** its `rtg` voice supplies triggers only from audible sequencer Steps; the target `voi` is independent. The third/fourth LFO views expose trigger, destination, amount, offset, slew and neg/pos/bi polarity. Kit storage has compatible defaults for old kits.
+- **Step Flam Probability (`fpr`):** after the main Step passes `prob`, fpr decides whether its Flam repeats play. It is saved per Step; old patterns default to 100.
 - **Stray/Glide LFOs** (`str`/`gld`), with smooth random motion, Offset bias and Retrigger behavior. `ofs=63` is neutral.
 - **Common Voice-CC map** on the voice channels, including Snare CC112-118, LFO controls and destination selection. Global/Pch channels retain priority; the first matching voice wins on a shared channel.
 - **Snare noise envelope and second oscillator** with Mix/FM/Ring, kit storage, Morph and LFO/velocity/step destinations. Snare OSC/FM names and ordering follow Mutador, retaining PWM in place of Membrane.
@@ -27,7 +29,7 @@ checks of its new controls. The startup display identifies this version.
 
 See the [Performance chapter](manual/chapters/07_performance.md),
 [MIDI map](manual/chapters/05_midi_and_clock.md), and
-[latest session](docs/sessions/030-pattern-bank-freeze-investigation.md).
+[latest session](docs/sessions/031-random-step-lfo-flam-probability.md).
 The release build and native source/timing/storage tests passed. This does
 not establish sound, timing or CPU parity on the physical instrument.
 

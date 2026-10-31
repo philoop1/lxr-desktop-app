@@ -74,3 +74,7 @@ ends an incomplete operation. Pattern bank selection addresses all 64 slots.
 
 [Previous: Voices and sound parameters](02_voices_and_sound.md) ·
 [Next: Saving and loading](04_saving_and_loading.md)
+
+## Flam Probability (0.2)
+
+The Step screen now has fpr next to the ordinary Step probability, Flam and Shift controls. The normal probability first decides whether the Step sounds. If it does, fpr decides whether its Flam repeats also sound. fpr=0 leaves only the main hit; fpr=100 keeps the full Flam. This decision is shared by all repeats of that Step. fpr is copied with Steps and saved in an FLP1 trailer after the existing pattern scale; older patterns load with fpr=100.

@@ -73,3 +73,7 @@ modulation path. Frequency 0 now stops the LFO, as in Mutador. For `rnd`
 at Frequency 0, Offset sets the held random value and a configured retrigger
 chooses another random value. Existing waveform IDs and kit fields are
 unchanged; the new shapes are stored as IDs 8 and 9 in the existing field.
+
+## Random per played Step LFO (0.2)
+
+Select the new LFO wave rps. Press the LFO parameter button repeatedly: the first two views are the existing controls; the third shows wave, rtg (source/trigger voice), voi (target voice) and dst; the fourth shows amount, ofs (value bias), slw (slew) and pol (neg, pos or bi). A random value is picked once when an active Step of rtg actually sounds. Empty, muted or probability-skipped Steps do not retrigger it. Open and closed hi-hat Steps both count as voice 6. slw=0 jumps immediately; higher values glide toward the new value. ofs=0 is neutral in rps mode. The LFO settings are saved with the kit. The new slew and polarity values do not morph between kits.
