@@ -23,6 +23,16 @@ inventory; **unknown** needs behavioral or binary verification.
 | Master FX / P08 | `front/LxrAvr/Parameters.h`, DSP mixer/filter source; `PAR_MASTER_FILTER`, `PAR_MASTER_FILTER_RESO`, `PAR_MASTER_FILTER_DRIVE`, `PAR_FX_SEND_MODE` | `Core/Inc/Parameters.h`, `Core/Inc/menu/menuPages.h`, `Core/Src/Soundengine/DSPAudio/`; `PAR_FX_TYPE`, `PAR_FX_ROUTING`, `PAR_FX_DRY_WET` already exist | mutador Control/PC CC30..39; `fxm` st2/lr2; All and Settings fields | **Present + missing:** desktop has FX bus/drive/ring/compressor/delay; compare routing before adding master LP/HP and bipolar sends. |
 | New voice synthesis / P09 | `front/LxrAvr/Parameters.h`, DSP voice files; `PAR_MEMBRANE1..3`, `PAR_SNARE_MEMBRANE`, `PAR_SNARE_NOISE_*`, `PAR_SNARE_LAYER_*` | `Core/Inc/Parameters.h`, `Core/Src/Soundengine/DSPAudio/`, `Core/Src/Preset/presetManager.c`; these named extension IDs not found | mutador per-voice CC111 and Snare CC112..118; mutador extended Kit/Morph/Performance/All blocks | **Missing:** one voice feature per branch or small related batch; explicitly version desktop kit blocks and test legacy kits. |
 
+## Fork changes after this baseline inventory
+
+As of 2026-10-29, Pch and Morph CC2 have an initial implementation; P01 is
+partial. The fork also has CPU display, the PERF pattern shortcut, Morph
+update corrections, master srt independent of Morph, and lsh/lmp/lsr load
+policies. User feedback confirms 0.1.4 works on the device. These additions
+do not establish full MIDI, storage or sync parity. The baseline rows above
+retain their original snapshot meaning; current priorities are in the
+[updated import plan](IMPORT_MUTADOR_PLAN.md).
+
 ## Storage and ABI warning
 
 - The symbolic `PAR_*` names above identify **roles**, not compatible numeric
@@ -42,6 +52,15 @@ inventory; **unknown** needs behavioral or binary verification.
 
 ## Next evidence needed
 
+The table above is the initial source/target snapshot. Implemented delta in
+0.1.12: four-point Groove (`PAR_SHUFFLE`, `PAR_GROOVE_SH2/3/4`), Pch
+CC40/41/42/43, PERF subpage 4 / SHIFT+4, globals offsets 58..60 (61 stored
+bytes total). `PerformanceGroove.c`, `PerformanceSteps.c`, `PerformanceDelay.c`
+and `sequencer.c` integrate fine note/repeat timing; `clockSync.c` and
+`TriggerOut.c` integrate external anchors and groove clock output. The menu,
+globals loader and MIDI parser expose controls and the lsh load hold.
+See [session 020](sessions/020-four-point-groove.md) for validation and limits.
+
 1. ~~Successful untouched desktop image with a supported compiler.~~ Done:
    ARM GCC 14.3, image SHA-256 `B34C0C3A946D02C5CEE624351A44C2597694B4832FDAA9CBAEB3627F84979AFE`.
 2. Same Euclid input cases run on official 1.71 and the built desktop image;
@@ -49,3 +68,32 @@ inventory; **unknown** needs behavioral or binary verification.
 3. Hardware smoke test for audio, save/load, DIN/USB MIDI and analogue sync.
 4. For P01, a checked numeric CC table and channel-precedence test before
    source changes.
+# 2026-10-30 delta
+
+The 0.1.14 import in [session 022](sessions/022-step-scale-audio-import.md) adds global grids, grouped step editing, half-closed hi-hat, physical external sends, six voice plus master VCAs, and master filter. The original matrix below is retained as the pre-import audit. Still absent: LFO Stray and Glide, Snare noise envelope, drum oscillator `rng` mix mode, Membrane and additional Snare layers. Hardware and old-kit/Morph checks remain open.
+
+The 0.1.15 follow-up in [session 023](sessions/023-snare-ring-clock.md) adds Snare Noise Envelope, `rng` Ring mode and MIDI Clock Offset. The earlier missing list is a historical 0.1.14 snapshot; Stray/Glide, Membrane and extra Snare layers remain absent.
+
+The 0.1.16 follow-up in [session 024](sessions/024-copy-start-snare-layer.md) adds the Snare's second oscillator, COPY for individual steps/eight-step groups/tracks across patterns, and a separate predictive manual MIDI Clock bar start. Mutador's eight-substep main-step structure has no direct desktop equivalent; the desktop adaptation copies its actual 64-step data and timing fields.
+
+## Current delta through 0.1.22
+
+The Snare noise envelope and oscillator layer, destinations and voice CCs are
+implemented. Stray/Glide and the full common Voice-CC map are now present,
+excluding Membrane. Earlier missing lists describe their dated checkpoints.
+Still open: Random Velocity, scl quarter-position switching, per-pattern
+scale, and hardware behavior/CPU checks. See session 026.
+
+## Current Scale update in 0.1.22
+
+Session 027 implements per-pattern 2/4/6/8/12/16/24/32, long PERFORMANCE,
+encoder preview/confirmation and next-bar Step-1 switching. This supersedes
+the preceding open scale items and 12a/b/c planning. Random Velocity and
+Membrane remain absent; hardware verification remains open.
+
+## 0.1.23 velocity checkpoint
+
+Random Velocity is now imported, together with the new AVL control applied
+after it, and SHIFT+Step 1 from every mode. See session 028. This supersedes
+the earlier missing-Random-Velocity lists. Hardware verification remains open;
+Membrane is still intentionally excluded.

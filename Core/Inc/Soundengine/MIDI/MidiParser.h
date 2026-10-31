@@ -40,6 +40,13 @@ void midiDebugSend(uint8_t b1, uint8_t b2);
 // 5 - M2A - midi in to usb out and midi out
 
 void midiParser_setRouting(uint8_t value);
+void midiParser_setGlobalPitch(uint8_t value);
+void midiParser_setGlobalDecay(uint8_t value);
+void midiParser_setStepPerformance(uint16_t parameter,uint8_t value);
+void midiParser_setDelayParameter(uint16_t parameter,uint8_t value);
+void midiParser_setAccentParameter(uint16_t parameter,uint8_t value);
+uint8_t midiParser_applyPerformanceVelocity(uint8_t voice,uint8_t velocity,uint8_t note);
+void midiParser_setPitchBendRange(uint8_t value);
 
 // it's either tx or rx. value is a bitmap value from 0 to 15 where (lsb first):
 // bit 1 - Note on/off
@@ -50,7 +57,7 @@ void midiParser_setFilter(uint8_t is_tx, uint8_t value);
 
 // a place to store all the incoming CC values
 //needed to know to which value the automation node should return
-extern uint8_t midiParser_originalCcValues[0xff];
+extern uint8_t midiParser_originalCcValues[0x100];
 
 
 extern uint8_t midi_MidiChannels[8]; // last element is global channel

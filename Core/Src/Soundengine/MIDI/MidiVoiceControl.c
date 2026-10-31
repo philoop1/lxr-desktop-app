@@ -27,18 +27,19 @@ uint8_t voiceStatus[NUM_DRUM_VOICES];
 static uint8_t active_voices=0;	// which voices are currently playing a note
 //----------------------------------------------------------------
 // this fn assumes a valid voice is sent
-void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
+static void voiceControl_trigger(uint8_t voice, uint8_t note, uint8_t vel, uint8_t echo, uint8_t modVelocity)
 {
 	active_voices |= (1<<voice);
+	const uint8_t soundNote=midiParser_applyPerformanceVelocity(voice,modVelocity,note);
 
 	if(voice < 3)
-		Drum_trigger(voice, vel, note);
+		Drum_trigger(voice, vel, soundNote);
 	else if(voice < 4)
-		Snare_trigger(vel, note);
+		Snare_trigger(vel, soundNote);
 	else if(voice < 5)
-		Cymbal_trigger(vel, note);
+		Cymbal_trigger(vel, soundNote);
 	else
-		HiHat_trigger(vel,voice-5,note);
+		HiHat_trigger(vel,voice-5,soundNote);
 	
 	//Send trigger out signal
 	/*
@@ -51,7 +52,7 @@ void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
 	}
 	*/
 
-	if (active_voices & (1<<voice))
+	if (echo && (active_voices & (1<<voice)))
 	{
     uint8_t midiChan = midi_MidiChannels[voice];
 		seq_sendMidiNoteOn(midiChan, note, vel);
@@ -63,6 +64,21 @@ void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
 	uart_sendFrontpanelByte(0);
 }
 //----------------------------------------------------------------
+void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
+{
+	voiceControl_trigger(voice, note, vel, 1, vel);
+}
+
+void voiceControl_noteOnNoEcho(uint8_t voice, uint8_t note, uint8_t vel)
+{
+	voiceControl_trigger(voice, note, vel, 0, vel);
+}
+
+void voiceControl_noteOnNoEchoWithMod(uint8_t voice,uint8_t note,uint8_t velocity,uint8_t modVelocity)
+{
+    voiceControl_trigger(voice,note,velocity,0,modVelocity);
+}
+
 void voiceControl_noteOff(uint8_t voice)
 {
 	uint8_t midiChan; // which midi channel to send a note on

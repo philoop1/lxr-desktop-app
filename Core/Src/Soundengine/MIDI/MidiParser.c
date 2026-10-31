@@ -28,14 +28,20 @@
 #include "Soundengine/DSPAudio/modulationNode.h"
 #include "Soundengine/USB/usb_manager.h"
 #include "menu/menu.h"
+#include "menu/CcNr2Text.h"
 #include "Soundengine/FxBus.h"
 #include "Preset/PresetManager.h"
+#include "Soundengine/Sequencer/PerformanceSteps.h"
+#include "menu/PerformanceControls.h"
+#include "Soundengine/Sequencer/PerformanceDelay.h"
+#include "buttonHandler.h"
 
 #include "Soundengine/MIDI/MidiMessages.h"
 
 static uint16_t midiParser_activeNrpnNumber = 0;
+static uint32_t midiParser_clockCycles;
 
-uint8_t midiParser_originalCcValues[0xff];
+uint8_t midiParser_originalCcValues[0x100];
 
 // this will be set to some value if we are ignoring all mtc messages until the next 0 message
 static uint8_t midiParser_mtcIgnore=1;
@@ -141,7 +147,109 @@ static void midiParser_nrpnHandler(uint16_t value)
 	msg2.data2 = value;
 	midiParser_ccHandler(msg2,true, 0, 0.f);
 }
+#define GLOBAL_DECAY_CENTER 63
+static uint8_t midiParser_modVelocity[7],midiParser_modVelocityValid;
+static uint8_t midiParser_lastHatTrack=5;
+static void midiParser_refreshVelocityVoice(uint8_t track);
+static void midiParser_refreshVelocityParameter(uint16_t parameter);
+static uint8_t midiParser_applyVelocityDepth(uint8_t base, uint8_t amount, uint8_t velocity)
+{
+	if(amount < GLOBAL_DECAY_CENTER)
+	{
+		const uint32_t change = (uint32_t)base * (GLOBAL_DECAY_CENTER - amount) * velocity;
+		return (uint8_t)(base - ((change + 4000u) / (GLOBAL_DECAY_CENTER * 127u)));
+	}
+	if(amount > GLOBAL_DECAY_CENTER)
+	{
+		const uint32_t change = (uint32_t)(127 - base) * (amount - GLOBAL_DECAY_CENTER) * velocity;
+		return (uint8_t)(base + ((change + 4064u) / (64u * 127u)));
+	}
+	return base;
+}
+static uint8_t midiParser_scalePerformanceVelocityAmount(uint8_t amount)
+{
+	const int16_t target = (int16_t)amount - GLOBAL_DECAY_CENTER;
+	const int16_t level = (int16_t)activeParameters[PAR_PERF_VELO_LEVEL] - GLOBAL_DECAY_CENTER;
+	const int16_t divisor = (level < 0) ? GLOBAL_DECAY_CENTER : 64;
+	int32_t scaled;
+
+	if(target == 0 || level == 0)
+		return GLOBAL_DECAY_CENTER;
+	scaled = (int32_t)target * level;
+	if(scaled >= 0)
+		scaled = (scaled + divisor / 2) / divisor;
+	else
+		scaled = (scaled - divisor / 2) / divisor;
+	if(scaled < -63)
+		scaled = -63;
+	else if(scaled > 64)
+		scaled = 64;
+	return (uint8_t)(GLOBAL_DECAY_CENTER + scaled);
+}
+static uint8_t midiParser_velocityAmount(uint16_t param)
+{
+	return midiParser_scalePerformanceVelocityAmount(activeParameters[param]);
+}
+static uint8_t midiParser_velocityForTrack(uint8_t track)
+{
+	return (midiParser_modVelocityValid & (1u<<track)) ? midiParser_modVelocity[track] : 0;
+}
+static const uint8_t midiParser_decayParams[7]={VELOD1,VELOD2,VELOD3,VELOD4,VELOD5,VELOD6,VELOD6_OPEN};
+static uint8_t midiParser_globalDecay=63;
+
+// Mutador's bipolar depth formula at full modulation velocity (127).
+static uint8_t midiParser_decayDepth(uint8_t base,uint8_t amount)
+{
+	if(amount<63) {
+		const uint32_t change=(uint32_t)base*(63-amount)*127u;
+		return (uint8_t)(base-((change+4000u)/(63u*127u)));
+	}
+	if(amount>63) {
+		const uint32_t change=(uint32_t)(127-base)*(amount-63)*127u;
+		return (uint8_t)(base+((change+4064u)/(64u*127u)));
+	}
+	return base;
+}
+static void midiParser_applyGlobalDecayParam(uint8_t param)
+{
+	uint8_t track=0;
+	while(track<7 && midiParser_decayParams[track]!=param) track++;
+	if(track>=7)return;
+	const uint8_t trackValue=midiParser_applyVelocityDepth(midiParser_originalCcValues[param],
+		midiParser_velocityAmount(PAR_PERF_VELO_DECAY),midiParser_velocityForTrack(track));
+	const uint8_t value=midiParser_decayDepth(trackValue,midiParser_globalDecay);
+	switch(param) {
+	case VELOD1: slopeEg2_setDecay(&voiceArray[0].oscVolEg,value,AMP_EG_SYNC); break;
+	case VELOD2: slopeEg2_setDecay(&voiceArray[1].oscVolEg,value,AMP_EG_SYNC); break;
+	case VELOD3: slopeEg2_setDecay(&voiceArray[2].oscVolEg,value,AMP_EG_SYNC); break;
+	case VELOD4: slopeEg2_setDecay(&snareVoice.oscVolEg,value,false); break;
+	case VELOD5: slopeEg2_setDecay(&cymbalVoice.oscVolEg,value,false); break;
+	case VELOD6: hatVoice.decayClosed=slopeEg2_calcDecay(value); break;
+	case VELOD6_OPEN: hatVoice.decayOpen=slopeEg2_calcDecay(value); break;
+	default: return;
+	}
+	modNode_originalValueChanged((uint16_t)(param-1u));
+}
+void midiParser_setGlobalDecay(uint8_t value)
+{
+	midiParser_globalDecay=value>127 ? 127 : value;
+	activeParameters[PAR_GLOBAL_DECAY]=midiParser_globalDecay;
+	for(uint8_t i=0;i<7;i++) midiParser_applyGlobalDecayParam(midiParser_decayParams[i]);
+	menu_repaint();
+}
+void midiParser_setStepPerformance(uint16_t param,uint8_t value)
+{
+	const uint8_t maximum=param==PAR_PERF_NOTE_REPEAT_CHANCE ? 127 : 100;
+	if(param!=PAR_RANDOM_STEP && param!=PAR_PERF_NOTE_REPEAT_CHANCE &&
+	   param!=PAR_PERF_SCARCITY && param!=PAR_PERF_PROB && param!=PAR_PERF_NOTE_PROB) return;
+	activeParameters[param]=value>maximum ? maximum : value;
+	perf_configure(activeParameters[PAR_RANDOM_STEP],activeParameters[PAR_PERF_NOTE_REPEAT_CHANCE],
+		activeParameters[PAR_PERF_SCARCITY],activeParameters[PAR_PERF_PROB]);
+	perf_setNoteProbability(activeParameters[PAR_PERF_NOTE_PROB]);
+	menu_repaint();
+}
 //-----------------------------------------------------------
+static Lfo *midiParser_voiceLfo(uint8_t voice);
 /** handle all incoming CCs and invoke action*/
 void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFloatModulator, float v)
 {
@@ -166,9 +274,11 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 	if((msg.status &0xF0) == MIDI_CC)
 	{
 
-		const uint16_t paramNr = msg.data1-1;
+		// Legacy CC0 wraps to parameter 127 (Bank Change). Avoid unsigned
+		// underflow: kit loading sends this placeholder along with sound CCs.
+		const uint16_t paramNr = (uint16_t)((msg.data1 + 127u) & 0x7fu);
 		if(updateOriginalValue && !isFloatModulator) {
-			midiParser_originalCcValues[paramNr+1] = value.itg;
+			midiParser_originalCcValues[msg.data1] = value.itg;
 		}
 
 		switch(msg.data1)
@@ -901,6 +1011,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 		}
 		if(!isFloatModulator)
 		{
+			if(updateOriginalValue) midiParser_refreshVelocityParameter(msg.data1);
 			modNode_originalValueChanged(paramNr);
 		}
 	} //msg.status == MIDI_CC
@@ -1132,8 +1243,27 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 			case CC2_MIX_MOD_1:
 			case CC2_MIX_MOD_2:
 			case CC2_MIX_MOD_3:
-				voiceArray[msg.data1-CC2_MIX_MOD_1].mixOscs = value.itg != 0;
+				voiceArray[msg.data1-CC2_MIX_MOD_1].mixOscs = value.itg > 2 ? 2 : value.itg;
 				break;
+
+			case PAR_SNARE_NOISE_ATTACK-128:
+				Snare_setNoiseAttack(value.itg);
+				break;
+			case PAR_SNARE_NOISE_DECAY-128:
+				Snare_setNoiseDecay(value.itg);
+				break;
+			case PAR_SNARE_NOISE_SLOPE-128:
+				Snare_setNoiseSlope(value.itg);
+				break;
+			case PAR_SNARE_LAYER_WAVE-128: {
+				uint8_t maximum=menu_getWaveformMax();
+				uint8_t wave=isFloatModulator ? (uint8_t)(v*maximum+0.5f) : value.itg;
+				Snare_setLayerWave(wave>maximum ? maximum : wave); break;
+			}
+			case PAR_SNARE_LAYER_AMOUNT-128: Snare_setLayerAmount(value.itg); break;
+			case PAR_SNARE_LAYER_FREQ-128: Snare_setLayerFreq(value.itg); break;
+			case PAR_SNARE_LAYER_MODE-128:
+				Snare_setLayerMode(isFloatModulator ? (uint8_t)(v*2.f+0.5f) : value.itg); break;
 
 			case CC2_VOLUME_MOD_ON_OFF1:
 			case CC2_VOLUME_MOD_ON_OFF2:
@@ -1150,6 +1280,14 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				hatVoice.volumeMod = value.itg != 0;
 				break;
 
+            case CC2_VEL_DEST_1: case CC2_VEL_DEST_2: case CC2_VEL_DEST_3:
+            case CC2_VEL_DEST_4: case CC2_VEL_DEST_5: case CC2_VEL_DEST_6: {
+                uint8_t voice=(uint8_t)(msg.data1-CC2_VEL_DEST_1);
+                uint8_t destination=value.itg;
+                modNode_setDestination(&velocityModulators[voice],destination);
+                activeParameters[PAR_VEL_DEST_1+voice]=paramToModTarget[destination];
+                break;
+            }
 			case CC2_VELO_MOD_AMT_1:
 			case CC2_VELO_MOD_AMT_2:
 			case CC2_VELO_MOD_AMT_3:
@@ -1166,11 +1304,11 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				{
 					uint8_t wave = NUM_LFO_WAVEFORMS * value.flt;
 					wave = wave >= NUM_LFO_WAVEFORMS ? NUM_LFO_WAVEFORMS-1 : wave;
-					voiceArray[msg.data1-CC2_WAVE_LFO1].lfo.waveform = wave;
+					lfo_setWaveform(&voiceArray[msg.data1-CC2_WAVE_LFO1].lfo,wave);
 				}
 				else
 				{
-					voiceArray[msg.data1-CC2_WAVE_LFO1].lfo.waveform = value.itg;
+					lfo_setWaveform(&voiceArray[msg.data1-CC2_WAVE_LFO1].lfo,value.itg);
 				}
 				break;
 
@@ -1179,11 +1317,11 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				{
 					uint8_t wave = NUM_LFO_WAVEFORMS * value.flt;
 					wave = wave >= NUM_LFO_WAVEFORMS ? NUM_LFO_WAVEFORMS-1 : wave;
-					snareVoice.lfo.waveform = wave;
+					lfo_setWaveform(&snareVoice.lfo,wave);
 				}
 				else
 				{
-					snareVoice.lfo.waveform = value.itg;
+					lfo_setWaveform(&snareVoice.lfo,value.itg);
 				}
 				break;
 
@@ -1192,11 +1330,11 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				{
 					uint8_t wave = NUM_LFO_WAVEFORMS * value.flt;
 					wave = wave >= NUM_LFO_WAVEFORMS ? NUM_LFO_WAVEFORMS-1 : wave;
-					cymbalVoice.lfo.waveform = wave;
+					lfo_setWaveform(&cymbalVoice.lfo,wave);
 				}
 				else
 				{
-					cymbalVoice.lfo.waveform = value.itg;
+					lfo_setWaveform(&cymbalVoice.lfo,value.itg);
 				}
 				break;
 
@@ -1205,11 +1343,11 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				{
 					uint8_t wave = NUM_LFO_WAVEFORMS * value.flt;
 					wave = wave >= NUM_LFO_WAVEFORMS ? NUM_LFO_WAVEFORMS-1 : wave;
-					hatVoice.lfo.waveform = wave;
+					lfo_setWaveform(&hatVoice.lfo,wave);
 				}
 				else
 				{
-					hatVoice.lfo.waveform = value.itg;
+					lfo_setWaveform(&hatVoice.lfo,value.itg);
 				}
 				break;
 
@@ -1277,37 +1415,44 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				lfo_setSync(&hatVoice.lfo, value.itg);
 				break;
 
-			case CC2_VOICE_LFO1:
-			case CC2_VOICE_LFO2:
-			case CC2_VOICE_LFO3:
-			case CC2_VOICE_LFO4:
-			case CC2_VOICE_LFO5:
-			case CC2_VOICE_LFO6:
-				break;
-
-			case CC2_TARGET_LFO1:
-			case CC2_TARGET_LFO2:
-			case CC2_TARGET_LFO3:
-			case CC2_TARGET_LFO4:
-			case CC2_TARGET_LFO5:
-			case CC2_TARGET_LFO6:
-				break;
+            case CC2_VOICE_LFO1: case CC2_VOICE_LFO2: case CC2_VOICE_LFO3:
+            case CC2_VOICE_LFO4: case CC2_VOICE_LFO5: case CC2_VOICE_LFO6: {
+                uint8_t voice=(uint8_t)(msg.data1-CC2_VOICE_LFO1);
+                uint8_t targetVoice=value.itg<1 ? 1 : value.itg>6 ? 6 : value.itg;
+                uint8_t gap=getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1+voice]);
+                uint8_t target=getModTargetIdxFromGapIdx((uint8_t)(targetVoice-1),gap);
+                activeParameters[PAR_VOICE_LFO1+voice]=targetVoice;
+                activeParameters[PAR_TARGET_LFO1+voice]=target;
+                modNode_setDestination(&midiParser_voiceLfo(voice)->modTarget,modTargets[target].param);
+                break;
+            }
+            case CC2_TARGET_LFO1: case CC2_TARGET_LFO2: case CC2_TARGET_LFO3:
+            case CC2_TARGET_LFO4: case CC2_TARGET_LFO5: case CC2_TARGET_LFO6: {
+                uint8_t voice=(uint8_t)(msg.data1-CC2_TARGET_LFO1);
+                uint8_t destination=value.itg;
+                modNode_setDestination(&midiParser_voiceLfo(voice)->modTarget,destination);
+                uint8_t target=paramToModTarget[destination];
+                activeParameters[PAR_TARGET_LFO1+voice]=target;
+                uint8_t targetVoice=voiceFromModTargValue(target);
+                if(targetVoice)activeParameters[PAR_VOICE_LFO1+voice]=targetVoice;
+                break;
+            }
 
 
 
 			case CC2_OFFSET_LFO1:
 			case CC2_OFFSET_LFO2:
 			case CC2_OFFSET_LFO3:
-				voiceArray[msg.data1-CC2_OFFSET_LFO1].lfo.phaseOffset = value.flt * 0xffffffff;
+				lfo_setPhaseOffset(&voiceArray[msg.data1-CC2_OFFSET_LFO1].lfo,value.itg);
 				break;
 			case CC2_OFFSET_LFO4:
-				snareVoice.lfo.phaseOffset = value.flt * 0xffffffff;
+				lfo_setPhaseOffset(&snareVoice.lfo,value.itg);
 				break;
 			case CC2_OFFSET_LFO5:
-				cymbalVoice.lfo.phaseOffset = value.flt * 0xffffffff;
+				lfo_setPhaseOffset(&cymbalVoice.lfo,value.itg);
 				break;
 			case CC2_OFFSET_LFO6:
-				hatVoice.lfo.phaseOffset = value.flt * 0xffffffff;
+				lfo_setPhaseOffset(&hatVoice.lfo,value.itg);
 				break;
 
 			case CC2_AUDIO_OUT1:
@@ -1437,11 +1582,180 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 		}
 		if(!isFloatModulator)
 		{
+			if(updateOriginalValue) midiParser_refreshVelocityParameter(paramNr);
 			modNode_originalValueChanged(paramNr);
 		}
 	}
 }
 
+static const uint8_t midiParser_filterParams[6]={FILTER_FREQ_DRUM1,FILTER_FREQ_DRUM2,FILTER_FREQ_DRUM3,SNARE_FILTER_F,CYM_FIL_FREQ,HAT_FILTER_F};
+static const uint8_t midiParser_slopeParams[6]={VOL_SLOPE1,VOL_SLOPE2,VOL_SLOPE3,EG_SNARE1_SLOPE,CYM_SLOPE,VOL_SLOPE6};
+static uint8_t midiParser_velocityLive(void)
+{
+	if(activeParameters[PAR_PERF_VELO_LEVEL]==63)return 0;
+	for(uint16_t p=PAR_PERF_VELO_DECAY;p<=PAR_PERF_VELO_DRIVE;p++)
+		if(activeParameters[p]!=63)return 1;
+	return 0;
+}
+static void midiParser_velocityCc(uint16_t parameter,uint16_t depth,uint8_t velocity)
+{
+	MidiMsg msg={0};
+	msg.data2=midiParser_applyVelocityDepth(midiParser_originalCcValues[parameter],
+		midiParser_velocityAmount(depth),velocity);
+	if(parameter<128){msg.status=MIDI_CC;msg.data1=(uint8_t)parameter;}
+	else {msg.status=MIDI_CC2;msg.data1=(uint8_t)(parameter-128);}
+	midiParser_ccHandler(msg,0,0,0.f);
+}
+static void midiParser_applyVelocityDestination(uint8_t track,uint16_t destination)
+{
+	if(destination==PAR_PERF_VELO_DECAY) {
+		midiParser_applyGlobalDecayParam(midiParser_decayParams[track]);return;
+	}
+	uint8_t sound=track>5?5:track;
+	uint8_t owner=sound==5?midiParser_lastHatTrack:track;
+	uint8_t velocity=midiParser_velocityForTrack(owner);
+	switch(destination) {
+	case PAR_PERF_VELO_SAMPLE_RATE:
+		midiParser_velocityCc((uint16_t)(VOICE_DECIMATION1+sound),destination,velocity);break;
+	case PAR_PERF_VELO_FILTER:
+		midiParser_velocityCc(midiParser_filterParams[sound],destination,velocity);break;
+	case PAR_PERF_VELO_SLOPE:
+		midiParser_velocityCc(midiParser_slopeParams[sound],destination,velocity);break;
+	case PAR_PERF_VELO_DRIVE:
+		midiParser_velocityCc((uint16_t)(128+CC2_FILTER_DRIVE_1+sound),destination,velocity);break;
+	case PAR_PERF_VELO_MOD_AMOUNT:
+		if(sound<4)midiParser_velocityCc((uint16_t)(MODAMNT1+sound),destination,velocity);
+		else if(sound==4) {
+			midiParser_velocityCc(CYM_MOD_OSC_GAIN1,destination,velocity);
+			midiParser_velocityCc(CYM_MOD_OSC_GAIN2,destination,velocity);
+		}
+		break;
+	default: break; // coarse modulation is applied to the next played note
+	}
+}
+static void midiParser_refreshVelocityVoice(uint8_t track)
+{
+	// Neutral destinations must not overwrite step automation or LFO state.
+	for(uint16_t p=PAR_PERF_VELO_DECAY;p<=PAR_PERF_VELO_DRIVE;p++)
+		if(midiParser_velocityAmount(p)!=63)midiParser_applyVelocityDestination(track,p);
+}
+static void midiParser_refreshVelocityParameter(uint16_t parameter)
+{
+	for(uint8_t track=0;track<7;track++)if(parameter==midiParser_decayParams[track]) {
+		if(midiParser_globalDecay!=63 || midiParser_velocityAmount(PAR_PERF_VELO_DECAY)!=63)
+			midiParser_applyGlobalDecayParam((uint8_t)parameter);
+		return;
+	}
+	if(!midiParser_velocityLive())return;
+	for(uint8_t sound=0;sound<6;sound++) {
+		uint16_t destination=PAR_NONE;
+		if(parameter==VOICE_DECIMATION1+sound)destination=PAR_PERF_VELO_SAMPLE_RATE;
+		if(parameter==midiParser_filterParams[sound])destination=PAR_PERF_VELO_FILTER;
+		if(parameter==midiParser_slopeParams[sound])destination=PAR_PERF_VELO_SLOPE;
+		if(parameter==128+CC2_FILTER_DRIVE_1+sound)destination=PAR_PERF_VELO_DRIVE;
+		if((sound<4 && parameter==MODAMNT1+sound) ||
+		   (sound==4 && (parameter==CYM_MOD_OSC_GAIN1 || parameter==CYM_MOD_OSC_GAIN2)))
+			destination=PAR_PERF_VELO_MOD_AMOUNT;
+		if(destination!=PAR_NONE && midiParser_velocityAmount(destination)!=63) {
+			midiParser_applyVelocityDestination(sound==5?midiParser_lastHatTrack:sound,destination);
+			return;
+		}
+	}
+}
+void midiParser_setAccentParameter(uint16_t param,uint8_t value)
+{
+	if(param!=PAR_PERF_VELO_LEVEL && (param<PAR_PERF_VELO_DECAY || param>PAR_PERF_VELO_DRIVE))return;
+	uint8_t oldDepth[7];
+	for(uint8_t i=0;i<7;i++)oldDepth[i]=midiParser_velocityAmount((uint16_t)(PAR_PERF_VELO_DECAY+i));
+	activeParameters[param]=value>127?127:value;
+	for(uint8_t i=0;i<7;i++) {
+		uint16_t destination=(uint16_t)(PAR_PERF_VELO_DECAY+i);
+		uint8_t newDepth=midiParser_velocityAmount(destination);
+		if(oldDepth[i]!=newDepth)
+			for(uint8_t track=0;track<7;track++)midiParser_applyVelocityDestination(track,destination);
+	}
+	menu_repaint();
+}
+uint8_t midiParser_applyPerformanceVelocity(uint8_t voice,uint8_t velocity,uint8_t note)
+{
+	if(voice>6)return note;
+	midiParser_modVelocity[voice]=velocity;
+	midiParser_modVelocityValid |= (uint8_t)(1u<<voice);
+	if(voice>=5)midiParser_lastHatTrack=voice;
+	if(!midiParser_velocityLive())return note;
+	midiParser_refreshVelocityVoice(voice);
+	uint8_t sound=voice>5?5:voice;
+	uint8_t coarse=(uint8_t)(F_OSC1_COARSE+sound*2u);
+	uint8_t base=midiParser_originalCcValues[coarse];
+	uint8_t value=midiParser_applyVelocityDepth(base,midiParser_velocityAmount(PAR_PERF_VELO_COARSE),velocity);
+	int16_t shifted=(int16_t)note+value-base;
+	if(shifted<0)shifted=0;
+	if(shifted>127)shifted=127;
+	return (uint8_t)shifted;
+}
+void midiParser_setDelayParameter(uint16_t param,uint8_t value)
+{
+	if(param<PAR_PERF_DELAY_CHANCE || param>PAR_PERF_DELAY_INPUT_MASK)return;
+	uint8_t maximum=127;
+	if(param==PAR_PERF_DELAY_CHANCE)maximum=100;
+	if(param==PAR_PERF_DELAY_SYNC)maximum=15;
+	if(param==PAR_PERF_DELAY_COUNT)maximum=32;
+	if(param==PAR_PERF_DELAY_TARGET)maximum=10;
+	if(param==PAR_PERF_DELAY_MODE)maximum=1;
+	activeParameters[param]=value>maximum?maximum:value;
+	PerfDelayConfig cfg={activeParameters[PAR_PERF_DELAY_CHANCE],activeParameters[PAR_PERF_DELAY_SYNC],
+		activeParameters[PAR_PERF_DELAY_COUNT],activeParameters[PAR_PERF_DELAY_BOUNCE],
+		activeParameters[PAR_PERF_DELAY_TARGET],activeParameters[PAR_PERF_DELAY_MODE],
+		activeParameters[PAR_PERF_DELAY_EXP],activeParameters[PAR_PERF_DELAY_INPUT_MASK],
+		(int8_t)(((uint16_t)activeParameters[PAR_PERF_DELAY_PITCH]*24u+63u)/127u-12)};
+	perf_delayConfigure(cfg);
+	if(param==PAR_PERF_DELAY_INPUT_MASK)buttonHandler_refreshVoiceDisplay();
+	menu_repaint();
+}
+static uint8_t midiParser_extendedPerformanceCc(uint8_t cc,uint8_t value)
+{
+	uint16_t parameter=PAR_NONE;
+	switch(cc) {
+    case 9:
+        performance_set(PAR_PERF_RANDOM_VELO,(uint8_t)(((uint16_t)value*100u+63u)/127u));
+        menu_repaintAll();return 1;
+	case 20:case 21:case 22:case 23:case 24:case 25:case 26:
+		performance_set((uint16_t)(PAR_VCA1+cc-20),value);menu_repaintAll();return 1;
+	case 30:case 31:case 32:case 33:case 34:case 35:case 36:
+		performance_set((uint16_t)(PAR_FX_SEND1+cc-30),value);menu_repaintAll();return 1;
+	case 37:performance_set(PAR_MASTER_FILTER,value==64?63:value);menu_repaintAll();return 1;
+	case 38:performance_set(PAR_MASTER_FILTER_RESO,value);menu_repaintAll();return 1;
+	case 39:performance_set(PAR_MASTER_FILTER_DRIVE,value);menu_repaintAll();return 1;
+	case 79:case 80:case 81:case 82:case 83:case 84:case 85:case 86:case 87:
+		if(!value||value>=64) {performance_set(PAR_GLOBAL_SCALE,(uint8_t)(cc-79));menu_repaintAll();}
+		return 1;
+	case 40: seq_setShuffle(value/127.f);menu_repaintAll();return 1;
+	case 41:
+	case 42:
+	case 43: seq_setGrooveStep((uint8_t)(cc-40),value==64?63:value);menu_repaintAll();return 1;
+	case 8: midiParser_setStepPerformance(PAR_PERF_NOTE_PROB,(uint8_t)(((uint16_t)value*100u+63u)/127u));return 1;
+	case 10: parameter=PAR_PERF_DELAY_CHANCE;value=(uint8_t)(((uint16_t)value*100u+63u)/127u);break;
+	case 11: parameter=PAR_PERF_DELAY_SYNC;value=(uint8_t)(((uint16_t)value*15u+63u)/127u);break;
+	case 12: parameter=PAR_PERF_DELAY_COUNT;value=(uint8_t)(((uint16_t)value*32u+63u)/127u);break;
+	case 13: parameter=PAR_PERF_DELAY_BOUNCE;if(value==64)value=63;break;
+	case 14: parameter=PAR_PERF_DELAY_EXP;break;
+	case 15: parameter=PAR_PERF_DELAY_PITCH;break;
+	case 16: parameter=PAR_PERF_DELAY_MODE;value=(uint8_t)(value>=64);break;
+	case 126: parameter=PAR_PERF_DELAY_TARGET;value=(uint8_t)(((uint16_t)value*10u+63u)/127u);break;
+	case 44: midiParser_setAccentParameter(PAR_PERF_VELO_LEVEL,value==64?63:value);return 1;
+	default:
+		if(cc>=46 && cc<=52) {
+			midiParser_setAccentParameter((uint16_t)(PAR_PERF_VELO_DECAY+cc-46),value==64?63:value);return 1;
+		}
+		if(cc>=60 && cc<=66) {
+			if(value>=64)midiParser_setDelayParameter(PAR_PERF_DELAY_INPUT_MASK,
+				activeParameters[PAR_PERF_DELAY_INPUT_MASK]^(uint8_t)(1u<<(cc-60)));
+			return 1;
+		}
+		return 0;
+	}
+	midiParser_setDelayParameter(parameter,value);return 1;
+}
 //-----------------------------------------------------------
 // this will check whether mtc is running, and if so will
 // check to see whether we need to stop the sequencer due to
@@ -1473,66 +1787,142 @@ void midiParser_checkMtc()
 }
 
 //------------------------------------------------------
-// this fn assumes a valid voice is sent
-// do_rec - whether we want to allow it to be recorded and echoed - we will only record
-//          to the active track for notes received from the global channel
-static void midiParser_noteOn(uint8_t voice, uint8_t note, uint8_t vel, uint8_t do_rec)
+#define MIDI_NOTE_INPUT_RECORD 0x01u
+#define MIDI_NOTE_INPUT_ECHO   0x02u
+
+// Input routing has already matched the note; recording and echo are independent.
+static void midiParser_noteOn(uint8_t voice, uint8_t note, uint8_t vel, uint8_t inputFlags)
 {
-
-	if(menu_activePage == SEQ_PAGE)
+	// Preserve desktop step-note entry for the voice being edited.
+	if(menu_activePage == SEQ_PAGE && voice == menu_getActiveVoice())
 	{
-		//use incoming MIDI notes to set sequencer/step note
 		const uint8_t step = activeParameters[PAR_ACTIVE_STEP];
-		const uint8_t trackNr = menu_getActiveVoice(); //max 6 => 0x6 = 0b110
 		const uint8_t patternNr = menu_getViewedPattern();
-
-
-		seq_patternSet.seq_subStepPattern[patternNr][trackNr][step].note = note;
+		seq_patternSet.seq_subStepPattern[patternNr][voice][step].note = note;
 		activeParameters[PAR_STEP_NOTE] = note;
 		menu_repaint();
+		return;
+	}
+	if(seq_isTrackMuted(voice)) return;
+	// Normal voiceControl_noteOn also sends MIDI: avoid that hidden echo.
+	voiceControl_noteOnNoEcho(voice, note, vel);
+	if(inputFlags & MIDI_NOTE_INPUT_RECORD)
+		seq_addNote(voice, vel, note);
+	if(inputFlags & MIDI_NOTE_INPUT_ECHO)
+	{
+		const uint8_t chan = midi_MidiChannels[voice];
+		seq_midiNoteOff(chan);
+		seq_sendMidiNoteOn(chan, note, vel);
+	}
+}
 
+static inline uint8_t midiParser_scaleGlobalPitchNote(uint8_t note)
+{
+	int16_t offset = (int16_t)note - 60; // C4 is neutral.
+
+	if(offset < -63)
+		offset = -63;
+	if(offset > 64)
+		offset = 64;
+
+	return (uint8_t)(63 + offset);
+}
+
+static inline uint8_t midiParser_scaleGlobalPitchCc(uint8_t data2)
+{
+	uint8_t dist;
+	uint8_t amount;
+
+	if(data2 >= 61 && data2 <= 66)
+		return 63;
+
+	if(data2 < 61)
+	{
+		dist = 61 - data2;
+		if(dist <= 36)
+			amount = (uint8_t)(((uint16_t)dist * 12 + 35) / 36);
+		else
+			amount = (uint8_t)(12 + (((uint16_t)(dist - 36) * 51 + 12) / 25));
+		return (uint8_t)(63 - amount);
+	}
+
+	dist = data2 - 66;
+	if(dist <= 36)
+		amount = (uint8_t)(((uint16_t)dist * 12 + 35) / 36);
+	else
+		amount = (uint8_t)(12 + (((uint16_t)(dist - 36) * 52 + 12) / 25));
+
+	return (uint8_t)(63 + amount);
+}
+
+static int16_t midiParser_pitchBendValue = 0;
+static uint8_t midiParser_pitchBendRange = 12;
+
+static void midiParser_recalcGlobalPitch(void)
+{
+	for(uint8_t i=0; i<3; ++i)
+	{
+		osc_recalcFreq(&voiceArray[i].osc);
+		osc_recalcFreq(&voiceArray[i].modOsc);
+	}
+	osc_recalcFreq(&snareVoice.osc);
+	osc_recalcFreq(&cymbalVoice.osc);
+	osc_recalcFreq(&cymbalVoice.modOsc);
+	osc_recalcFreq(&cymbalVoice.modOsc2);
+	osc_recalcFreq(&hatVoice.osc);
+	osc_recalcFreq(&hatVoice.modOsc);
+	osc_recalcFreq(&hatVoice.modOsc2);
+}
+
+void midiParser_setGlobalPitch(uint8_t value)
+{
+	if(value > 127) value = 127;
+	activeParameters[PAR_GLOBAL_PITCH] = value;
+	osc_setGlobalPitchOffset(value);
+	midiParser_recalcGlobalPitch();
+	menu_repaint();
+}
+
+void midiParser_setPitchBendRange(uint8_t value)
+{
+	midiParser_pitchBendRange = value > 48 ? 48 : value;
+	activeParameters[PAR_PITCH_BEND_RANGE] = midiParser_pitchBendRange;
+	osc_setGlobalPitchBend(midiParser_pitchBendValue, midiParser_pitchBendRange);
+	midiParser_recalcGlobalPitch();
+}
+
+static void midiParser_setControlNotePitch(uint8_t note)
+{
+	const uint8_t value = midiParser_scaleGlobalPitchNote(note);
+	osc_setNotePitchOffset((int8_t)((int16_t)value - 63));
+	midiParser_recalcGlobalPitch();
+	menu_repaint();
+}
+
+static void midiParser_applyVoicePitchBend(uint8_t voice, int16_t bend)
+{
+	if(voice < 3)
+	{
+		osc_setPitchBend(&voiceArray[voice].osc,bend,midiParser_pitchBendRange);
+		osc_setPitchBend(&voiceArray[voice].modOsc,bend,midiParser_pitchBendRange);
+	}
+	else if(voice == 3)
+	{
+		osc_setPitchBend(&snareVoice.osc,bend,midiParser_pitchBendRange);
+	}
+	else if(voice == 4)
+	{
+		osc_setPitchBend(&cymbalVoice.osc,bend,midiParser_pitchBendRange);
+		osc_setPitchBend(&cymbalVoice.modOsc,bend,midiParser_pitchBendRange);
+		osc_setPitchBend(&cymbalVoice.modOsc2,bend,midiParser_pitchBendRange);
 	}
 	else
 	{
-
-		if(seq_isTrackMuted(voice))
-			return;
-
-		// check the midi mode for the voice. If it's "any", trigger that note.
-		// if it's some other note, trigger the drum voice only if it matches, and in this case
-		// trigger the default note
-
-		//if(midi_NoteOverride[voice] != 0) {
-		if(activeParameters[PAR_MIDI_NOTE1 + voice] != 0) {
-			// looking for specific note
-			//if(note==midi_NoteOverride[voice])
-			if(note==activeParameters[PAR_MIDI_NOTE1 + voice])
-				note=SEQ_DEFAULT_NOTE; // match found. Play default note
-			else
-				return; // note does not match. Do nothing
-		}
-
-		voiceControl_noteOn(voice,note,vel);
-
-		//Recording Mode - record the note to sequencer and echo to channel of that voice
-		// (we'd want to hear what's being recorded)
-		if(do_rec) {
-			const uint8_t chan=midi_MidiChannels[voice];
-
-			// record note if rec is on
-			seq_addNote(voice,vel, note);
-
-			//if a note is on for that channel send note-off first
-			seq_midiNoteOff(chan);
-			//send the new note to midi/usb out
-			// todo a user played note will end up being turned off if a pattern switch happens.
-			//           to fix this we'd have to differentiate between a user played note and a
-			//           note triggered from sequencer, and also recognize note off on user played note and send it.
-			seq_sendMidiNoteOn(chan, note, vel);
-		}
-
+		// Closed and open hi-hat share one sound engine.
+		osc_setPitchBend(&hatVoice.osc,bend,midiParser_pitchBendRange);
+		osc_setPitchBend(&hatVoice.modOsc,bend,midiParser_pitchBendRange);
+		osc_setPitchBend(&hatVoice.modOsc2,bend,midiParser_pitchBendRange);
 	}
-
 }
 //------------------------------------------------------
 //static void midiParser_noteOff(uint8_t voice, uint8_t note, uint8_t vel)
@@ -1550,6 +1940,268 @@ uint8_t midiParser_isValidChannel(uint8_t chan)
 	}
 
 	return 0;
+}
+
+// Dedicated voice channels use Mutador's common voice map; gch/Pch retain priority.
+static uint8_t midiParser_mapVoiceCc(uint8_t voice, uint8_t cc, MidiMsg* out)
+{
+	const uint8_t soundVoice = (voice > 5) ? 5 : voice;
+
+	out->status = MIDI_CC;
+	out->data1 = cc;
+
+	switch(cc)
+	{
+	case 7:
+		out->data1 = VOL1 + soundVoice;
+		return 1;
+	case 9:
+		if(soundVoice < 3) out->data1 = OSC_WAVE_DRUM1 + soundVoice;
+		else if(soundVoice == 3) out->data1 = OSC_WAVE_SNARE;
+		else if(soundVoice == 4) out->data1 = CYM_WAVE1;
+		else out->data1 = WAVE1_HH;
+		return 1;
+	case 10:
+		out->data1 = (soundVoice < 3) ? (PAN1 + soundVoice) : (PAN4 + (soundVoice - 3));
+		out->data2 = (out->data2==64 ? 63 : out->data2);
+		return 1;
+	case 12:
+		out->data1 = VOICE_DECIMATION1 + soundVoice;
+		return 1;
+	case 13:
+		if(soundVoice < 3) out->data1 = OSC1_DIST + soundVoice;
+		else if(soundVoice == 3) out->data1 = SNARE_DISTORTION;
+		else if(soundVoice == 4) out->data1 = CYMBAL_DISTORTION;
+		else out->data1 = HAT_DISTORTION;
+		return 1;
+	case 14:
+		out->data1 = F_OSC1_COARSE + (soundVoice * 2);
+		return 1;
+	case 16:
+		if(soundVoice < 3) out->data1 = FILTER_FREQ_DRUM1 + soundVoice;
+		else if(soundVoice == 3) out->data1 = SNARE_FILTER_F;
+		else if(soundVoice == 4) out->data1 = CYM_FIL_FREQ;
+		else out->data1 = HAT_FILTER_F;
+		return 1;
+	case 17:
+		if(soundVoice < 3) out->data1 = RESO_DRUM1 + soundVoice;
+		else if(soundVoice == 3) out->data1 = SNARE_RESO;
+		else if(soundVoice == 4) out->data1 = CYM_RESO;
+		else out->data1 = HAT_RESO;
+		return 1;
+	case 18:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_FILTER_DRIVE_1 + soundVoice;
+		return 1;
+	case 19:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_FILTER_TYPE_1 + soundVoice;
+		return 1;
+	case 20:
+		if(soundVoice == 3) { out->data1 = SNARE_MIX; return 1; }
+		break;
+	case 21:
+		if(soundVoice == 3) { out->data1 = SNARE_NOISE_F; return 1; }
+		break;
+	case 22:
+		if(soundVoice < 3) {
+			out->status = MIDI_CC2;
+			out->data1 = CC2_MIX_MOD_1 + soundVoice;
+			return 1;
+		}
+		break;
+	case 23:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_VOLUME_MOD_ON_OFF1 + soundVoice;
+		return 1;
+	case 24:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_VELO_MOD_AMT_1 + soundVoice;
+		return 1;
+	case 25:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_VEL_DEST_1 + soundVoice;
+		return 1;
+	case 26:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_TRANS1_VOL + soundVoice;
+		return 1;
+	case 27:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_TRANS1_WAVE + soundVoice;
+		return 1;
+	case 28:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_TRANS1_FREQ + soundVoice;
+		return 1;
+	case 46:
+		out->data1 = F_OSC1_FINE + (soundVoice * 2);
+		out->data2 = (out->data2==64 ? 63 : out->data2);
+		return 1;
+	case 70:
+		if(soundVoice == 3) { out->data1 = REPEAT1; return 1; }
+		if(soundVoice == 4) { out->data1 = CYM_REPEAT; return 1; }
+		break;
+	case 72:
+		if(soundVoice == 5) { out->data1 = VELOD6_OPEN; return 1; }
+		break;
+	case 73:
+		out->data1 = VELOA1 + (soundVoice * 2);
+		return 1;
+	case 74:
+		if(soundVoice < 3) out->data1 = VOL_SLOPE1 + soundVoice;
+		else if(soundVoice == 3) out->data1 = EG_SNARE1_SLOPE;
+		else if(soundVoice == 4) out->data1 = CYM_SLOPE;
+		else out->data1 = VOL_SLOPE6;
+		return 1;
+	case 75:
+		out->data1 = VELOD1 + (soundVoice * 2);
+		return 1;
+	case 76:
+		out->data1 = FREQ_LFO1 + soundVoice;
+		return 1;
+	case 77:
+		out->data1 = AMOUNT_LFO1 + soundVoice;
+		return 1;
+	case 78:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_OFFSET_LFO1 + soundVoice;
+		return 1;
+	case 79:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_WAVE_LFO1 + soundVoice;
+		return 1;
+	case 80:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_VOICE_LFO1 + soundVoice;
+		return 1;
+	case 81:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_TARGET_LFO1 + soundVoice;
+		return 1;
+	case 82:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_RETRIGGER_LFO1 + soundVoice;
+		return 1;
+	case 83:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_SYNC_LFO1 + soundVoice;
+		return 1;
+	case 84:
+		if(soundVoice < 3) out->data1 = PITCHD1 + soundVoice;
+		else if(soundVoice == 3) out->data1 = PITCHD4;
+		else break;
+		return 1;
+	case 85:
+		if(soundVoice < 3) out->data1 = MODAMNT1 + soundVoice;
+		else if(soundVoice == 3) out->data1 = MODAMNT4;
+		else break;
+		return 1;
+	case 86:
+		if(soundVoice < 3) out->data1 = PITCH_SLOPE1 + soundVoice;
+		else if(soundVoice == 3) out->data1 = PITCH_SLOPE4;
+		else break;
+		return 1;
+	case 89:
+		out->status = MIDI_CC2;
+		out->data1 = CC2_AUDIO_OUT1 + soundVoice;
+		return 1;
+	case 102:
+		if(soundVoice < 3) { out->data1 = MOD_WAVE_DRUM1 + soundVoice; return 1; }
+		break;
+	case 103:
+		if(soundVoice < 3) { out->data1 = FMDTN1 + (soundVoice * 2); return 1; }
+		break;
+	case 104:
+		if(soundVoice < 3) { out->data1 = FMAMNT1 + (soundVoice * 2); return 1; }
+		break;
+	case 105:
+		if(soundVoice == 4) out->data1 = CYM_WAVE2;
+		else if(soundVoice == 5) out->data1 = WAVE2_HH;
+		else break;
+		return 1;
+	case 106:
+		if(soundVoice == 4) out->data1 = CYM_MOD_OSC_GAIN1;
+		else if(soundVoice == 5) out->data1 = MOD_OSC_GAIN1;
+		else break;
+		return 1;
+	case 107:
+		if(soundVoice == 4) out->data1 = CYM_MOD_OSC_F1;
+		else if(soundVoice == 5) out->data1 = MOD_OSC_F1;
+		else break;
+		return 1;
+	case 108:
+		if(soundVoice == 4) out->data1 = CYM_WAVE3;
+		else if(soundVoice == 5) out->data1 = WAVE3_HH;
+		else break;
+		return 1;
+	case 109:
+		if(soundVoice == 4) out->data1 = CYM_MOD_OSC_GAIN2;
+		else if(soundVoice == 5) out->data1 = MOD_OSC_GAIN2;
+		else break;
+		return 1;
+	case 110:
+		if(soundVoice == 4) out->data1 = CYM_MOD_OSC_F2;
+		else if(soundVoice == 5) out->data1 = MOD_OSC_F2;
+		else break;
+		return 1;
+	case 112:
+		if(soundVoice == 3) { out->status = MIDI_CC2; out->data1 = (PAR_SNARE_LAYER_WAVE-128); return 1; }
+		break;
+	case 113:
+		if(soundVoice == 3) { out->status = MIDI_CC2; out->data1 = (PAR_SNARE_LAYER_AMOUNT-128); return 1; }
+		break;
+	case 114:
+		if(soundVoice == 3) { out->status = MIDI_CC2; out->data1 = (PAR_SNARE_LAYER_FREQ-128); return 1; }
+		break;
+	case 115:
+		if(soundVoice == 3) { out->status = MIDI_CC2; out->data1 = (PAR_SNARE_LAYER_MODE-128); return 1; }
+		break;
+	case 116:
+		if(soundVoice == 3) { out->status = MIDI_CC2; out->data1 = (PAR_SNARE_NOISE_ATTACK-128); return 1; }
+		break;
+	case 117:
+		if(soundVoice == 3) { out->status = MIDI_CC2; out->data1 = (PAR_SNARE_NOISE_DECAY-128); return 1; }
+		break;
+	case 118:
+		if(soundVoice == 3) { out->status = MIDI_CC2; out->data1 = (PAR_SNARE_NOISE_SLOPE-128); return 1; }
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+static Lfo *midiParser_voiceLfo(uint8_t voice)
+{
+    if(voice<3)return &voiceArray[voice].lfo;
+    if(voice==3)return &snareVoice.lfo;
+    if(voice==4)return &cymbalVoice.lfo;
+    return &hatVoice.lfo;
+}
+static uint8_t midiParser_handleVoiceChannelCc(uint8_t channel,MidiMsg msg)
+{
+    if(channel==midi_MidiChannels[7] || channel==midi_ControlChannel)return 0;
+    for(uint8_t voice=0;voice<7;voice++) {
+        MidiMsg mapped=msg;
+        if(channel!=midi_MidiChannels[voice] || !midiParser_mapVoiceCc(voice,msg.data1,&mapped))continue;
+        uint16_t parameter=(mapped.status==MIDI_CC2) ? (uint16_t)(mapped.data1+128) : (uint16_t)(mapped.data1-1);
+        if(parameter>=END_OF_SOUND_PARAMETERS)return 0;
+        uint8_t value=mapped.data2;
+        if(msg.data1!=25 && msg.data1!=81) {
+            if(msg.data1==80)value=(uint8_t)((value>5 ? 5 : value)+1);
+            value=menu_limitSoundParameter(parameter,value);
+            activeParameters[parameter]=value;
+        }
+        mapped.data2=value;
+        midiParser_ccHandler(mapped,1,0,0.f);
+        // Low-half automation destinations use wire CC numbering (+1).
+        uint8_t automDestination=(uint8_t)(parameter+(parameter<128 ? 1 : 0));
+        seq_recordAutomation(voice,automDestination,value);
+        menu_repaintAll();
+        return 1; // As in Mutador, the first matching voice wins on shared channels.
+    }
+    return 0;
 }
 
 uint8_t midiParser_cc2voiceNr(uint8_t cc)
@@ -1718,6 +2370,14 @@ uint8_t midiParser_cc2voiceNr(uint8_t cc)
  */
 void midiParser_parseMidiMessage(MidiMsg msg)
 {
+	// Match Mutador: Pch note pitch is consumed before Thru and RX filtering.
+	if(!msg.bits.sysxbyte && (msg.status & 0xF0) == NOTE_ON && msg.data2 &&
+	   (msg.status & 0x0F) == midi_ControlChannel &&
+	   midi_ControlChannel != midi_MidiChannels[7])
+	{
+		midiParser_setControlNotePitch(msg.data1);
+		return;
+	}
 	// route message if needed
 	if(midiParser_routing.value) {
 		if(msg.bits.source==midiSourceUSB) {
@@ -1751,22 +2411,37 @@ void midiParser_parseMidiMessage(MidiMsg msg)
     {
       case MIDI_CLOCK:
         if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
-          seq_sync();
+          if(seq_getExtSync()==2)
+            sync_tickAtCycles(msg.bits.source==midiSourceMIDI ?
+                midiParser_clockCycles : DWT->CYCCNT);
         break;
       case MIDI_START:
         if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
         {
           sync_midiResetPosition();
           sync_midiStartStop(1);
+          uart_sendFrontpanelByte(FRONT_SEQ_CC);
+          uart_sendFrontpanelByte(FRONT_SEQ_RUN_STOP);
+          uart_sendFrontpanelByte(1);
         }
         break;
       case MIDI_CONTINUE:
         if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
+        {
           sync_midiStartStop(1);
+          uart_sendFrontpanelByte(FRONT_SEQ_CC);
+          uart_sendFrontpanelByte(FRONT_SEQ_RUN_STOP);
+          uart_sendFrontpanelByte(1);
+        }
         break;
       case MIDI_STOP:
         if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
+        {
           sync_midiStartStop(0);
+          uart_sendFrontpanelByte(FRONT_SEQ_CC);
+          uart_sendFrontpanelByte(FRONT_SEQ_RUN_STOP);
+          uart_sendFrontpanelByte(0);
+        }
         break;
       case MIDI_SONG_POSITION_POINTER:
         {
@@ -1855,30 +2530,32 @@ void midiParser_parseMidiMessage(MidiMsg msg)
 		if((msgonly & 0xE0) == 0x80) {
 			// note on or note off message (one of these two only)
 			if(midiParser_txRxFilter & MIDI_FILTER_NOTES) {
-				int8_t v, q=-1;
-				// if a note message comes in on global channel, then send that note to
-				// the voice that is currently active on the front.
-				if(midi_MidiChannels[7]==chanonly) {
-					q=frontParser_activeTrack; // avoid sending it again later if the active track happens to have the same channel set
-											   // (this might not really matter. does sending a note on twice do any harm?)
-					if(msgonly==NOTE_ON && msg.data2) {
-						midiParser_noteOn(frontParser_activeTrack, msg.data1, msg.data2, 1);
-					} else { // NOTE_OFF or zero velocity note
-						//midiParser_noteOff(frontParser_activeTrack, msg.data1, msg.data2);
+				if(msgonly == NOTE_ON && msg.data2)
+				{
+					if(chanonly == midi_MidiChannels[7])
+					{
+						uint8_t mapped = 0;
+						for(uint8_t v=0; v<7; ++v)
+						{
+							if(activeParameters[PAR_MIDI_NOTE1+v] != 0 &&
+							   activeParameters[PAR_MIDI_NOTE1+v] == msg.data1)
+							{
+								midiParser_noteOn(v, SEQ_DEFAULT_NOTE, msg.data2,
+									MIDI_NOTE_INPUT_RECORD | MIDI_NOTE_INPUT_ECHO);
+								mapped = 1;
+							}
+						}
+						if(!mapped && activeParameters[PAR_MIDI_NOTE1+frontParser_activeTrack] == 0)
+							midiParser_noteOn(frontParser_activeTrack, msg.data1, msg.data2,
+								MIDI_NOTE_INPUT_RECORD | MIDI_NOTE_INPUT_ECHO);
+					}
+					else
+					{
+						for(uint8_t v=0; v<7; ++v)
+							if(midi_MidiChannels[v] == chanonly)
+								midiParser_noteOn(v, msg.data1, msg.data2, MIDI_NOTE_INPUT_RECORD);
 					}
 				}
-
-				// check each voice to see if it cares about this message
-				for(v=0;v<7;v++) {
-					if(midi_MidiChannels[v]==chanonly && v != q) { // if channel match and we haven't sent it already for the voice
-						if(msgonly==NOTE_ON && msg.data2) {
-							midiParser_noteOn(v, msg.data1, msg.data2, 1);
-							//Also used in sequencer trigger note function
-						} else { // NOTE_OFF or zero velocity note
-						//	midiParser_noteOff(v, msg.data1, msg.data2);
-						}
-					} // if channel matches
-				} // for each voice
 			} // check midi filter
 
 		} else if(msgonly==PROG_CHANGE) {
@@ -1887,8 +2564,34 @@ void midiParser_parseMidiMessage(MidiMsg msg)
 				seq_setNextPattern(msg.data1);
 
 		} else if(msgonly==MIDI_CC){
+			if((midiParser_txRxFilter & MIDI_FILTER_CC) && midiParser_handleVoiceChannelCc(chanonly,msg))return;
+			if(chanonly == midi_ControlChannel && msg.data1 == 27 &&
+			   (midiParser_txRxFilter & MIDI_FILTER_CC))
+			{
+				midiParser_setGlobalPitch(midiParser_scaleGlobalPitchCc(msg.data2));
+				return;
+			}
 
-
+			if(chanonly == midi_ControlChannel && (midiParser_txRxFilter & MIDI_FILTER_CC))
+			{
+				uint16_t parameter=PAR_NONE;
+				uint8_t value=msg.data2;
+				if(msg.data1==28) {
+					midiParser_setGlobalDecay(midiParser_scaleGlobalPitchCc(value));
+					return;
+				}
+				if(msg.data1==5) parameter=PAR_RANDOM_STEP;
+				if(msg.data1==6) parameter=PAR_PERF_NOTE_REPEAT_CHANCE;
+				if(msg.data1==7) parameter=PAR_PERF_PROB;
+				if(parameter!=PAR_NONE) {
+					if(parameter!=PAR_PERF_NOTE_REPEAT_CHANCE)
+						value=(uint8_t)(((uint16_t)value*100u+63u)/127u);
+					midiParser_setStepPerformance(parameter,value);
+					return;
+				}
+			}
+			if(chanonly==midi_ControlChannel && (midiParser_txRxFilter & MIDI_FILTER_CC) &&
+			   midiParser_extendedPerformanceCc(msg.data1,msg.data2)) return;
 			uint8_t voiceNr = midiParser_cc2voiceNr(msg.data1);
 
 			if(voiceNr==0 || voiceNr >= 7) //any set midi channel
@@ -1910,7 +2613,7 @@ void midiParser_parseMidiMessage(MidiMsg msg)
 			{
 
 				// respond to CC message. This responds only when global channel or voice channel matches the cc message's channel
-				if((midiParser_txRxFilter & MIDI_FILTER_CC) && ((chanonly == midi_MidiChannels[voiceNr]) || (chanonly == midi_MidiChannels[7]) )) {
+				if((midiParser_txRxFilter & MIDI_FILTER_CC) && ((chanonly == midi_MidiChannels[voiceNr - 1u]) || (chanonly == midi_MidiChannels[7]) )) {
 					//record automation if record is turned on
 					seq_recordAutomation(frontParser_activeTrack, msg.data1, msg.data2);
 
@@ -1922,9 +2625,21 @@ void midiParser_parseMidiMessage(MidiMsg msg)
 					uart_sendFrontpanelByte(msg.data2);
 				}
 			}
-		} else {
-			// anything else
-			// TODO MIDI_PITCH_WHEEL ?
+		} else if(msgonly == MIDI_PITCH_WHEEL) {
+			const int16_t bend = (int16_t)((msg.data1 | (msg.data2 << 7)) - 8192);
+			if(chanonly == midi_MidiChannels[7] || chanonly == midi_ControlChannel)
+			{
+				midiParser_pitchBendValue = bend;
+				osc_setGlobalPitchBend(bend, midiParser_pitchBendRange);
+				midiParser_recalcGlobalPitch();
+			}
+			else
+				for(uint8_t v=0; v<7; ++v)
+					if(midi_MidiChannels[v] == chanonly)
+					{
+						midiParser_applyVoicePitchBend(v, bend);
+						break;
+					}
 		}
 	} // channel specific vs non channel specific
 
@@ -2098,6 +2813,8 @@ void midiParser_parseUartData(unsigned char data)
     if(parserState != SYSEX_DATA) // we are still in sysex receive mode
       parserState = MIDI_STATUS;  // next byte should be a new message, or we don't care about it
     midiMsg_tmp.bits.source = midiSourceMIDI;
+    if(midiMsg_tmp.status==MIDI_CLOCK)
+      midiParser_clockCycles=uart_takeMidiClockCycles();
     midiParser_parseMidiMessage(midiMsg_tmp);
     parseMsg = 0;
   }

@@ -17,6 +17,7 @@
 #include "Soundengine/MIDI/MidiMessages.h"
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Sequencer/clockSync.h"
 #include "Soundengine/MIDI/Uart.h"
 //#include "SD_Manager.h"
 #include "Soundengine/Sequencer/EuklidGenerator.h"
@@ -1018,9 +1019,13 @@ static void frontParser_handleSeqCC()
 	case FRONT_SEQ_RUN_STOP:
 		if(cortex_midiMsg.data2 == 0)
 		{
+			sync_midiStartStop(0);
 			seq_resetPosition();
 		}
-		seq_setRunning(cortex_midiMsg.data2);
+		if(cortex_midiMsg.data2 && seq_getExtSync()==2)
+			sync_requestStartOnNextBar();
+		else if(cortex_midiMsg.data2)
+			seq_setRunning(1);
 		break;
 
 	case FRONT_SEQ_MUTE_TRACK:
@@ -1090,6 +1095,9 @@ static void frontParser_handleSeqCC()
 			case PRE_48_PPQ_OUT:
 				trigger_dividerClockOut1 = PRE_48_PPQ_OUT;
 							break;
+			case PRE_16SH_OUT:
+				trigger_dividerClockOut1 = PRE_16SH_OUT;
+				break;
 		}
 
 		break;

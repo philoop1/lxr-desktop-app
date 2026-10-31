@@ -107,6 +107,21 @@
 //---------------------------------------------------------------------
 void parameterArray_init()
 {
+	parameterArray[PAR_SNARE_NOISE_ATTACK].ptr=&snareVoice.noiseAttackControl;
+	parameterArray[PAR_SNARE_NOISE_ATTACK].type=TYPE_UINT8;
+	parameterArray[PAR_SNARE_NOISE_DECAY].ptr=&snareVoice.noiseDecayControl;
+	parameterArray[PAR_SNARE_NOISE_DECAY].type=TYPE_UINT8;
+	parameterArray[PAR_SNARE_NOISE_SLOPE].ptr=&snareVoice.noiseSlopeControl;
+	parameterArray[PAR_SNARE_NOISE_SLOPE].type=TYPE_UINT8;
+	parameterArray[PAR_SNARE_LAYER_WAVE].ptr=&snareVoice.layerOsc.waveform;
+	parameterArray[PAR_SNARE_LAYER_WAVE].type=TYPE_UINT8;
+	parameterArray[PAR_SNARE_LAYER_AMOUNT].ptr=&snareVoice.layerAmountControl;
+	parameterArray[PAR_SNARE_LAYER_AMOUNT].type=TYPE_UINT8;
+	parameterArray[PAR_SNARE_LAYER_FREQ].ptr=&snareVoice.layerFreqControl;
+	parameterArray[PAR_SNARE_LAYER_FREQ].type=TYPE_UINT8;
+	parameterArray[PAR_SNARE_LAYER_MODE].ptr=&snareVoice.layerMode;
+	parameterArray[PAR_SNARE_LAYER_MODE].type=TYPE_UINT8;
+
 
 	parameterArray[PAR_OSC_WAVE_DRUM1].ptr 	= &voiceArray[0].osc.waveform;
 	parameterArray[PAR_OSC_WAVE_DRUM1].type = TYPE_UINT8;

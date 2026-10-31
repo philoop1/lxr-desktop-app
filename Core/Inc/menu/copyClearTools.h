@@ -25,6 +25,8 @@ enum
 	MODE_CLEAR,
 	MODE_COPY_PATTERN,
 	MODE_COPY_TRACK,
+	MODE_COPY_STEP,
+	MODE_COPY_STEP_GROUP,
 };
 
 //clear targets
@@ -43,6 +45,7 @@ void copyClear_clearCurrentTrack();
 void copyClear_clearCurrentPattern();
 void copyClear_copyTrack();
 void copyClear_copyPattern();
+int8_t copyClear_getSrc(void);
 uint8_t copyClear_getClearTarget();
 uint8_t copyClear_isClearModeActive();
 void copyClear_setClearTarget(uint8_t mode);

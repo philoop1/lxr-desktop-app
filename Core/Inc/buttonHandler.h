@@ -24,6 +24,8 @@ extern uint8_t buttonHandler_originalValue[2];
 extern uint8_t buttonHandler_resetLock1;
 extern uint8_t buttonHandler_resetLock2;
 
+uint8_t buttonHandler_isMidiDelayPage(void);
+void buttonHandler_refreshVoiceDisplay(void);
 #define BUTTON_TIMEOUT 2000//(38) //~500[ms]
 #define NO_STEP_SELECTED -1
 /**indicates which of the 4 select button modes is active.

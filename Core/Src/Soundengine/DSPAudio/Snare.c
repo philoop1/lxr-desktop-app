@@ -23,6 +23,35 @@
 //instance of the snare voice
 INDTCMZ SnareVoice snareVoice;
 
+static void Snare_updateNoiseEnvelopeEnabled(void)
+{
+	snareVoice.noiseEnvelopeEnabled = snareVoice.noiseAttackControl != 0 ||
+		snareVoice.noiseDecayControl != 127 || snareVoice.noiseSlopeControl != 64;
+	if(!snareVoice.noiseEnvelopeEnabled) snareVoice.noiseEgValue=1.f;
+}
+void Snare_setNoiseAttack(uint8_t value)
+{
+	snareVoice.noiseAttackControl=value;
+	slopeEg2_setAttack(&snareVoice.noiseVolEg,value,false);
+	Snare_updateNoiseEnvelopeEnabled();
+}
+void Snare_setNoiseDecay(uint8_t value)
+{
+	snareVoice.noiseDecayControl=value;
+	slopeEg2_setDecay(&snareVoice.noiseVolEg,value,false);
+	Snare_updateNoiseEnvelopeEnabled();
+}
+void Snare_setNoiseSlope(uint8_t value)
+{
+	snareVoice.noiseSlopeControl=value;
+	slopeEg2_setSlope(&snareVoice.noiseVolEg,value);
+	Snare_updateNoiseEnvelopeEnabled();
+}
+void Snare_setLayerWave(uint8_t value){snareVoice.layerOsc.waveform=value;}
+void Snare_setLayerAmount(uint8_t value){snareVoice.layerAmountControl=value;snareVoice.layerAmount=value/127.f;}
+void Snare_setLayerFreq(uint8_t value){snareVoice.layerFreqControl=value;}
+void Snare_setLayerMode(uint8_t value){snareVoice.layerMode=value>2?2:value;}
+
 //---------------------------------------------------
 void Snare_setPan(const uint8_t pan)
 {
@@ -54,6 +83,11 @@ void Snare_init()
 	snareVoice.osc.fmMod = 0;
 	snareVoice.osc.midiFreq = 70<<8 | 64;
 	snareVoice.osc.modNodeValue = 1;
+	snareVoice.layerOsc=snareVoice.osc;
+	Snare_setLayerWave(0);
+	Snare_setLayerAmount(0);
+	Snare_setLayerFreq(25);
+	Snare_setLayerMode(0);
 
 	setDistortionShape(&snareVoice.distortion, 0.f);
 
@@ -65,6 +99,11 @@ void Snare_init()
 	snareVoice.egPitchModAmount = 0.5f;
 
 	slopeEg2_init(&snareVoice.oscVolEg);
+	slopeEg2_init(&snareVoice.noiseVolEg);
+	snareVoice.noiseEgValue=1.f;
+	Snare_setNoiseAttack(0);
+	Snare_setNoiseDecay(127);
+	Snare_setNoiseSlope(64);
 
 
 
@@ -96,9 +135,13 @@ void Snare_trigger(const uint8_t vel, const uint8_t note)
 		snareVoice.osc.phase = (0xff<<22)*offset;
 	else
 		snareVoice.osc.phase = 0;
+	snareVoice.layerOsc.phase=0;
+	osc_setBaseNote(&snareVoice.layerOsc,note);
 
 	DecayEg_trigger(&snareVoice.oscPitchEg);
 	slopeEg2_trigger(&snareVoice.oscVolEg);
+	if(snareVoice.noiseEnvelopeEnabled)
+		slopeEg2_trigger(&snareVoice.noiseVolEg);
 	snareVoice.velo = vel/127.f;
 
 	osc_setBaseNote(&snareVoice.osc,note);
@@ -120,6 +163,8 @@ IN_ITCM_RAM void Snare_calcAsync()
 
 	//calc the osc  vol eg
 	snareVoice.egValueOscVol = slopeEg2_calc(&snareVoice.oscVolEg);
+	snareVoice.noiseEgValue = snareVoice.noiseEnvelopeEnabled ?
+		slopeEg2_calc(&snareVoice.noiseVolEg) : 1.f;
 
 	//turn off trigger signal if trigger gate mode is on and volume == 0
 	/*
@@ -140,6 +185,8 @@ IN_ITCM_RAM void Snare_calcAsync()
 	}
 
 	osc_setFreq(&snareVoice.osc);
+	snareVoice.layerOsc.pitchMod=snareVoice.osc.pitchMod*(0.25f+snareVoice.layerFreqControl/33.9f);
+	osc_setFreq(&snareVoice.layerOsc);
 	osc_setFreq(&snareVoice.noiseOsc);
 
 
@@ -168,7 +215,30 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 
 
 	//calc next osc sample
-	calcNextOscSampleBlock(&snareVoice.osc,oscBuf,size,(1.f-snareVoice.mix), snareVoice.pwm);
+	const float oscGain=snareVoice.noiseEnvelopeEnabled ? 1.f : (1.f-snareVoice.mix);
+	if(snareVoice.layerAmountControl && snareVoice.layerMode==1) {
+		int16_t layerBuf[size];
+		calcNextOscSampleBlock(&snareVoice.layerOsc,layerBuf,size,snareVoice.layerAmount,snareVoice.pwm);
+		calcNextOscSampleFmBlock(&snareVoice.osc,layerBuf,oscBuf,size,oscGain,snareVoice.pwm);
+	} else {
+	calcNextOscSampleBlock(&snareVoice.osc,oscBuf,size,oscGain,snareVoice.pwm);
+	if(snareVoice.layerAmountControl) {
+		int16_t layerBuf[size];
+		const float amount=snareVoice.layerAmount;
+		calcNextOscSampleBlock(&snareVoice.layerOsc,layerBuf,size,
+			snareVoice.layerMode==0 ? oscGain : 1.f,snareVoice.pwm);
+		for(uint8_t i=0;i<size;i++) {
+			const float base=oscBuf[i];
+			const float layer=layerBuf[i];
+			float sample;
+			if(snareVoice.layerMode==2) sample=base*(1.f-amount)+amount*(base*layer/32768.f);
+			else sample=base*(1.f-amount)+layer*amount;
+			if(sample>32767.f)sample=32767.f;
+			else if(sample< -32768.f)sample= -32768.f;
+			oscBuf[i]=(int16_t)sample;
+		}
+	}
+	}
 	// apply filter to synthesized sound as well here if desired, or combine code for more efficiency
 	//SVF_calcBlockZDF(&snareVoice.filter,snareVoice.filterType,transBuf,size);
 
@@ -178,6 +248,23 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 
 
 	uint8_t j;
+	if(snareVoice.noiseEnvelopeEnabled)
+	{
+		const float bodyGain=snareVoice.egValueOscVol;
+		const float noiseGain=snareVoice.noiseEgValue;
+		const float velocity=snareVoice.volumeMod ? snareVoice.velo : 1.f;
+		const float level=snareVoice.vol*velocity;
+		for(j=0;j<size;j++)
+		{
+			const float body=oscBuf[j]*(1.f-snareVoice.mix)*bodyGain;
+			const float noise=buf[j]*snareVoice.mix*noiseGain;
+			const float click=transBuf[j]*bodyGain;
+			buf[j]=level*(body+noise+click)*
+				calcOnePole(&snareVoice.FaderVolumeFilter,adc_getFaderVolume(3));
+		}
+		calcDistBlock(&snareVoice.distortion,buf,size);
+		return;
+	}
 	if(snareVoice.volumeMod)
 	{
 		snareVoice.combinedVolume = snareVoice.vol * snareVoice.velo * snareVoice.egValueOscVol ;

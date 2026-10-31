@@ -329,6 +329,14 @@ enum ParamEnums
 	PAR_FX_REVERB_TYPE,
 	PAR_FX_DELAY_TYPE,
 	PAR_MORPH_KIT_DEST,
+	/* Appended inside the reserved 512-byte kit block; legacy IDs stay put. */
+	PAR_SNARE_NOISE_ATTACK,
+	PAR_SNARE_NOISE_DECAY,
+	PAR_SNARE_NOISE_SLOPE,
+	PAR_SNARE_LAYER_WAVE,
+	PAR_SNARE_LAYER_AMOUNT,
+	PAR_SNARE_LAYER_FREQ,
+	PAR_SNARE_LAYER_MODE,
 
 	//#########################################
 	//######## End of sound Parameters ########
@@ -428,7 +436,64 @@ enum ParamEnums
 		PAR_MIDI_CHAN_PC, // performance/control channel (1..16)
 		PAR_SHUFFLE_LOAD, // load the pattern's shuffle on pattern change
 		PAR_LOAD_MORPH,   // load the kit's saved morph target with the kit
+		PAR_LOAD_SAMPLE_RATE, // load master sample rate with the kit
+		PAR_GLOBAL_PITCH, // stored bipolar master pitch, neutral=63
+		PAR_PITCH_BEND_RANGE, // stored semitone range 0..48
+		PAR_GLOBAL_DECAY,
+		PAR_RANDOM_STEP,
+		PAR_PERF_NOTE_REPEAT_CHANCE,
+		PAR_PERF_SCARCITY,
+		PAR_PERF_PROB,
+		PAR_PERF_NOTE_PROB,
+		PAR_PERF_DELAY_CHANCE,
+		PAR_PERF_DELAY_SYNC,
+		PAR_PERF_DELAY_COUNT,
+		PAR_PERF_DELAY_BOUNCE,
+		PAR_PERF_DELAY_TARGET,
+		PAR_PERF_DELAY_MODE,
+		PAR_PERF_DELAY_EXP,
+		PAR_PERF_DELAY_PITCH,
+		PAR_PERF_DELAY_INPUT_MASK,
+		PAR_PERF_VELO_DECAY,
+		PAR_PERF_VELO_SAMPLE_RATE,
+		PAR_PERF_VELO_FILTER,
+		PAR_PERF_VELO_COARSE,
+		PAR_PERF_VELO_SLOPE,
+		PAR_PERF_VELO_MOD_AMOUNT,
+		PAR_PERF_VELO_DRIVE,
+		PAR_GROOVE_SH2,
+		PAR_GROOVE_SH3,
+		PAR_GROOVE_SH4,
+		PAR_MASTER_FILTER_ENABLE,
+		PAR_GLOBAL_SCALE,
+		PAR_FX_SEND_MODE,
 		PAR_CPU_USE,      // live display only; never stored on SD
+		PAR_PERF_VELO_LEVEL, // live master depth; reset to neutral on settings load
+
+		PAR_FX_OUTPUT_MODE,
+		PAR_MASTER_FILTER,
+		PAR_MASTER_FILTER_RESO,
+		PAR_MASTER_FILTER_DRIVE,
+		PAR_FX_SEND1,
+		PAR_FX_SEND2,
+		PAR_FX_SEND3,
+		PAR_FX_SEND4,
+		PAR_FX_SEND5,
+		PAR_FX_SEND6,
+		PAR_FX_SEND7,
+
+		PAR_VCA1,
+		PAR_VCA2,
+		PAR_VCA3,
+		PAR_VCA4,
+		PAR_VCA5,
+		PAR_VCA6,
+		PAR_VCA7,
+		PAR_CLOCK_OFFSET,
+		PAR_CLOCK_OFFSET_FINE,
+		PAR_PATTERN_SCALE,
+		PAR_PERF_RANDOM_VELO,
+		PAR_PERF_AVL,
 
 	NUM_PARAMS	
 };

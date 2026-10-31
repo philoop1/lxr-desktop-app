@@ -1,8 +1,12 @@
 # P01 MIDI comparison: mutador and LXR V2 desktop
 
 Code audit, 2026-10-29. Source snapshots: mutador `7319e19b`, desktop main
-`a43cd4f`. No MIDI code has been ported in this branch. The mutador manual is
+`a43cd4f`. This is the original baseline comparison. The mutador manual is
 used as a map, but conclusions below were checked against the parsers.
+
+Current fork status and executable channel/CC results are in the
+[2026-10-29 channel audit](P01_CHANNEL_AUDIT.md). Pch/Morph CC2 now exist;
+the audit also found and corrected a legacy voice-channel index error.
 
 ## Main behavioral differences
 
@@ -32,7 +36,7 @@ the existing global channel would change old controller mappings.
 | 2 | Drum 1 oscillator waveform | Morph amount | Only on Control/PC; voice channel retains compact-map meaning separately |
 | 6 | NRPN data entry coarse | Chance Step Repeat | Keep NRPN on legacy channels; intercept on Control/PC |
 | 7 | Cymbal waveform 1 | Step Chance | Voice compact map also uses CC7 for voice volume; channel precedence is essential |
-| 10 | Voice 1 fine tune | Delay Chance | Voice compact map uses CC10 for pan; three meanings require strict channel routing |
+| 10 | Voice 1 fine tune | Step repeat amount | Voice compact map uses CC10 for pan; three meanings require strict channel routing |
 | 11..16 | Voice fine/coarse tuning CCs | Delay scale/repeats/bounce/pitch/poly mode | Delay CCs are P05, after the new channel contract |
 | 20..26 | Voice tuning/waveform CCs | Six Voice VCAs and Master VCA | Control channel only |
 | 27..29 | Synth waveform/noise/mix CCs | Global pitch/decay/filter | Control channel only |

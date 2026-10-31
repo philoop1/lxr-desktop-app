@@ -352,11 +352,10 @@ int main(void)
 #else
 	//print boot up message
 lcd_clear();
-lcd_string("Sonic Potions");
+lcd_string("LXR2 Mutador");
 //goto 2nd line
 lcd_setcursor(0,2);
-lcd_string("LXR2 Drums V");
-lcd_string(FIRMWARE_VERSION);
+lcd_string("Mutador 0.1.28");
 #endif
 
 lcd_showSplash();

@@ -37,6 +37,9 @@ extern uint8_t voiceStatus[NUM_DRUM_VOICES];
 //---------------------------------------------------
 //------------- Functions ---------------------------
 void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel);
+// Sound and LED only; incoming routing owns recording and echo.
+void voiceControl_noteOnNoEcho(uint8_t voice, uint8_t note, uint8_t vel);
+void voiceControl_noteOnNoEchoWithMod(uint8_t voice,uint8_t note,uint8_t velocity,uint8_t modVelocity);
 void voiceControl_noteOff(uint8_t voice);//0xff == all voices
 uint8_t voiceControl_isVoicePlaying(uint8_t voice);
 

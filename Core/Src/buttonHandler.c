@@ -1,3 +1,4 @@
+#include "Soundengine/Sequencer/PerformanceScale.h"
 /*
  * buttonHandler.c
  *
@@ -13,6 +14,7 @@
  */
 #include <frontPanelParser_ui.h>
 #include "buttonHandler.h"
+#include "menu/StepSelection.h"
 #include "menu/menu.h"
 #include "ledHandler.h"
 #include "lcd.h"
@@ -26,7 +28,22 @@
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Preset/PresetManager.h"
 #include "Soundengine/FxBus.h"
+#include "Soundengine/MIDI/MidiParser.h"
+#include "Soundengine/Sequencer/PerformanceSteps.h"
 
+uint8_t buttonHandler_isMidiDelayPage(void)
+{
+	return menu_getActivePage()==PERF_PAGE && menu_getSubPage()==PERF_DELAY_SUBPAGE;
+}
+void buttonHandler_refreshVoiceDisplay(void)
+{
+	if(buttonHandler_isMidiDelayPage()) {
+		menu_muteModeActive=0;
+		led_setActiveVoiceLeds(activeParameters[PAR_PERF_DELAY_INPUT_MASK]&127u);
+	}
+	else if(menu_getActivePage()==PERF_PAGE) buttonHandler_showMuteLEDs();
+	else led_setActiveVoice(menu_getActiveVoice());
+}
 //used to remember the last active page when entering the sequencer mode
 //needed to return to the previously shown page when seq mode button is released
 //static uint8_t lastActivePage = 0;
@@ -53,6 +70,8 @@ volatile struct {
 
 } buttonHandler_stateMemory;
 
+static uint8_t buttonHandler_perfScaleArmed;
+static uint32_t buttonHandler_perfScaleDeadline;
 static uint8_t buttonHandler_mutedVoices = 0;
 volatile static int8_t buttonHandler_armedAutomationStep = NO_STEP_SELECTED;
 
@@ -306,6 +325,13 @@ static void buttonHandler_setTimeraction(uint8_t buttonNr) {
 //periodically called handler for timed actions
 //-> hold a step button for a long time to select/rec automation
 void buttonHandler_tick() {
+    if(buttonHandler_perfScaleArmed && (int32_t)(systick_ticks-buttonHandler_perfScaleDeadline)>=0) {
+        buttonHandler_perfScaleArmed=0;
+        buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_VOICE;
+        menu_openPatternScale();
+        led_setMode2(SELECT_MODE_VOICE);
+        menu_repaintAll();
+    }
 	if ((systick_ticks > buttonHandler_buttonTimer)) {
 		if (buttonHandler_buttonTimerStepNr >= 0) //!=NO_STEP_SELECTED)
 		{
@@ -821,8 +847,80 @@ static void buttonHandler_setTrackRotation(uint8_t seqButtonPressed)
 }
 */
 //--------------------------------------------------------
+static void buttonHandler_openPerformanceLayer(uint8_t page)
+{
+	buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_PERF;
+	led_setMode2(SELECT_MODE_PERF);
+	menu_openPerformanceLayer(page);
+}
+static uint16_t buttonHandler_heldPatternKeys;
+static uint8_t buttonHandler_copyPatternSource;
+static uint8_t buttonHandler_heldPattern[16];
+
+static uint8_t buttonHandler_selectPatternLoop(uint8_t key)
+{
+	const uint8_t pattern=(uint8_t)(key+16u*menu_activePatternBank);
+	buttonHandler_heldPatternKeys |= (uint16_t)(1u<<key);
+	buttonHandler_heldPattern[key]=pattern;
+	uint8_t first=pattern, last=pattern, count=0;
+	for(uint8_t i=0;i<16;i++)
+		if(buttonHandler_heldPatternKeys & (1u<<i)) {
+			const uint8_t p=buttonHandler_heldPattern[i];
+			if(p<first) first=p;
+			if(p>last) last=p;
+			count++;
+		}
+	if(count>=2) { perf_setLoop(first,last); return first; }
+	perf_clearLoop();
+	return pattern;
+}
+
+
+static void buttonHandler_enterPatternShortcut(void)
+{
+    buttonHandler_disarmTimerActionStep();
+    buttonHandler_buttonTimerStepNr=NO_STEP_SELECTED;
+    copyClear_reset();
+    menu_openPerformanceLayer(0);
+    buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_PATTERN;
+    led_setMode2(SELECT_MODE_PERF);
+    led_initPatternSelectLeds();
+}
+
 static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 {
+    if(seqButtonPressed==SEQ_DRUM1 && buttonHandler_getShift()) {
+        buttonHandler_enterPatternShortcut();
+        return;
+    }
+	if(copyClear_Mode>=MODE_COPY_PATTERN && !buttonHandler_getShift()) {
+		if(buttonHandler_stateMemory.selectButtonMode==SELECT_MODE_PATTERN) {
+			const uint8_t pattern=(uint8_t)(seqButtonPressed+16u*menu_activePatternBank);
+			if(copyClear_Mode==MODE_COPY_TRACK && copyClear_srcSet())
+				seq_copyTrackPattern((uint8_t)copyClear_getSrc(),buttonHandler_copyPatternSource,pattern);
+			else if(!copyClear_srcSet()) {
+				copyClear_setSrc((int8_t)pattern,MODE_COPY_PATTERN);
+				led_setBlinkLed(led_idx2StepLed(seqButtonPressed),1);
+			}
+			else if(copyClear_Mode==MODE_COPY_PATTERN)
+				seq_copyPattern((uint8_t)copyClear_getSrc(),pattern);
+			if(copyClear_srcSet() && copyClear_Mode!=MODE_COPY_PATTERN)copyClear_reset();
+			else if(copyClear_Mode==MODE_COPY_PATTERN && copyClear_getSrc()!=pattern)copyClear_reset();
+			led_updateSeqLeds();
+			return;
+		}
+		const uint8_t step=(uint8_t)(seqButtonPressed+16u*menu_activeBar);
+		if(!copyClear_srcSet()) {
+			copyClear_setSrc((int8_t)step,MODE_COPY_STEP);
+			led_setBlinkLed(led_idx2StepLed(seqButtonPressed),1);
+		}
+		else if(copyClear_Mode==MODE_COPY_STEP) {
+			seq_copyStep(menu_getActiveVoice(),menu_getViewedPattern(),(uint8_t)copyClear_getSrc(),step);
+			copyClear_reset();
+			led_updateSeqLeds();
+		}
+		return;
+	}
 
 
 	uint8_t ledNr = led_idx2StepLed(seqButtonPressed);
@@ -833,8 +931,14 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 		{
 
 		case SEQ_DRUM2:
+			buttonHandler_openPerformanceLayer(PERF_ACCENT_SUBPAGE);
+			break;
 		case SEQ_DRUM3:
-		case SEQ_SNARE:
+			buttonHandler_openPerformanceLayer(PERF_DELAY_SUBPAGE);
+			break;
+		case SEQ_SNARE: // SHIFT + Step 4: four-point Groove
+			buttonHandler_openPerformanceLayer(PERF_GROOVE_SUBPAGE);
+			break;
 		case SEQ_CLP:
 		case SEQ_CL_HH:
 		case SEQ_OP_HH:
@@ -863,12 +967,6 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			//--> enter song mode
 			buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_SONG;
 			menu_switchPage(SONG_MODE_PAGE);
-			break;
-		case SEQ_DRUM1: // SHIFT + Step 1: pattern select, keep PERF display
-			if(menu_getActivePage() == PERF_PAGE) {
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_PATTERN;
-				led_initPatternSelectLeds();
-			}
 			break;
 		case SEQ_PATTERN: //Pattern
 
@@ -1126,8 +1224,13 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			buttonHandler_setTimeraction((uint8_t) (seqButtonPressed + menu_activeBar*16));
 			break;
 		case SELECT_MODE_STEP:
-			led_clearAllBlinkLeds();
-			buttonHandler_selectActiveStep(ledNr, seqButtonPressed);
+			if(stepEdit_press(menu_getViewedPattern(),menu_getActiveVoice(),seqButtonPressed,
+				(uint8_t)(seqButtonPressed+menu_activeBar*16))) {
+				led_clearAllBlinkLeds();
+				buttonHandler_selectActiveStep(ledNr,seqButtonPressed);
+			} else {
+				led_setBlinkLed(ledNr,1);
+			}
 
 			//reset sub step to 1 (== main step parameters)
 			//led_setBlinkLed(LED_PART_SELECT1, 1);
@@ -1179,6 +1282,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			}
 			else
 			{
+				const uint8_t selectedPattern=buttonHandler_selectPatternLoop(seqButtonPressed);
 				//a new pattern is manually selected -> KCM=auto should load in every case
 				//SKIP_NEXT_KIT_AUTOLOAD is just to prevent autoload after saving to a new slot
 				if(activeParameters[PAR_PATTERN_MODE] == SKIP_NEXT_KIT_AUTOLOAD)
@@ -1189,7 +1293,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 
 
 				//select pattern to show // shownPattern
-				menu_setShownPattern(seqButtonPressed + 16 * menu_activePatternBank);
+				menu_setShownPattern(selectedPattern);
 				led_clearSequencerLeds();
 
 				led_clearAllBlinkLeds();
@@ -1210,7 +1314,8 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_setBlinkLed(ledNr, 1);
 
 				//tell sequencer to change pattern
-				frontPanel_sendData(SEQ_CC, SEQ_CHANGE_PAT, seqButtonPressed + 16 * menu_activePatternBank);
+				frontPanel_sendData(SEQ_CC, SEQ_CHANGE_PAT, selectedPattern);
+				led_initPatternSelectLeds();
 			}
 			break;
 
@@ -1292,6 +1397,9 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 //--------------------------------------------------------
 static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 {
+	stepEdit_release(seqButtonPressed);
+	buttonHandler_heldPatternKeys &= (uint16_t)~(1u<<seqButtonPressed);
+	if(buttonHandler_getCopy())return;
 
 	uint8_t ledNr = led_idx2StepLed(seqButtonPressed);
 
@@ -1377,6 +1485,18 @@ static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 // one of the 8 part buttons is pressed
 static void buttonHandler_selectButtonPressed(uint8_t partNr)
 {
+	if(copyClear_Mode>=MODE_COPY_PATTERN && !buttonHandler_getShift()) {
+		if(!copyClear_srcSet()) {
+			copyClear_setSrc((int8_t)partNr,MODE_COPY_STEP_GROUP);
+			led_setBlinkLed(led_idx2SelectLed(partNr),1);
+		}
+		else if(copyClear_Mode==MODE_COPY_STEP_GROUP) {
+			seq_copyStepGroup(menu_getActiveVoice(),menu_getViewedPattern(),(uint8_t)copyClear_getSrc(),partNr);
+			copyClear_reset();
+			led_updateSeqLeds();
+		}
+		return;
+	}
 	//if in step mode, return to voice/edit mode
 	if(buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_STEP)
 	{
@@ -1434,6 +1554,7 @@ static void buttonHandler_selectButtonPressed(uint8_t partNr)
 // one of the 8 part buttons is released
 static void buttonHandler_partButtonReleased(uint8_t partNr)
 {
+	if(buttonHandler_getCopy())return;
 	if (copyClear_Mode >= MODE_COPY_PATTERN) {
 
 	} else {
@@ -1451,6 +1572,14 @@ static void buttonHandler_partButtonReleased(uint8_t partNr)
 
 //--------------------------------------------------------
 // one of the 7 voice buttons pressed
+static uint8_t buttonHandler_handleDelayVoice(uint8_t voice)
+{
+	if(voice>=7 || !buttonHandler_isMidiDelayPage())return 0;
+	midiParser_setDelayParameter(PAR_PERF_DELAY_INPUT_MASK,
+		activeParameters[PAR_PERF_DELAY_INPUT_MASK] ^ (uint8_t)(1u<<voice));
+	buttonHandler_refreshVoiceDisplay();
+	return 1;
+}
 static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 {
 
@@ -1470,6 +1599,7 @@ static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 	if (copyClear_Mode >= MODE_COPY_PATTERN) {
 		//copy mode -> voice buttons select track copy src/dst
 		if (copyClear_srcSet()) {
+			if(copyClear_Mode!=MODE_COPY_TRACK)return;
 			//select dest
 			copyClear_setDst((int8_t)voiceNr, MODE_COPY_TRACK);
 			copyClear_copyTrack();
@@ -1486,11 +1616,13 @@ static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 
 		} else {
 			// no source selected so select src
+			buttonHandler_copyPatternSource=menu_getViewedPattern();
 			copyClear_setSrc((int8_t)voiceNr, MODE_COPY_TRACK);
 			led_setBlinkLed((uint8_t) (LED_VOICE1 + voiceNr), 1);
 		}
 	} else {
 		// mode none or clear
+		if(buttonHandler_handleDelayVoice(voiceNr)) return;
 		// determine if we are in mute/unmute mode -
 		// in perf mode we are in mute mode unless shift is held
 		// in any other mode we are in mute mode when shift is held
@@ -1580,6 +1712,7 @@ static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 
 //--------------------------------------------------------
 void buttonHandler_buttonPressed(uint8_t buttonNr) {
+	if(buttonNr!=BUT_MODE2)buttonHandler_perfScaleArmed=0;
 
 	screensaver_touch();
 
@@ -1798,12 +1931,16 @@ void buttonHandler_buttonPressed(uint8_t buttonNr) {
 		break;
 
 
-	case BUT_MODE1 :
-	case BUT_MODE2 :
-	case BUT_MODE3 :
-	case BUT_MODE4 :
-		buttonHandler_handleModeButtons((uint8_t) (buttonNr - BUT_MODE1));
-		break;
+    case BUT_MODE2:
+        buttonHandler_perfScaleArmed=1;
+        buttonHandler_perfScaleDeadline=systick_ticks+BUTTON_TIMEOUT;
+        buttonHandler_handleModeButtons(SELECT_MODE_PERF);
+        break;
+    case BUT_MODE1:
+    case BUT_MODE3:
+    case BUT_MODE4:
+        buttonHandler_handleModeButtons((uint8_t)(buttonNr-BUT_MODE1));
+        break;
 
 	case BUT_SEQ8:
 		buttonHandler_seqButtonPressed(7);
@@ -2106,6 +2243,10 @@ void buttonHandler_buttonReleased(uint8_t buttonNr) {
 	case BUT_SEQ16:
 		buttonHandler_seqButtonReleased(15);
 		break;
+
+	case BUT_MODE2:
+        buttonHandler_perfScaleArmed=0;
+        break;
 
 	case BUT_MODE3:
 		if(buttonHandler_stateMemory.selectButtonMode != SELECT_MODE_LOAD)

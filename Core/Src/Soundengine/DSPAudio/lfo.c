@@ -22,6 +22,68 @@
 #include "Soundengine/DSPAudio/Snare.h"
 #include "Soundengine/MIDI/valueShaper.h"
 //-------------------------------------------------------------
+static inline float lfo_random01(void)
+{
+	return GetRngValue() / (float)0xffffffff;
+}
+static inline void lfo_setRandomValue(Lfo *lfo)
+{
+	lfo->rnd = lfo_random01();
+}
+static inline float lfo_reflectUnitRange(float value)
+{
+	if(value < 0.f)
+		return -value;
+	if(value > 1.f)
+		return 2.f-value;
+	return value;
+}
+static inline void lfo_setSmoothRandomTarget(Lfo *lfo, uint8_t waveform)
+{
+	if(waveform == LFO_STRAY)
+	{
+		const float step = (lfo_random01()*2.f-1.f)*0.35f;
+		lfo->rndTarget = lfo_reflectUnitRange(lfo->rnd+step);
+	}
+	else
+	{
+		lfo->rndTarget = lfo_random01();
+	}
+}
+static inline void lfo_advanceSmoothRandom(Lfo *lfo)
+{
+	lfo->rnd = lfo->rndTarget;
+	lfo_setSmoothRandomTarget(lfo,lfo->waveform);
+}
+static inline float lfo_calcSmoothRandom(Lfo *lfo)
+{
+	const float phase = lfo->phase/(float)0xffffffff;
+	const float smoothPhase = phase*phase*(3.f-2.f*phase);
+	return lfo->rnd+(lfo->rndTarget-lfo->rnd)*smoothPhase;
+}
+static inline float lfo_applySmoothRandomBias(Lfo *lfo, float value)
+{
+	const float control = (lfo->phaseOffset/(float)0xffffffff)*127.f;
+	const float bias = (control-63.f)/64.f;
+	float bipolar = value*2.f-1.f;
+	bipolar += bias*(1.f-fabsf(bipolar));
+
+	if(bipolar < -1.f)
+		bipolar = -1.f;
+	else if(bipolar > 1.f)
+		bipolar = 1.f;
+
+	return bipolar+1.f;
+}
+static inline void lfo_setRandomValueFromOffset(Lfo *lfo)
+{
+	lfo->rnd = lfo->phaseOffset / (float)0xffffffff;
+}
+static inline void lfo_updateHeldRandomFromOffset(Lfo *lfo)
+{
+	if((lfo->waveform == LFO_NOISE) && (lfo->phaseInc == 0))
+		lfo_setRandomValueFromOffset(lfo);
+}
 void lfo_init(Lfo *lfo)
 {
 	lfo->phase 			= 0;
@@ -31,6 +93,8 @@ void lfo_init(Lfo *lfo)
 	lfo->waveform		= SINE;
 	lfo->sync			= 0;
 	lfo->freq			= 1;
+	lfo->rnd=0.5f;
+	lfo->rndTarget=0.5f;
 	lfo->modNodeValue	= 1;
 
 	modNode_init(&lfo->modTarget);
@@ -71,15 +135,10 @@ IN_ITCM_RAM float lfo_calc(Lfo *lfo)
 		break;
 	//---
 		case LFO_NOISE:
-		if(overflow)
-		{
-			lfo->rnd = GetRngValue();
-			lfo->rnd = lfo->rnd  / (float)0xffffffff ;
-		}
-
-			return lfo->rnd;
-		break;
-	//---
+        if(overflow)lfo_setRandomValue(lfo);
+        return lfo->rnd;
+        break;
+    //---
 		case LFO_SAW_DOWN:
 		return (0xffffffff-(lfo->phase)) / (float)0xffffffff;
 		break;
@@ -98,6 +157,11 @@ IN_ITCM_RAM float lfo_calc(Lfo *lfo)
 			}
 			break;
 	//---
+        case LFO_STRAY:
+        case LFO_GLIDE:
+            if(overflow)lfo_advanceSmoothRandom(lfo);
+            return lfo_calcSmoothRandom(lfo);
+        break;
 		default:
 		return 0;
 		break;
@@ -107,12 +171,16 @@ IN_ITCM_RAM float lfo_calc(Lfo *lfo)
 //-------------------------------------------------------------
 void lfo_dispatchNextValue(Lfo* lfo)
 {
-	float val = lfo_calc(lfo);
-	modNode_updateValue(&lfo->modTarget,val);
+	const float source=lfo_calc(lfo);
+    if(lfo->waveform==LFO_STRAY || lfo->waveform==LFO_GLIDE) {
+        // Mutador bias returns 0..2; desktop modulation accepts 0..1.
+        modNode_updateValue(&lfo->modTarget,lfo_applySmoothRandomBias(lfo,source)*0.5f);
+    } else modNode_updateValue(&lfo->modTarget,source);
 }
 //-------------------------------------------------------------
 IN_ITCM_RAM uint32_t lfo_calcPhaseInc(float freq, uint8_t sync)
 {
+	if(freq<=0.f)return 0;
 	if(sync==0)//no sync
 	{
 		return freq/(LFO_SR) * 0xffffffff;
@@ -184,18 +252,41 @@ IN_ITCM_RAM uint32_t lfo_calcPhaseInc(float freq, uint8_t sync)
 //-------------------------------------------------------------
 IN_ITCM_RAM void lfo_setFreq(Lfo *lfo, float f)
 {
-	//f += 1;
+	if(f<=0.f){lfo->freq=0;lfo->phaseInc=0;lfo_updateHeldRandomFromOffset(lfo);return;}
+    //f += 1;
 	//f = f/128.f;
 	f = 0.0078125f + f* (1.f-0.0078125f); //to prevent f from being zero
 	f = f*f*f;
 	lfo->freq = f*LFO_MAX_F;
 	lfo->phaseInc = lfo_calcPhaseInc(lfo->freq,lfo->sync);
+	lfo_updateHeldRandomFromOffset(lfo);
 }
 //-------------------------------------------------------------
+void lfo_setWaveform(Lfo *lfo, uint8_t waveform)
+{
+	if(waveform > LFO_GLIDE)
+		waveform = LFO_SINE;
+
+	if((waveform != lfo->waveform)
+		&& ((waveform == LFO_STRAY) || (waveform == LFO_GLIDE)))
+	{
+		lfo->rnd = 0.5f;
+		lfo_setSmoothRandomTarget(lfo,waveform);
+	}
+
+	lfo->waveform = waveform;
+	lfo_updateHeldRandomFromOffset(lfo);
+}
+void lfo_setPhaseOffset(Lfo *lfo, uint8_t offset)
+{
+	lfo->phaseOffset = offset>=127 ? UINT32_MAX : (uint32_t)(offset / 127.f * 0xffffffff);
+	lfo_updateHeldRandomFromOffset(lfo);
+}
 IN_ITCM_RAM void lfo_setSync(Lfo* lfo, uint8_t sync)
 {
 	lfo->sync = sync;
 	lfo->phaseInc = lfo_calcPhaseInc(lfo->freq,lfo->sync);
+	lfo_updateHeldRandomFromOffset(lfo);
 }
 //-------------------------------------------------------------
 void lfo_recalcSync()
@@ -219,31 +310,40 @@ void lfo_recalcSync()
 	lfo->phaseInc = lfo_calcPhaseInc(lfo->freq,lfo->sync);
 }
 //-------------------------------------------------------------
+static inline void lfo_retriggerVoice(Lfo *lfo)
+{
+	if((lfo->waveform == LFO_STRAY) || (lfo->waveform == LFO_GLIDE))
+		lfo->phase = 0; // phaseOffset is the bipolar bias for smooth random modes.
+	else
+		lfo->phase = lfo->phaseOffset;
+	if((lfo->waveform == LFO_NOISE) && (lfo->phaseInc == 0))
+		lfo_setRandomValue(lfo);
+}
 void lfo_retrigger(uint8_t voice)
 {
 	if(voiceArray[0].lfo.retrigger == voice+1)
 	{
-		voiceArray[0].lfo.phase = voiceArray[0].lfo.phaseOffset;
+		lfo_retriggerVoice(&voiceArray[0].lfo);
 	}
 	if(voiceArray[1].lfo.retrigger == voice+1)
 	{
-		voiceArray[1].lfo.phase = voiceArray[1].lfo.phaseOffset;
+		lfo_retriggerVoice(&voiceArray[1].lfo);
 	}
 	if(voiceArray[2].lfo.retrigger == voice+1)
 	{
-		voiceArray[2].lfo.phase = voiceArray[2].lfo.phaseOffset;
+		lfo_retriggerVoice(&voiceArray[2].lfo);
 	}
 	if(snareVoice.lfo.retrigger == voice+1)
 	{
-		snareVoice.lfo.phase = snareVoice.lfo.phaseOffset;
+		lfo_retriggerVoice(&snareVoice.lfo);
 	}
 	if(cymbalVoice.lfo.retrigger == voice+1)
 	{
-		cymbalVoice.lfo.phase = cymbalVoice.lfo.phaseOffset;
+		lfo_retriggerVoice(&cymbalVoice.lfo);
 	}
 	if(hatVoice.lfo.retrigger == voice+1)
 	{
-		hatVoice.lfo.phase = hatVoice.lfo.phaseOffset;
+		lfo_retriggerVoice(&hatVoice.lfo);
 	}
 }
 //-------------------------------------------------------------

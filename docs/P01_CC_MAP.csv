@@ -1,0 +1,129 @@
+cc,legacy_symbol,legacy_target_group,dedicated_Pch_now
+0,CC_BANK_CHANGE,0,Ignored
+1,CC_MODWHEEL,0,Ignored
+2,OSC_WAVE_DRUM1,1,Morph
+3,OSC_WAVE_DRUM2,2,Ignored
+4,OSC_WAVE_DRUM3,3,Ignored
+5,OSC_WAVE_SNARE,4,Random step
+6,NRPN_DATA_ENTRY_COARSE,0,Previous step repeat
+7,CYM_WAVE1,5,Global probability
+8,WAVE1_HH,6,Step chance scale
+9,F_OSC1_COARSE,1,Ignored
+10,F_OSC1_FINE,1,Delay chance
+11,F_OSC2_COARSE,2,Delay clock
+12,F_OSC2_FINE,2,Delay count
+13,F_OSC3_COARSE,3,Delay bounce
+14,F_OSC3_FINE,3,Delay exponent
+15,F_OSC4_COARSE,4,Delay pitch
+16,F_OSC4_FINE,4,Delay mode
+17,F_OSC5_COARSE,5,Ignored
+18,F_OSC5_FINE,5,Ignored
+19,F_OSC6_COARSE,6,Ignored
+20,F_OSC6_FINE,6,Voice/master VCA
+21,MOD_WAVE_DRUM1,1,Voice/master VCA
+22,MOD_WAVE_DRUM2,2,Voice/master VCA
+23,MOD_WAVE_DRUM3,3,Voice/master VCA
+24,CYM_WAVE2,5,Voice/master VCA
+25,CYM_WAVE3,5,Voice/master VCA
+26,WAVE2_HH,6,Voice/master VCA
+27,WAVE3_HH,6,Global pitch
+28,SNARE_NOISE_F,4,Global decay
+29,SNARE_MIX,4,Ignored
+30,CYM_MOD_OSC_F1,5,External FX send
+31,CYM_MOD_OSC_F2,5,External FX send
+32,CYM_MOD_OSC_GAIN1,5,External FX send
+33,CYM_MOD_OSC_GAIN2,5,External FX send
+34,MOD_OSC_F1,6,External FX send
+35,MOD_OSC_F2,6,External FX send
+36,MOD_OSC_GAIN1,6,External FX send
+37,MOD_OSC_GAIN2,6,Master filter cutoff
+38,FILTER_FREQ_DRUM1,1,Master filter resonance
+39,FILTER_FREQ_DRUM2,2,Master filter drive
+40,FILTER_FREQ_DRUM3,3,Shuffle master
+41,SNARE_FILTER_F,4,Groove SH2
+42,CYM_FIL_FREQ,5,Groove SH3
+43,HAT_FILTER_F,6,Groove SH4
+44,RESO_DRUM1,1,Accent master
+45,RESO_DRUM2,2,Ignored
+46,RESO_DRUM3,3,Accent decay
+47,SNARE_RESO,4,Accent sample rate
+48,CYM_RESO,5,Accent filter
+49,HAT_RESO,6,Accent coarse pitch
+50,VELOA1,1,Accent slope
+51,VELOD1,1,Accent mod amount
+52,VELOA2,2,Accent drive
+53,VELOD2,2,Ignored
+54,VELOA3,3,Ignored
+55,VELOD3,3,Ignored
+56,VELOA4,4,Ignored
+57,VELOD4,4,Ignored
+58,VELOA5,5,Ignored
+59,VELOD5,5,Ignored
+60,VELOA6,6,Delay input toggle
+61,VELOD6,6,Delay input toggle
+62,VELOD6_OPEN,6,Delay input toggle
+63,VOL_SLOPE1,1,Delay input toggle
+64,VOL_SLOPE2,2,Delay input toggle
+65,VOL_SLOPE3,3,Delay input toggle
+66,EG_SNARE1_SLOPE,4,Delay input toggle
+67,CYM_SLOPE,5,Ignored
+68,VOL_SLOPE6,6,Ignored
+69,REPEAT1,4,Ignored
+70,CYM_REPEAT,5,Ignored
+71,PITCHD1,1,Ignored
+72,PITCHD2,2,Ignored
+73,PITCHD3,3,Ignored
+74,PITCHD4,4,Ignored
+75,MODAMNT1,1,Ignored
+76,MODAMNT2,2,Ignored
+77,MODAMNT3,3,Ignored
+78,MODAMNT4,4,Ignored
+79,PITCH_SLOPE1,1,Ignored
+80,PITCH_SLOPE2,2,Global grid select
+81,PITCH_SLOPE3,3,Global grid select
+82,PITCH_SLOPE4,4,Global grid select
+83,FMAMNT1,1,Global grid select
+84,FMDTN1,1,Ignored
+85,FMAMNT2,2,Ignored
+86,FMDTN2,2,Ignored
+87,FMAMNT3,3,Ignored
+88,FMDTN3,3,Ignored
+89,VOL1,1,Ignored
+90,VOL2,2,Ignored
+91,VOL3,3,Ignored
+92,VOL4,4,Ignored
+93,VOL5,5,Ignored
+94,VOL6,6,Ignored
+95,PAN1,1,Ignored
+96,PAN2,2,Ignored
+97,PAN3,3,Ignored
+98,NRPN_FINE,0,Ignored
+99,NRPN_COARSE,0,Ignored
+100,PAN4,4,Ignored
+101,PAN5,5,Ignored
+102,PAN6,6,Ignored
+103,OSC1_DIST,1,Ignored
+104,OSC2_DIST,2,Ignored
+105,OSC3_DIST,3,Ignored
+106,SNARE_DISTORTION,4,Ignored
+107,CYMBAL_DISTORTION,5,Ignored
+108,HAT_DISTORTION,6,Ignored
+109,VOICE_DECIMATION1,1,Ignored
+110,VOICE_DECIMATION2,2,Ignored
+111,VOICE_DECIMATION3,3,Ignored
+112,VOICE_DECIMATION4,4,Ignored
+113,VOICE_DECIMATION5,5,Ignored
+114,VOICE_DECIMATION6,6,Ignored
+115,VOICE_DECIMATION_ALL,7,Ignored
+116,FREQ_LFO1,1,Ignored
+117,FREQ_LFO2,2,Ignored
+118,FREQ_LFO3,3,Ignored
+119,FREQ_LFO4,4,Ignored
+120,FREQ_LFO5,5,Ignored
+121,FREQ_LFO6,6,Ignored
+122,AMOUNT_LFO1,1,Ignored
+123,AMOUNT_LFO2,2,Ignored
+124,AMOUNT_LFO3,3,Ignored
+125,AMOUNT_LFO4,4,Ignored
+126,AMOUNT_LFO5,5,Delay velocity target
+127,AMOUNT_LFO6,6,Ignored

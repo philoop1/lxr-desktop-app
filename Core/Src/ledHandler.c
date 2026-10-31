@@ -12,7 +12,9 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */ 
 
+#include "Soundengine/Sequencer/PerformanceSteps.h"
 #include "ledHandler.h"
+#include "menu/StepSelection.h"
 #include "buttonHandler.h"
 #include <string.h>
 #include "menu/menu.h"
@@ -77,7 +79,7 @@ void led_clearSelectLeds()
 void led_initPatternSelectLeds()
 {
 	const uint8_t bank = menu_playedPattern/16;
-	const uint8_t ledIdx = led_idx2StepLed(menu_playedPattern); //led_idx2SelectLed(menu_playedPattern);
+	const uint8_t ledIdx = led_idx2StepLed(menu_playedPattern%16); //led_idx2SelectLed(menu_playedPattern);
 
 	// a blinking LED shows the viewed pattern if different from the played pattern
 	if(menu_playedPattern != menu_getViewedPattern())
@@ -97,6 +99,15 @@ void led_initPatternSelectLeds()
 		led_setValue(1,ledIdx);
 	}
 
+	uint8_t loopStart,loopEnd;
+	if(perf_getLoop(&loopStart,&loopEnd)) {
+		led_clearAllBlinkLeds(); led_clearSequencerLeds();
+		for(uint8_t i=0;i<16;i++) {
+			const uint8_t pattern=(uint8_t)(menu_activePatternBank*16u+i);
+			if(pattern>=loopStart && pattern<=loopEnd) led_setValue(1,led_idx2StepLed(i));
+		}
+		if(bank==menu_activePatternBank) led_setBlinkLed(ledIdx,1);
+	}
 	//Bar /Bank buttons
 	switch(menu_activePatternBank)
 	{
@@ -411,6 +422,10 @@ void led_updateSeqLeds()
 		{
 			uint8_t isActive = seq_isMainStepActive(trackNr,menu_activeBar*16+i,patternNr);
 			led_setValue(isActive,led_idx2StepLed(i));
+			if(buttonHandler_getMode()==SELECT_MODE_STEP) {
+				uint64_t selected=stepEdit_mask(patternNr,trackNr);
+				led_setBlinkLed(led_idx2StepLed(i),(uint8_t)((selected>>(menu_activeBar*16+i))&1u));
+			}
 		}
 
 		//a query seq track also updated track length, so do it here?
@@ -539,6 +554,7 @@ void led_setMode2Leds(uint8_t value)
 //-------------------------------------------------------
 void led_pulseLed(uint8_t ledNr)
 {
+	if(buttonHandler_isMidiDelayPage() && ledNr>=LED_VOICE1 && ledNr<=LED_VOICE1+6) return;
 	//search for a free pulse slot
 	for(int i = 0; i < NUM_OF_PULSABLE_LEDS; i++)
 	{
@@ -645,6 +661,14 @@ void led_blinkHandler()
 //-------------------------------------------------------
 void led_tickHandler()
 {
+	static uint8_t delayOwned;
+	if(buttonHandler_isMidiDelayPage()) {
+		delayOwned=1;
+		buttonHandler_refreshVoiceDisplay();
+	} else if(delayOwned) {
+		delayOwned=0;
+		buttonHandler_refreshVoiceDisplay();
+	}
 	for(int i=0;i<NUM_OF_PULSABLE_LEDS;i++)
 	{
 		//if the led is active at the moment

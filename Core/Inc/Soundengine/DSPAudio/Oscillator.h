@@ -57,6 +57,7 @@ typedef struct OscStruct
 
 	//for midi
 	uint16_t	midiFreq;  //upper 8 bit coarse, lower 8 bit fine -> the sound edit freq offset
+	float pitchBend; // per-voice bend in semitones, combined with master pitch
 	uint8_t baseNote;		// the last played midi note
 	uint32_t startPhase;		// the OSC is reset to this phase on retrigger
 } OscInfo;
@@ -116,6 +117,11 @@ void calcUserSampleOscBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,cons
 //int16_t calcSampleOsc(OscInfo* osc);
 //-----------------------------------------------------------
 /** set the played midi note.*/
+// Live performance-note transpose, -63..64 semitones.
+void osc_setNotePitchOffset(int8_t offset);
+void osc_setGlobalPitchOffset(uint8_t value);
+void osc_setGlobalPitchBend(int16_t bend, uint8_t range);
+void osc_setPitchBend(OscInfo* osc, int16_t bend, uint8_t range);
 void osc_setBaseNote(OscInfo* osc, uint8_t baseNote);
 //-----------------------------------------------------------
 /** recalculate the frequency if either the base note or the offset note value changed*/

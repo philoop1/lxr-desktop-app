@@ -1,3 +1,4 @@
+#include "Soundengine/Sequencer/PerformanceScale.h"
 /*
  * Copyright (C) 2012-2026 Erica Synths
  * SPDX-License-Identifier: GPL-3.0-only
@@ -8,6 +9,10 @@
  */
 
 #include "menu/menu.h"
+#include "menu/StepSelection.h"
+#include "menu/PerformanceControls.h"
+#include "Soundengine/Sequencer/PerformanceSteps.h"
+#include "Soundengine/TriggerOut.h"
 #include "lcd.h"
 #include <string.h>
 #include <stdlib.h>
@@ -89,6 +94,23 @@ static volatile struct {
 } menu_saveOptions;
 
 
+uint8_t menu_limitSoundParameter(uint16_t parameter,uint8_t value)
+{
+    if(parameter>=END_OF_SOUND_PARAMETERS)return 0;
+    uint16_t dtype=parameter_dtypes[parameter];
+    uint8_t maximum=127;
+    switch(dtype&0xff) {
+    case DTYPE_MENU: maximum=(uint8_t)(getMaxEntriesForMenu(dtype>>8)-1);break;
+    case DTYPE_ON_OFF: case DTYPE_0b1: maximum=1;break;
+    case DTYPE_0B100: maximum=100;break;
+    case DTYPE_0B15: maximum=15;break;
+    case DTYPE_1B16: if(!value)value=1;maximum=16;break;
+    case DTYPE_1B64: if(!value)value=1;maximum=64;break;
+    case DTYPE_VOICE_LFO: if(!value)value=1;maximum=6;break;
+    default: break;
+    }
+    return value>maximum ? maximum : value;
+}
 //-----------------------------------------------------------------
 /** array holding all the names for the parameters
  *  short name, category, long name
@@ -255,6 +277,72 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_CPU_USE, CAT_GLOBAL, LONG_CPU_USE}, // TEXT_CPU_USE
 		{SHORT_SHUFFLE_LOAD, CAT_GLOBAL, LONG_SHUFFLE_LOAD},
 		{SHORT_LOAD_MORPH, CAT_GLOBAL, LONG_LOAD_MORPH},
+		{SHORT_LOAD_SAMPLE_RATE, CAT_GLOBAL, LONG_LOAD_SAMPLE_RATE},
+		{SHORT_GLOBAL_PITCH, CAT_GLOBAL, LONG_GLOBAL_PITCH},
+		{SHORT_PITCH_BEND_RANGE, CAT_MIDI, LONG_PITCH_BEND_RANGE},
+		{SHORT_GLOBAL_DECAY, CAT_GLOBAL, LONG_GLOBAL_DECAY},
+		{SHORT_RANDOM_STEP, CAT_GLOBAL, LONG_RANDOM_STEP},
+		{SHORT_PERF_NOTE_REPEAT_CHANCE, CAT_GLOBAL, LONG_PERF_NOTE_REPEAT_CHANCE},
+		{SHORT_PERF_SCARCITY, CAT_GLOBAL, LONG_PERF_SCARCITY},
+		{SHORT_PERF_PROB, CAT_GLOBAL, LONG_PERF_PROB},
+		{SHORT_PERF_NOTE_PROB, CAT_GLOBAL, LONG_PERF_NOTE_PROB},
+		{SHORT_PERF_DELAY_CHANCE, CAT_GLOBAL, LONG_PERF_DELAY_CHANCE},
+		{SHORT_PERF_DELAY_SYNC, CAT_GLOBAL, LONG_PERF_DELAY_SYNC},
+		{SHORT_PERF_DELAY_COUNT, CAT_GLOBAL, LONG_PERF_DELAY_COUNT},
+		{SHORT_PERF_DELAY_BOUNCE, CAT_GLOBAL, LONG_PERF_DELAY_BOUNCE},
+		{SHORT_PERF_DELAY_TARGET, CAT_GLOBAL, LONG_PERF_DELAY_TARGET},
+		{SHORT_PERF_DELAY_MODE, CAT_GLOBAL, LONG_PERF_DELAY_MODE},
+		{SHORT_PERF_DELAY_EXP, CAT_GLOBAL, LONG_PERF_DELAY_EXP},
+		{SHORT_PERF_DELAY_PITCH, CAT_GLOBAL, LONG_PERF_DELAY_PITCH},
+		{SHORT_PERF_DELAY_INPUT_MASK, CAT_GLOBAL, LONG_PERF_DELAY_INPUT_MASK},
+		{SHORT_PERF_VELO_DECAY, CAT_GLOBAL, LONG_PERF_VELO_DECAY},
+		{SHORT_PERF_VELO_SAMPLE_RATE, CAT_GLOBAL, LONG_PERF_VELO_SAMPLE_RATE},
+		{SHORT_PERF_VELO_FILTER, CAT_GLOBAL, LONG_PERF_VELO_FILTER},
+		{SHORT_PERF_VELO_COARSE, CAT_GLOBAL, LONG_PERF_VELO_COARSE},
+		{SHORT_PERF_VELO_SLOPE, CAT_GLOBAL, LONG_PERF_VELO_SLOPE},
+		{SHORT_PERF_VELO_MOD_AMOUNT, CAT_GLOBAL, LONG_PERF_VELO_MOD_AMOUNT},
+		{SHORT_PERF_VELO_DRIVE, CAT_GLOBAL, LONG_PERF_VELO_DRIVE},
+		{SHORT_PERF_VELO_LEVEL, CAT_GLOBAL, LONG_PERF_VELO_LEVEL},
+		{SHORT_GROOVE_SH2, CAT_SEQUENCER, LONG_GROOVE_SH2},
+		{SHORT_GROOVE_SH3, CAT_SEQUENCER, LONG_GROOVE_SH3},
+		{SHORT_GROOVE_SH4, CAT_SEQUENCER, LONG_GROOVE_SH4},
+		{SHORT_MASTER_FILTER_ENABLE, CAT_GLOBAL, LONG_MASTER_FILTER_ENABLE},
+		{SHORT_GLOBAL_SCALE, CAT_GLOBAL, LONG_GLOBAL_SCALE},
+		{SHORT_FX_SEND_MODE, CAT_GLOBAL, LONG_FX_SEND_MODE},
+		{SHORT_FX_OUTPUT_MODE, CAT_GLOBAL, LONG_FX_OUTPUT_MODE},
+		{SHORT_MASTER_FILTER, CAT_GLOBAL, LONG_MASTER_FILTER},
+		{SHORT_MASTER_FILTER_RESO, CAT_GLOBAL, LONG_MASTER_FILTER_RESO},
+		{SHORT_MASTER_FILTER_DRIVE, CAT_GLOBAL, LONG_MASTER_FILTER_DRIVE},
+		{SHORT_FX_SEND1, CAT_GLOBAL, LONG_FX_SEND1},
+		{SHORT_FX_SEND2, CAT_GLOBAL, LONG_FX_SEND2},
+		{SHORT_FX_SEND3, CAT_GLOBAL, LONG_FX_SEND3},
+		{SHORT_FX_SEND4, CAT_GLOBAL, LONG_FX_SEND4},
+		{SHORT_FX_SEND5, CAT_GLOBAL, LONG_FX_SEND5},
+		{SHORT_FX_SEND6, CAT_GLOBAL, LONG_FX_SEND6},
+		{SHORT_FX_SEND7, CAT_GLOBAL, LONG_FX_SEND7},
+		{SHORT_VCA1, CAT_GLOBAL, LONG_VCA1},
+		{SHORT_VCA2, CAT_GLOBAL, LONG_VCA2},
+		{SHORT_VCA3, CAT_GLOBAL, LONG_VCA3},
+		{SHORT_VCA4, CAT_GLOBAL, LONG_VCA4},
+		{SHORT_VCA5, CAT_GLOBAL, LONG_VCA5},
+		{SHORT_VCA6, CAT_GLOBAL, LONG_VCA6},
+		{SHORT_VCA7, CAT_GLOBAL, LONG_VCA7},
+		{SHORT_SNARE_NOISE_ATTACK,CAT_NOISE,LONG_SNARE_NOISE_ATTACK},
+		{SHORT_SNARE_NOISE_DECAY,CAT_NOISE,LONG_SNARE_NOISE_DECAY},
+		{SHORT_SNARE_NOISE_SLOPE,CAT_NOISE,LONG_SNARE_NOISE_SLOPE},
+		{SHORT_CLOCK_OFFSET,CAT_CLOCK,LONG_CLOCK_OFFSET},
+		{SHORT_CLOCK_OFFSET_FINE,CAT_CLOCK,LONG_CLOCK_OFFSET_FINE},
+		{SHORT_SNARE_LAYER_WAVE,CAT_OSC,LONG_SNARE_LAYER_WAVE},
+		{SHORT_SNARE_LAYER_AMOUNT,CAT_OSC,LONG_SNARE_LAYER_AMOUNT},
+		{SHORT_SNARE_LAYER_FREQ,CAT_OSC,LONG_SNARE_LAYER_FREQ},
+		{SHORT_SNARE_LAYER_MODE,CAT_OSC,LONG_SNARE_LAYER_MODE},
+		{SHORT_PATTERN_SCALE,CAT_GLOBAL,LONG_PATTERN_SCALE},
+		{SHORT_PERF_RANDOM_VELO,CAT_GLOBAL,LONG_PERF_RANDOM_VELO},
+		{SHORT_PERF_AVL,CAT_GLOBAL,LONG_PERF_AVL},
+
+
+
+
 
 
 };
@@ -513,6 +601,13 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 		/*PAR_FX_REVERB_TYPE*/	DTYPE_MENU | (MENU_REVERB<<8),
 		/*PAR_FX_DELAY_TYPE*/	DTYPE_MENU | (MENU_DELAY<<8),
 		/*PAR_MORPH_KIT_DEST*/	DTYPE_0B127,
+		/*PAR_SNARE_NOISE_ATTACK*/ DTYPE_0B127,
+		/*PAR_SNARE_NOISE_DECAY*/ DTYPE_0B127,
+		/*PAR_SNARE_NOISE_SLOPE*/ DTYPE_0B127,
+		/*PAR_SNARE_LAYER_WAVE*/ DTYPE_MENU | (MENU_WAVEFORM<<8),
+		/*PAR_SNARE_LAYER_AMOUNT*/ DTYPE_0B127,
+		/*PAR_SNARE_LAYER_FREQ*/ DTYPE_0B127,
+		/*PAR_SNARE_LAYER_MODE*/ DTYPE_MENU | (MENU_SNARE_LAYER_MODE<<8),
 
 
 	    /*PAR_ROLL*/ 			DTYPE_MENU | (MENU_ROLL_RATES<<8),
@@ -574,7 +669,64 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_MIDI_CHAN_PC*/ DTYPE_1B16,
 	    /*PAR_SHUFFLE_LOAD*/ DTYPE_ON_OFF,
 	    /*PAR_LOAD_MORPH*/ DTYPE_ON_OFF,
+	    /*PAR_LOAD_SAMPLE_RATE*/ DTYPE_ON_OFF,
+	    /*PAR_GLOBAL_PITCH*/ DTYPE_PM63,
+	    /*PAR_PITCH_BEND_RANGE*/ DTYPE_0B127,
+	    /*PAR_GLOBAL_DECAY*/ DTYPE_PM63,
+	    /*PAR_RANDOM_STEP*/ DTYPE_0B100,
+	    /*PAR_PERF_NOTE_REPEAT_CHANCE*/ DTYPE_0B127,
+	    /*PAR_PERF_SCARCITY*/ DTYPE_0B100,
+	    /*PAR_PERF_PROB*/ DTYPE_0B100,
+	    /*PAR_PERF_NOTE_PROB*/ DTYPE_0B100,
+	    /*PAR_PERF_DELAY_CHANCE*/ DTYPE_0B100,
+	    /*PAR_PERF_DELAY_SYNC*/ DTYPE_MENU | (MENU_REPEAT_SYNC<<8),
+	    /*PAR_PERF_DELAY_COUNT*/ DTYPE_0B127,
+	    /*PAR_PERF_DELAY_BOUNCE*/ DTYPE_PM63,
+	    /*PAR_PERF_DELAY_TARGET*/ DTYPE_0B127,
+	    /*PAR_PERF_DELAY_MODE*/ DTYPE_MENU | (MENU_DELAY_MODE<<8),
+	    /*PAR_PERF_DELAY_EXP*/ DTYPE_0B127,
+	    /*PAR_PERF_DELAY_PITCH*/ DTYPE_PM63,
+	    /*PAR_PERF_DELAY_INPUT_MASK*/ DTYPE_0B127,
+	    /*PAR_PERF_VELO_DECAY*/ DTYPE_PM63,
+	    /*PAR_PERF_VELO_SAMPLE_RATE*/ DTYPE_PM63,
+	    /*PAR_PERF_VELO_FILTER*/ DTYPE_PM63,
+	    /*PAR_PERF_VELO_COARSE*/ DTYPE_PM63,
+	    /*PAR_PERF_VELO_SLOPE*/ DTYPE_PM63,
+	    /*PAR_PERF_VELO_MOD_AMOUNT*/ DTYPE_PM63,
+	    /*PAR_PERF_VELO_DRIVE*/ DTYPE_PM63,
+	    /*PAR_GROOVE_SH2*/ DTYPE_PM63,
+	    /*PAR_GROOVE_SH3*/ DTYPE_PM63,
+	    /*PAR_GROOVE_SH4*/ DTYPE_PM63,
+	    /*PAR_MASTER_FILTER_ENABLE*/ DTYPE_ON_OFF,
+	    /*PAR_GLOBAL_SCALE*/ DTYPE_MENU | (MENU_GLOBAL_SCALE<<8),
+	    /*PAR_FX_SEND_MODE*/ DTYPE_MENU | (MENU_FX_SEND_MODE<<8),
 	    /*PAR_CPU_USE*/ DTYPE_0B100,
+	    /*PAR_PERF_VELO_LEVEL*/ DTYPE_PM63,
+	    /*PAR_FX_OUTPUT_MODE*/ DTYPE_MENU | (MENU_FX_OUTPUT_MODE<<8),
+	    /*PAR_MASTER_FILTER*/ DTYPE_PM63,
+	    /*PAR_MASTER_FILTER_RESO*/ DTYPE_0B127,
+	    /*PAR_MASTER_FILTER_DRIVE*/ DTYPE_0B127,
+	    /*PAR_FX_SEND1*/ DTYPE_0B127,
+	    /*PAR_FX_SEND2*/ DTYPE_0B127,
+	    /*PAR_FX_SEND3*/ DTYPE_0B127,
+	    /*PAR_FX_SEND4*/ DTYPE_0B127,
+	    /*PAR_FX_SEND5*/ DTYPE_0B127,
+	    /*PAR_FX_SEND6*/ DTYPE_0B127,
+	    /*PAR_FX_SEND7*/ DTYPE_0B127,
+	    /*PAR_VCA1*/ DTYPE_0B127,
+	    /*PAR_VCA2*/ DTYPE_0B127,
+	    /*PAR_VCA3*/ DTYPE_0B127,
+	    /*PAR_VCA4*/ DTYPE_0B127,
+	    /*PAR_VCA5*/ DTYPE_0B127,
+	    /*PAR_VCA6*/ DTYPE_0B127,
+	    /*PAR_VCA7*/ DTYPE_0B127,
+	    /*PAR_CLOCK_OFFSET*/ DTYPE_0B127,
+	    /*PAR_CLOCK_OFFSET_FINE*/ DTYPE_0B127,
+		/*PAR_PATTERN_SCALE*/ DTYPE_MENU | (MENU_PATTERN_SCALE<<8),
+		/*PAR_PERF_RANDOM_VELO*/ DTYPE_0B100,
+		/*PAR_PERF_AVL*/ DTYPE_0B255,
+
+
 };
 
 
@@ -674,6 +826,8 @@ static uint8_t menuIndex = 0;
 static uint8_t menu_TargetVoiceGapIndex = 0xFF;
 
 uint8_t menu_numSamples = 0;
+static uint8_t menu_scalePattern;
+uint8_t menu_getWaveformMax(void){return (uint8_t)(5u+menu_numSamples);}
 
 //preset vars
 uint8_t menu_selectedPresetNr[NUM_PRESET_LOCATIONS];
@@ -734,6 +888,7 @@ void copyEditBufferToName(uint8_t presetNr, uint8_t nameType)
 //-----------------------------------------------------------------
 void menu_setShownPattern(uint8_t patternNr)
 {
+	if(patternNr!=menu_shownPattern)stepEdit_clear();
 	menu_shownPattern = patternNr;
 	frontPanel_sendData(SEQ_CC,SEQ_SET_SHOWN_PATTERN,menu_shownPattern);
 }
@@ -756,6 +911,16 @@ void menu_init()
 	memset(saveScreenPots,0,4*sizeof(uint8_t));
 
 	memset(mainParameters, 0, sizeof(uint8_t) * END_OF_SOUND_PARAMETERS * NUM_KIT_SLOTS);
+	for(uint8_t kit=0;kit<NUM_KIT_SLOTS;kit++) {
+		mainParameters[kit][PAR_SNARE_NOISE_ATTACK]=0;
+		mainParameters[kit][PAR_SNARE_NOISE_DECAY]=127;
+		mainParameters[kit][PAR_SNARE_NOISE_SLOPE]=64;
+		mainParameters[kit][PAR_SNARE_LAYER_FREQ]=25;
+	}
+	activeParameters[PAR_SNARE_NOISE_ATTACK]=0;
+	activeParameters[PAR_SNARE_NOISE_DECAY]=127;
+	activeParameters[PAR_SNARE_NOISE_SLOPE]=64;
+	activeParameters[PAR_SNARE_LAYER_FREQ]=25;
 
 
 	activeParameters[PAR_EUKLID_LENGTH] = 16;
@@ -768,6 +933,41 @@ void menu_init()
 	//frontPanel_sendData(SEQ_CC,SEQ_ROLL_RATE,8); //value is initialized in cortex firmware
 
 	activeParameters[PAR_BPM] = 120;
+	activeParameters[PAR_GLOBAL_PITCH] = 63;
+	activeParameters[PAR_PITCH_BEND_RANGE] = 12;
+	activeParameters[PAR_GLOBAL_DECAY] = 63;
+	activeParameters[PAR_RANDOM_STEP] = 0;
+	activeParameters[PAR_PERF_NOTE_REPEAT_CHANCE] = 0;
+	activeParameters[PAR_PERF_SCARCITY] = 100;
+	activeParameters[PAR_PERF_PROB] = 100;
+	activeParameters[PAR_PERF_NOTE_PROB] = 100;
+	activeParameters[PAR_PERF_DELAY_CHANCE] = 0;
+	activeParameters[PAR_PERF_DELAY_SYNC] = 6;
+	activeParameters[PAR_PERF_DELAY_COUNT] = 0;
+	activeParameters[PAR_PERF_DELAY_BOUNCE] = 63;
+	activeParameters[PAR_PERF_DELAY_TARGET] = 5;
+	activeParameters[PAR_PERF_DELAY_MODE] = 0;
+	activeParameters[PAR_PERF_DELAY_EXP] = 64;
+	activeParameters[PAR_PERF_DELAY_PITCH] = 64;
+	activeParameters[PAR_PERF_DELAY_INPUT_MASK] = 127;
+	activeParameters[PAR_PERF_VELO_DECAY] = 63;
+	activeParameters[PAR_PERF_VELO_SAMPLE_RATE] = 63;
+	activeParameters[PAR_PERF_VELO_FILTER] = 63;
+	activeParameters[PAR_PERF_VELO_COARSE] = 63;
+	activeParameters[PAR_PERF_VELO_SLOPE] = 63;
+	activeParameters[PAR_PERF_VELO_MOD_AMOUNT] = 63;
+	activeParameters[PAR_PERF_VELO_DRIVE] = 63;
+	activeParameters[PAR_PERF_VELO_LEVEL] = 63;
+	activeParameters[PAR_GROOVE_SH2] = 63;
+	activeParameters[PAR_GROOVE_SH3] = 63;
+	activeParameters[PAR_GROOVE_SH4] = 63;
+	activeParameters[PAR_MASTER_FILTER_ENABLE]=0;
+	activeParameters[PAR_GLOBAL_SCALE]=0;
+	activeParameters[PAR_FX_SEND_MODE]=0;
+	performance_resetExtended();
+
+
+	activeParameters[PAR_VOICE_DECIMATION_ALL] = 127;
 
 
 	// todo I tried to move everything below here to main.c before the call
@@ -1149,8 +1349,8 @@ static void menu_repaintSimplePage()
 	{
 		//show list of chained patterns
 		//0123456789..
-		// [002] | p05 ↑
-		//> 003  | p01 ↓
+		// [002] | p05 Ã¢â€ â€˜
+		//> 003  | p01 Ã¢â€ â€œ
 
 
 		uint8_t pos = seq_songPositionPointer;
@@ -1536,6 +1736,22 @@ static void menu_displayModTargetShort(uint8_t curParmVal, char *valueAsText, ch
 // (as opposed to repainting the load save screen)
 void menu_repaintGeneric()
 {
+	if(menu_activePage==PATTERN_SETTINGS_PAGE) {
+        memset(editDisplayBuffer[0],' ',16);memset(editDisplayBuffer[1],' ',16);
+        memcpy(editDisplayBuffer[0],"Pattern ",8);
+        uint8_t slot=(uint8_t)(menu_scalePattern+1);
+        editDisplayBuffer[0][8]=(char)('0'+slot/10);
+        editDisplayBuffer[0][9]=(char)('0'+slot%10);
+        memcpy(&editDisplayBuffer[0][10]," Scale",6);
+        uint8_t index=activeParameters[PAR_PATTERN_SCALE];
+        uint8_t division=perf_scaleDivision(index);
+        editDisplayBuffer[1][0]=division>=10 ? (char)('0'+division/10) : ' ';
+        editDisplayBuffer[1][1]=(char)('0'+division%10);
+        if(division!=seq_patternSet.scale[menu_scalePattern])memcpy(&editDisplayBuffer[1][5],"click=OK",8);
+        else if(perf_scaleHasPending())memcpy(&editDisplayBuffer[1][5],"next 1",6);
+        else memcpy(&editDisplayBuffer[1][5],"set",3);
+        return;
+    }
 	//first get the active sub-page and parameter from the menuIndex
 	const uint8_t activeParameter	= menuIndex & MASK_PARAMETER; // this will be 0 to 7 for the 4 columns
 	const uint8_t activePage		= (menuIndex&MASK_PAGE)>>PAGE_SHIFT; // this is the active sub page
@@ -1607,7 +1823,8 @@ void menu_repaintGeneric()
 				*/
 			case DTYPE_ON_OFF: //switch(parameters_dtypes[parNr] & 0x0F)
 				if(curParmVal == 1)
-					memcpy(&editDisplayBuffer[1][13],menuText_on,3);
+					memcpy(&editDisplayBuffer[1][13],
+						(parNr==PAR_SHUFFLE_LOAD||parNr==PAR_LOAD_MORPH||parNr==PAR_LOAD_SAMPLE_RATE)?menuText_aut:menuText_on,3);
 				else
 					memcpy(&editDisplayBuffer[1][13],menuText_off,3);
 				break;
@@ -1618,6 +1835,8 @@ void menu_repaintGeneric()
 				const uint8_t menuId = (parameter_dtypes[parNr] >> 8);
 				// get the value name
 				getMenuItemNameForValue(menuId, curParmVal, &editDisplayBuffer[1][13]);
+				if(parNr==PAR_PRESCALER_CLOCK_OUT1 && curParmVal==PRE_16SH_OUT)
+					memcpy(&editDisplayBuffer[1][12],"16sh",4);
 			}
 				break; // switch(parameters[parNr].dtype&0x0F) case DTYPE_MENU
 
@@ -1629,7 +1848,7 @@ void menu_repaintGeneric()
 				}
 				else
 				{
-					numtostrps(&editDisplayBuffer[1][13],(int8_t)(curParmVal - 63));
+					numtostrps(&editDisplayBuffer[1][13],parNr==PAR_PERF_DELAY_PITCH ? (int8_t)(((uint16_t)curParmVal*24u+63u)/127u)-12 : (int8_t)(curParmVal - 63));
 				}
 
 				break;
@@ -1655,8 +1874,12 @@ void menu_repaintGeneric()
 			case DTYPE_1B64:
 			case DTYPE_VOICE_LFO:
 
-				if(parNr == PAR_BPM)
-				{
+				if(parNr==PAR_PERF_AVL) {
+                    perf_formatVelocityGain(&editDisplayBuffer[1][11],curParmVal);
+                    editDisplayBuffer[1][15]='%';
+                }
+                else if(parNr == PAR_BPM)
+                {
 					if(curParmVal == 0)
 					{
 						editDisplayBuffer[1][13] = 'E';
@@ -1682,6 +1905,19 @@ void menu_repaintGeneric()
 
 
 			} //switch(parameters_dtypes[parNr] & 0x0F) end
+			if(parNr==PAR_CLOCK_OFFSET || parNr==PAR_CLOCK_OFFSET_FINE)
+			{
+				const uint16_t hundredths=(uint16_t)activeParameters[PAR_CLOCK_OFFSET]*10u+
+					activeParameters[PAR_CLOCK_OFFSET_FINE];
+				editDisplayBuffer[1][8]=hundredths?'-':' ';
+				editDisplayBuffer[1][9]=(char)('0'+hundredths/100u);
+				editDisplayBuffer[1][10]='.';
+				editDisplayBuffer[1][11]=(char)('0'+(hundredths/10u)%10u);
+				editDisplayBuffer[1][12]=(char)('0'+hundredths%10u);
+				editDisplayBuffer[1][13]='m';
+				editDisplayBuffer[1][14]='s';
+				editDisplayBuffer[1][15]=' ';
+			}
 
 		} // parameter type is not automation target
 
@@ -1742,7 +1978,7 @@ void menu_repaintGeneric()
 					}
 					else
 					{
-						numtostrps(valueAsText,(int8_t)(curParmVal - 63));
+						numtostrps(valueAsText,parNr==PAR_PERF_DELAY_PITCH ? (int8_t)(((uint16_t)curParmVal*24u+63u)/127u)-12 : (int8_t)(curParmVal - 63));
 					}
 					break;
 
@@ -1766,7 +2002,8 @@ void menu_repaintGeneric()
 					*/
 				case DTYPE_ON_OFF: //switch(parameters[parNr].dtype&0x0F)
 					if(curParmVal == 1)
-						memcpy(valueAsText,menuText_on,3);
+						memcpy(valueAsText,
+							(parNr==PAR_SHUFFLE_LOAD||parNr==PAR_LOAD_MORPH||parNr==PAR_LOAD_SAMPLE_RATE)?menuText_aut:menuText_on,3);
 					else
 						memcpy(valueAsText,menuText_off,3);
 					break;
@@ -1823,6 +2060,10 @@ void menu_repaintGeneric()
 
 			//write the text to the edit buffer
 			memcpy(&editDisplayBuffer[1][4*i],valueAsText,3);
+			editDisplayBuffer[1][4*i+3]=' ';
+            if(parNr==PAR_PERF_AVL)perf_formatVelocityGain(&editDisplayBuffer[1][4*i],curParmVal);
+			if(parNr==PAR_PRESCALER_CLOCK_OUT1 && curParmVal==PRE_16SH_OUT)
+				memcpy(&editDisplayBuffer[1][4*i],"16sh",4);
 
 		}	// for 1 to 4 .. each menu item
 	} // if editmode not active
@@ -2591,18 +2832,27 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 		return nextPatternNames[0][0];
 	case MENU_WAVEFORM:
 		return (uint8_t)(waveformNames[0][0] + menu_numSamples);
+	case MENU_REPEAT_SYNC:
+		return repeatSyncNames[0][0];
+	case MENU_DELAY_MODE:
+		return delayModeNames[0][0];
 	case MENU_ROLL_RATES:
 		return rollRateNames[0][0];
 	case MENU_MIDI_ROUTING:
 		return midiRoutingNames[0][0];
 	case MENU_MIDI_FILTERING:
 		return midiFilterNames[0][0];
+	case MENU_GLOBAL_SCALE:return globalScaleNames[0][0];
+	case MENU_FX_SEND_MODE:return fxSendModeNames[0][0];
+	case MENU_FX_OUTPUT_MODE:return fxOutputModeNames[0][0];
 	case MENU_PPQ_OUT:
 		return ppqOutNames[0][0];
 	case MENU_PPQ_IN:
 		return ppqInNames[0][0];
 	case MENU_MIX_FM:
 		return mixFmNames[0][0];
+	case MENU_SNARE_LAYER_MODE:return snareLayerModeNames[0][0];
+	case MENU_PATTERN_SCALE:return patternScaleNames[0][0];
 
 	case MENU_FX:
 		return fxNames[0][0];
@@ -2685,6 +2935,12 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 	case MENU_NEXT_PATTERN:
 		p=nextPatternNames[curParmVal+1];
 		break;
+	case MENU_REPEAT_SYNC:
+		p=repeatSyncNames[curParmVal+1];
+		break;
+	case MENU_DELAY_MODE:
+		p=delayModeNames[curParmVal+1];
+		break;
 	case MENU_ROLL_RATES:
 		p=rollRateNames[curParmVal+1];
 		break;
@@ -2697,12 +2953,17 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 	case MENU_PPQ_IN:
 		p=ppqInNames[curParmVal+1];
 		break;
+	case MENU_GLOBAL_SCALE:p=globalScaleNames[curParmVal+1];break;
+	case MENU_FX_SEND_MODE:p=fxSendModeNames[curParmVal+1];break;
+	case MENU_FX_OUTPUT_MODE:p=fxOutputModeNames[curParmVal+1];break;
 	case MENU_PPQ_OUT:
 		p=ppqOutNames[curParmVal+1];
 		break;
 	case MENU_MIX_FM:
 		p=mixFmNames[curParmVal+1];
 		break;
+	case MENU_SNARE_LAYER_MODE:p=snareLayerModeNames[curParmVal+1];break;
+	case MENU_PATTERN_SCALE:p=patternScaleNames[curParmVal+1];break;
 
 	case MENU_FX:
 		p=fxNames[curParmVal+1];
@@ -2751,6 +3012,20 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 // button - 1 if the button is depressed, 0 if its not
 void menu_parseEncoder(int8_t inc, uint8_t button)
 {
+    if(menu_activePage==PATTERN_SETTINGS_PAGE) {
+        uint8_t clicked=(uint8_t)(button && !lastEncoderButton);
+        lastEncoderButton=button;
+        if(inc) {
+            int16_t next=(int16_t)activeParameters[PAR_PATTERN_SCALE]+inc;
+            activeParameters[PAR_PATTERN_SCALE]=(uint8_t)(next<0 ? 0 : next>7 ? 7 : next);
+        }
+        if(clicked) {
+            seq_setPatternScale(menu_scalePattern,activeParameters[PAR_PATTERN_SCALE]);
+            performance_set(PAR_GLOBAL_SCALE,0); // confirmed per-pattern playback
+            preset_touchTimer(PRESET_PAT_TIMER);
+        }
+        screensaver_touch();menu_repaintAll();return;
+    }
 	uint8_t btnClicked=0;
 	// handle the button being clicked or released
 	if(button != lastEncoderButton) { // was the button clicked?
@@ -2893,14 +3168,7 @@ static void menu_encoderChangeParameter(int8_t inc)
 		//**VELO encoder value limit to start and end of range for this voice
 		// get voice, and figure valid range, translate to param number before sending
 		uint8_t voiceNr=(uint8_t)(paramNr - PAR_VEL_DEST_1);
-		if(*paramValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-			if(inc < 0) // going down, allow 0
-				*paramValue=0;
-			else // going up fix to start
-				*paramValue = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		} else if (*paramValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-			*paramValue = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		}
+		*paramValue=modTargetClampVoice(voiceNr,*paramValue,inc);
 
 		// determine the parameter id to send across
 		uint8_t value = (uint8_t)pgm_read_word(&modTargets[*paramValue].param);
@@ -2950,14 +3218,7 @@ static void menu_encoderChangeParameter(int8_t inc)
 		//**LFO - limit encoder start and end to range for the target voice (not the lfo number)
 		// this is a value from 1 to 6, so we adjust to be 0 based
 		uint8_t voiceNr =  (uint8_t)(activeParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
-		if(*paramValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-			if(inc < 0) // going down, allow 0
-				*paramValue=0;
-			else // going up fix to start
-				*paramValue = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		} else if (*paramValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-			*paramValue = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		}
+		*paramValue=modTargetClampVoice(voiceNr,*paramValue,inc);
 
 		// **LFOTARGFIX - save the gap index
 		menu_TargetVoiceGapIndex = getModTargetGapIndex(*paramValue);
@@ -3076,10 +3337,12 @@ checkvalid:
 		if(activeParameter == 4) { // move to 2nd section of sub-page
 
 		} else if(activeParameter == 8) { // moved past end of 2nd sub-page
-			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)){ // in global menu, we can move to next sub-page
+			if(menu_activePage==PERF_PAGE && activePage>=PERF_DELAY_SUBPAGE && activePage<=PERF_GROOVE_SUBPAGE)return;
+			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==PERF_PAGE)){ // in global menu, we can move to next sub-page
 
 				activeParameter=0; // set to par 0 of next sub page
-				activePage++; // and change page
+				activePage = (menu_activePage==PERF_PAGE) ?
+					(activePage==0 ? 1 : activePage==1 ? 5 : activePage==5 ? 6 : 0) : activePage+1;
 				if(activePage >=NUM_SUB_PAGES)
 					activePage=0; // wrap around to 1st (would only happen if we fill all 8. unlikely)
 			} else
@@ -3089,10 +3352,12 @@ checkvalid:
 		if(activeParameter == 3) { // move to first section of sub-page
 
 		} else if(activeParameter==-1) { // if we went past 0
-			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)) { // in global menu, we can move to previous sub-page
+			if(menu_activePage==PERF_PAGE && activePage>=PERF_DELAY_SUBPAGE && activePage<=PERF_GROOVE_SUBPAGE)return;
+			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==PERF_PAGE)) { // in global menu, we can move to previous sub-page
 
 				activeParameter=7; // put us on the last param of the previous sub-page
-				activePage--; // and change page
+				activePage = (menu_activePage==PERF_PAGE) ?
+					(activePage==0 ? 6 : activePage==6 ? 5 : activePage==5 ? 1 : 0) : activePage-1;
 				if(activePage < 0)
 					activePage=NUM_SUB_PAGES-1; //wrap around to last page (would only happen if we fill all 8. unlikely)
 			} else
@@ -3192,18 +3457,32 @@ void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle)
 			// toggle to next if possible
 			if(has2ndPage(activePage))
 				activeParameter=4;
-			else if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)){ // special case for global - wrap around to first
-				activePage=0;
+			else if(menu_activePage==PERF_PAGE && activePage>=PERF_DELAY_SUBPAGE && activePage<=PERF_GROOVE_SUBPAGE)
+				activeParameter=0;
+			else if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==PERF_PAGE)){
+				if(menu_activePage==PERF_PAGE)
+					activePage=(activePage==0 ? 1 : activePage==1 ? 5 : activePage==5 ? 6 : 0);
+				else if(activePage<NUM_SUB_PAGES-1 &&
+				   pgm_read_byte(&menuPages[menu_activePage][activePage+1].top1)!=TEXT_EMPTY)
+					activePage++;
+				else if(menu_activePage!=PERF_PAGE) activePage=0;
 				activeParameter=0;
 			}
 		} else { // we are on 2nd screen
+			if(menu_activePage==PERF_PAGE && activePage>=PERF_DELAY_SUBPAGE && activePage<=PERF_GROOVE_SUBPAGE) {
+				activeParameter=0;
+				menuIndex=(uint8_t)(activePage<<PAGE_SHIFT);
+				return;
+			}
 
-			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)){
+			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==PERF_PAGE)){
 				// in global mode, we move to next page if possible (or wrap to first)
-				if(activePage < NUM_SUB_PAGES-1 &&
+				if(menu_activePage==PERF_PAGE)
+					activePage=(activePage==0 ? 1 : activePage==1 ? 5 : activePage==5 ? 6 : 0);
+				else if(activePage < NUM_SUB_PAGES-1 &&
 				   pgm_read_byte(&menuPages[menu_activePage][activePage+1].top1) != TEXT_EMPTY) {
 					activePage++;
-				} else {
+				} else if(menu_activePage!=PERF_PAGE) {
 					activePage=0;
 				}
 			}
@@ -3212,10 +3491,7 @@ void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle)
 	} else { // move to different sub page
 		// we are moving to a different (specific) subpage
 		activePage=subPageNr;
-		if(activeParameter > 3 && has2ndPage(activePage))
-			activeParameter = 4;
-		else
-			activeParameter = 0;
+		activeParameter = 0;
 	}
 
 	menuIndex = (uint8_t)( (activePage << PAGE_SHIFT) | activeParameter);
@@ -3240,6 +3516,7 @@ uint8_t menu_getSubPage()
 //-----------------------------------------------------------------
 void menu_switchPage(uint8_t pageNr)
 {
+	if(pageNr!=SEQ_PAGE)stepEdit_clear();
 	//autosave config page settings
 	/*
 	if(menu_activePage == MENU_MIDI_PAGE)
@@ -3327,13 +3604,18 @@ void menu_switchPage(uint8_t pageNr)
 	case PERF_PAGE:
 	{
 		uint8_t toggle = (menu_activePage == PERF_PAGE);
+		if(toggle && menu_getSubPage()>=PERF_DELAY_SUBPAGE && menu_getSubPage()<=PERF_GROOVE_SUBPAGE)
+			toggle=0;
 
 		// **GMENU TODO do we need to clear any leds?
 		if (toggle) // if we are on the settings page already, toggle between all pages
 		{
 			menu_switchSubPage(menu_getSubPage(),1);
 		}
-		else menu_switchSubPage(0,0);
+		else {
+			menu_switchSubPage(0,0);
+			menuIndex=0;
+		}
 	}
 
 	case MENU_LAST_STEP_PAGE:
@@ -3428,12 +3710,29 @@ void menu_switchPage(uint8_t pageNr)
 	menu_repaintAll();
 };
 //-----------------------------------------------------------------
+void menu_openPatternScale(void)
+{
+    menu_scalePattern=seq_activePattern;
+    menu_switchPage(PATTERN_SETTINGS_PAGE);
+    menuIndex=0;
+    activeParameters[PAR_PATTERN_SCALE]=perf_scaleIndex(seq_patternSet.scale[menu_scalePattern]);
+    menu_repaintAll();
+}
+void menu_openPerformanceLayer(uint8_t subPage)
+{
+	if(subPage>=NUM_SUB_PAGES) return;
+	menu_switchPage(PERF_PAGE);
+	menuIndex=(uint8_t)(subPage<<PAGE_SHIFT);
+	editModeActive=0;
+	buttonHandler_refreshVoiceDisplay();
+	menu_repaintAll();
+}
 void menu_sendAllGlobals()
 {
 	uint16_t i;
 	for(i=PAR_BEGINNING_OF_GLOBALS;(i<NUM_PARAMS);i++)
 	{
-		menu_parseGlobalParam(i,activeParameters[i]);
+		if(i!=PAR_PATTERN_SCALE)menu_parseGlobalParam(i,activeParameters[i]);
 	}
 };
 //-----------------------------------------------------------------
@@ -3441,6 +3740,15 @@ void menu_sendAllGlobals()
 // This includes values for the currently active step in the sequencer
 void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 {
+    if(paramNr==PAR_PATTERN_SCALE) {
+        activeParameters[PAR_PATTERN_SCALE]=value>7 ? 7 : value;
+        return;
+    }
+	if(performance_set(paramNr,value))return;
+	if(menu_getActivePage()==SEQ_PAGE && stepEdit_apply(menu_getViewedPattern(),menu_getActiveVoice(),paramNr,value)) {
+		preset_touchTimer(PRESET_PAT_TIMER);
+		return;
+	}
 	switch(paramNr)
 	{
 
@@ -3500,6 +3808,11 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	case PAR_SHUFFLE:
 		frontPanel_sendData(SEQ_CC,SEQ_SHUFFLE,value);
 		break;
+	case PAR_GROOVE_SH2:
+	case PAR_GROOVE_SH3:
+	case PAR_GROOVE_SH4:
+		seq_setGrooveStep((uint8_t)(paramNr-PAR_GROOVE_SH2+1),value);
+		break;
 
 	case PAR_AUTOM_TRACK:
 		frontPanel_sendData(SEQ_CC,SEQ_SET_AUTOM_TRACK,value);
@@ -3535,6 +3848,43 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 
 	case PAR_BPM:
 		frontPanel_sendData(SET_BPM,value&0x7f,(value>>7)&0x7f);
+		break;
+	case PAR_PERF_DELAY_CHANCE:
+	case PAR_PERF_DELAY_SYNC:
+	case PAR_PERF_DELAY_COUNT:
+	case PAR_PERF_DELAY_BOUNCE:
+	case PAR_PERF_DELAY_TARGET:
+	case PAR_PERF_DELAY_MODE:
+	case PAR_PERF_DELAY_EXP:
+	case PAR_PERF_DELAY_PITCH:
+	case PAR_PERF_DELAY_INPUT_MASK:
+		midiParser_setDelayParameter(paramNr,value);
+		break;
+	case PAR_PERF_VELO_DECAY:
+	case PAR_PERF_VELO_SAMPLE_RATE:
+	case PAR_PERF_VELO_FILTER:
+	case PAR_PERF_VELO_COARSE:
+	case PAR_PERF_VELO_SLOPE:
+	case PAR_PERF_VELO_MOD_AMOUNT:
+	case PAR_PERF_VELO_DRIVE:
+	case PAR_PERF_VELO_LEVEL:
+		midiParser_setAccentParameter(paramNr,value);
+		break;
+	case PAR_GLOBAL_DECAY:
+		midiParser_setGlobalDecay(value);
+		break;
+	case PAR_RANDOM_STEP:
+	case PAR_PERF_NOTE_REPEAT_CHANCE:
+	case PAR_PERF_SCARCITY:
+	case PAR_PERF_PROB:
+	case PAR_PERF_NOTE_PROB:
+		midiParser_setStepPerformance(paramNr,value);
+		break;
+	case PAR_GLOBAL_PITCH:
+		midiParser_setGlobalPitch(value);
+		break;
+	case PAR_PITCH_BEND_RANGE:
+		midiParser_setPitchBendRange(value);
 		break;
 	case PAR_MORPH:
 	{
@@ -3771,7 +4121,7 @@ static uint8_t limitPotValue(int8_t diff, uint16_t paramNr)
 			voiceNr=(uint8_t)(paramNr-PAR_VEL_DEST_1);
 		else if(paramNr >= PAR_TARGET_LFO1 && paramNr <= PAR_TARGET_LFO6) {
 			// this is the voice being targeted, not the lfo number
-			voiceNr=(uint8_t)(mainParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
+			voiceNr=(uint8_t)(activeParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
 		}
 		s=pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
 		e=pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
@@ -3854,6 +4204,7 @@ static uint8_t limitPotValue(int8_t diff, uint16_t paramNr)
 //used in normal pot model, can probably be removed
 static uint8_t getDtypeValue(uint8_t value, uint16_t paramNr)
 {
+	if(paramNr==PAR_PERF_AVL)return (uint8_t)(((uint16_t)value*200u+127u)/255u);
 	const float frac = (value/255.f); // yield a fraction from 0 to 1
 
 	switch(pgm_read_word(&parameter_dtypes[paramNr]) & 0xFF)
@@ -3862,22 +4213,13 @@ static uint8_t getDtypeValue(uint8_t value, uint16_t paramNr)
 	case DTYPE_TARGET_SELECTION_LFO: {
 		//**VELO **LFO limit range to start and end for the applicable voice, but allow a setting of 0 (for off)
 		uint8_t voiceNr=0;
-		uint8_t s, e, rng;
 		if(paramNr >= PAR_VEL_DEST_1 && paramNr <= PAR_VEL_DEST_6 )
 			voiceNr=(uint8_t)(paramNr-PAR_VEL_DEST_1);
 		else if(paramNr >= PAR_TARGET_LFO1 && paramNr <= PAR_TARGET_LFO6) {
 			// this is the voice being targeted, not the lfo number
-			voiceNr=(uint8_t)(mainParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
+			voiceNr=(uint8_t)(activeParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
 		}
-		s=pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		e=pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		// start will be a non-zero value. We need to allow setting a value of 0 (off) or
-		// something within the start to end range.
-		rng=(uint8_t)(frac * ((e-s)+1)); // where in the range we are
-		if(!rng)
-			return 0; // set to off
-		else
-			return (uint8_t)((s-1)+rng); // set to an offset beginning at start of range
+		return modTargetFromFraction(voiceNr,frac);
 		}
 		break;
 
@@ -4163,14 +4505,7 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 		// this is a value from 1 to 6, so we adjust to be 0 based
 		uint8_t value = dtypeValue;
 		uint8_t voiceNr =  (paramNr - PAR_VEL_DEST_1);
-		if(dtypeValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-			if(diff < 0) // going down, allow 0
-				value=0;
-			else // going up fix to start
-				value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		} else if (dtypeValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-			value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		}
+		value=modTargetClampVoice(voiceNr,dtypeValue,diff);
 
 		activeParameters[paramNr] = value;
 		//**VELO knob value range. convert to param before sending
@@ -4214,14 +4549,7 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 		// this is a value from 1 to 6, so we adjust to be 0 based
 		uint8_t value = dtypeValue;
 		uint8_t voiceNr =  (uint8_t)(activeParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
-		if(dtypeValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-			if(diff < 0) // going down, allow 0
-				value=0;
-			else // going up fix to start
-				value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		} else if (dtypeValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-			value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		}
+		value=modTargetClampVoice(voiceNr,dtypeValue,diff);
 
 		activeParameters[paramNr] = value;
 
@@ -4314,6 +4642,7 @@ uint8_t menu_getActiveVoice()
 //----------------------------------------------------------------
 void menu_setActiveVoice(uint8_t voiceNr)
 {
+	if(voiceNr!=menu_activeVoice)stepEdit_clear();
 	// **LFOTARGFIX - save the gap index
 	menu_TargetVoiceGapIndex = getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1+voiceNr]);
 	menu_activeVoice = voiceNr;

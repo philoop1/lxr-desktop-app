@@ -79,6 +79,7 @@ enum PrescalerPpqOut
 	PRE_16_PPQ_OUT,
 	PRE_24_PPQ_OUT,
 	PRE_48_PPQ_OUT,
+	PRE_16SH_OUT, // shuffled sixteenth notes: 4 pulses per quarter
 
 };
 
@@ -99,6 +100,8 @@ extern uint8_t trigger_prescalerClockInput;
 void trigger_triggerVoice(uint8_t voice, triggerMode mode);
 #endif
 void trigger_clockTick(uint8_t onOff, uint8_t cnt);//the sequencer calls this function whenever a step is played to generate corresponding trigger out clocks
+void trigger_setGrooveClock(uint8_t enabled);
+void trigger_clockGrooveTick(uint8_t on2,uint8_t on4);
 void trigger_reset(uint8_t value);
 //void trigger_tickPhaseCounter();
 //uint8_t trigger_isGateModeOn();

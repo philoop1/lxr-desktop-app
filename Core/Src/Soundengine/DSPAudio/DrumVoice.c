@@ -248,14 +248,28 @@ IN_ITCM_RAM void calcDrumVoiceSyncBlock(const uint8_t voiceNr, int16_t* buf, con
 #endif
 
 	//calc next mod osc sampleBlock - int16_t processing
-	calcNextOscSampleBlock(&voiceArray[voiceNr].modOsc,modBuf,size,voiceArray[voiceNr].fmModAmount, voiceArray[voiceNr].pwm);
+	calcNextOscSampleBlock(&voiceArray[voiceNr].modOsc,modBuf,size,
+		voiceArray[voiceNr].mixOscs == 2 ? 1.f : voiceArray[voiceNr].fmModAmount,
+		voiceArray[voiceNr].pwm);
 
-	if(voiceArray[voiceNr].mixOscs)
+	if(voiceArray[voiceNr].mixOscs == 1)
 	{
 		//calc main osc buffer - int16_t processing
 		calcNextOscSampleBlock(&voiceArray[voiceNr].osc,buf,size, (1.f-voiceArray[voiceNr].fmModAmount), voiceArray[voiceNr].pwm);
 		//add mod buffer to main osc buffer - int16_t processing
 		bufferTool_addBuffersSaturating(buf,modBuf,size);
+	}
+	else if(voiceArray[voiceNr].mixOscs == 2)
+	{
+		const float amount = voiceArray[voiceNr].fmModAmount;
+		const int32_t wet = (int32_t)(amount * 32767.f + 0.5f);
+		const int32_t dry = 32767 - wet;
+		calcNextOscSampleBlock(&voiceArray[voiceNr].osc,buf,size,1.f,voiceArray[voiceNr].pwm);
+		for(uint8_t i=0;i<size;i++)
+		{
+			const int32_t ring = ((int32_t)buf[i] * modBuf[i]) >> 15;
+			buf[i] = (int16_t)(((int32_t)buf[i] * dry + ring * wet) >> 15);
+		}
 	}
 	else
 	{

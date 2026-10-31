@@ -38,5 +38,7 @@ uint8_t getModTargetIdxFromGapIdx(uint8_t v, uint8_t gapidx);
 
 // return an index into mod target gap array given an index into modTargets
 uint8_t getModTargetGapIndex(uint8_t modTargetIdx);
+uint8_t modTargetClampVoice(uint8_t voice,uint8_t target,int8_t direction);
+uint8_t modTargetFromFraction(uint8_t voice,float fraction);
 
 #endif /* CCNR2TEXT_H_ */

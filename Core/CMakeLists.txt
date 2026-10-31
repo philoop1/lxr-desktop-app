@@ -53,6 +53,8 @@ add_library(lxr_ui OBJECT
     Src/menu/Cc2Text.c
     Src/menu/copyClearTools.c
     Src/menu/menu.c
+    Src/menu/StepSelection.c
+    Src/menu/PerformanceControls.c
     Src/menu/screensaver.c
 )
 
@@ -75,6 +77,7 @@ add_library(lxr_dsp OBJECT
     Src/Soundengine/DSPAudio/HiHat.c
     Src/Soundengine/DSPAudio/lfo.c
     Src/Soundengine/DSPAudio/mixer.c
+    Src/Soundengine/DSPAudio/PerformanceMasterFilter.c
     Src/Soundengine/DSPAudio/modulationNode.c
     Src/Soundengine/DSPAudio/Oscillator.c
     Src/Soundengine/DSPAudio/random.c
@@ -125,6 +128,10 @@ add_library(lxr_sequencer OBJECT
     Src/Soundengine/Sequencer/clockSync.c
     Src/Soundengine/Sequencer/EuklidGenerator.c
     Src/Soundengine/Sequencer/sequencer.c
+    Src/Soundengine/Sequencer/PerformanceSteps.c
+    Src/Soundengine/Sequencer/PerformanceDelay.c
+    Src/Soundengine/Sequencer/PerformanceGroove.c
+    Src/Soundengine/Sequencer/PerformanceScale.c
 )
 
 # USB-MIDI message queue on top of the USB device stack.
@@ -175,6 +182,8 @@ set(LXR_ITCM_SOURCES
     Src/Soundengine/DSPAudio/FX/Reverb.c
     Src/Soundengine/MIDI/ParameterArray.c
     Src/Soundengine/Sequencer/sequencer.c
+    Src/Soundengine/Sequencer/PerformanceSteps.c
+    Src/Soundengine/Sequencer/PerformanceDelay.c
 )
 if(LXR_ITCM_OPT)
     set_source_files_properties(${LXR_ITCM_SOURCES} PROPERTIES COMPILE_OPTIONS "${LXR_ITCM_OPT}")

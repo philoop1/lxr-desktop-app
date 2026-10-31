@@ -1,3 +1,5 @@
+#include "Soundengine/Sequencer/PerformanceScale.h"
+#include "menu/PerformanceControls.h"
 /*
  * presetManager.c
  *
@@ -14,6 +16,7 @@
 //#include "../config.h"
 #include <frontPanelParser_ui.h>
 #include "Preset/PresetManager.h"
+#include "Soundengine/Sequencer/PerformanceSteps.h"
 //#include "../Hardware/SD/ff.h"
 #include "ff.h"
 #include <stdio.h>
@@ -49,6 +52,52 @@ char currentFolder[13];
 //uint8_t activePresetNr = 0;
 
 #define FILE_VERSION 2
+#define SNARE_NOISE_KIT_BYTES 4u
+static const uint8_t snareNoiseKitMagic[SNARE_NOISE_KIT_BYTES]={'S','N','E','2'};
+static const uint8_t oldSnareNoiseKitMagic[SNARE_NOISE_KIT_BYTES]={'S','N','E','1'};
+static void preset_writePatternScale(uint8_t pattern)
+{
+    UINT written;
+    uint8_t scale=seq_patternSet.scale[pattern];
+    scale=perf_scaleDivision(perf_scaleIndex(scale));
+    uint8_t data[6]={'S','C','L','2',scale,(uint8_t)(scale^0xa5)};
+    f_write((FIL*)&SDFile,data,sizeof(data),&written);
+}
+static void preset_readPatternScale(uint8_t pattern)
+{
+    UINT bytes=0;
+    uint8_t data[6]={0};
+    seq_patternSet.scale[pattern]=16;
+    if(f_read((FIL*)&SDFile,data,sizeof(data),&bytes)==FR_OK && bytes==sizeof(data) &&
+       !memcmp(data,"SCL2",4) && data[4]==perf_scaleDivision(perf_scaleIndex(data[4])) && data[5]==(uint8_t)(data[4]^0xa5))
+        seq_patternSet.scale[pattern]=data[4];
+}
+static void preset_defaultSnareLayer(uint8_t *parameters)
+{
+	parameters[PAR_SNARE_LAYER_WAVE]=0;
+	parameters[PAR_SNARE_LAYER_AMOUNT]=0;
+	parameters[PAR_SNARE_LAYER_FREQ]=25;
+	parameters[PAR_SNARE_LAYER_MODE]=0;
+}
+static void preset_defaultSnareNoise(uint8_t *parameters)
+{
+	parameters[PAR_SNARE_NOISE_ATTACK]=0;
+	parameters[PAR_SNARE_NOISE_DECAY]=127;
+	parameters[PAR_SNARE_NOISE_SLOPE]=64;
+	preset_defaultSnareLayer(parameters);
+}
+static void preset_validateSnareExtension(uint8_t *parameters,UINT bytesRead,
+		const uint8_t *magic,UINT magicBytes)
+{
+	if(bytesRead==END_OF_SOUND_PARAMETERS && magicBytes==SNARE_NOISE_KIT_BYTES &&
+		!memcmp(magic,snareNoiseKitMagic,SNARE_NOISE_KIT_BYTES))return;
+	if(bytesRead>=PAR_SNARE_LAYER_MODE+1 &&
+		!memcmp(&parameters[PAR_SNARE_LAYER_WAVE],oldSnareNoiseKitMagic,SNARE_NOISE_KIT_BYTES)) {
+		preset_defaultSnareLayer(parameters);
+		return;
+	}
+	preset_defaultSnareNoise(parameters);
+}
 
 /*
 #define NUM_TRACKS 7
@@ -228,6 +277,7 @@ FRESULT preset_saveTmpKit()
 	}
 	//write the preset data
 	f_write((FIL*)&SDFile,activeParameters,END_OF_SOUND_PARAMETERS,&bytesWritten);
+	f_write((FIL*)&SDFile,snareNoiseKitMagic,SNARE_NOISE_KIT_BYTES,&bytesWritten);
 
 	//close the file
 	f_close((FIL*)&SDFile);
@@ -272,6 +322,10 @@ FRESULT preset_LoadTmpKit()
 			// set to 0 for any that were not read from the file
 			if(END_OF_SOUND_PARAMETERS-bytesRead)
 				memset(para+bytesRead,0,END_OF_SOUND_PARAMETERS-bytesRead);
+			uint8_t magic[SNARE_NOISE_KIT_BYTES]={0};
+			UINT magicBytes=0;
+			f_read((FIL*)&SDFile,magic,sizeof(magic),&magicBytes);
+			preset_validateSnareExtension(para,bytesRead,magic,magicBytes);
 
 			//special case mod targets. normalize.
 			const uint8_t nmt=getNumModTargets();
@@ -449,6 +503,7 @@ FRESULT preset_LoadTmpPat()
 		//if(dataVersion > 1)
 		{
 			f_read((FIL*)&SDFile,(void*)&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesRead);
+		preset_readPatternScale(patternNr);
 			if(bytesRead == 0) success = 0;
 
 		}
@@ -576,6 +631,7 @@ FRESULT preset_saveTmpPat()
 
 		//write associated kit nr
 		f_write((FIL*)&SDFile,&seq_patternSet.kitNr[presetNr],sizeof(uint8_t),&bytesWritten);
+		preset_writePatternScale(presetNr);
 
 #endif
 
@@ -773,8 +829,9 @@ void preset_init(uint8_t presetNr)
 
 	for(int i=8;i<END_OF_SOUND_PARAMETERS; i++)
 	{
-		para[i-8] = initKit[i];
+		para[i-8] = i<INIT_KIT_SIZE ? initKit[i] : 0;
 	}
+	preset_defaultSnareNoise(para);
 
 	//special case mod targets. normalize.
 	const uint8_t nmt=getNumModTargets();
@@ -828,6 +885,7 @@ static void preset_writeDrumsetData(uint8_t presetNr, uint8_t isMorph)
 			f_write((FIL*)&SDFile,&mainParameters[presetNr][i],1,&bytesWritten);
 		}
 	}
+	f_write((FIL*)&SDFile,snareNoiseKitMagic,SNARE_NOISE_KIT_BYTES,&bytesWritten);
 }
 
 //----------------------------------------------------
@@ -840,8 +898,11 @@ void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmedi
 	}
 	else
 	{
-		//copy parameters to edit buffer
+		// Keep the live master sample rate when kit loading is disabled for it.
+		const uint8_t masterSampleRate = activeParameters[PAR_VOICE_DECIMATION_ALL];
 		memcpy(activeParameters, mainParameters[presetNr], sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
+		if(!activeParameters[PAR_LOAD_SAMPLE_RATE])
+			activeParameters[PAR_VOICE_DECIMATION_ALL] = masterSampleRate;
 		if(activeParameters[PAR_LOAD_MORPH])
 		{
 			uint8_t morphKit = activeParameters[PAR_MORPH_KIT_DEST];
@@ -934,6 +995,62 @@ FRESULT preset_saveDrumsetSD(uint8_t presetNr, uint8_t isMorph)
 };
 
 //----------------------------------------------------
+
+/* New performance values live outside the legacy reserved globals block. */
+static void preset_loadPerformanceExtension(void)
+{
+    static const uint8_t magicV1[8]={'M','U','T','A','0','0','0','1'};
+    static const uint8_t magicV2[8]={'M','U','T','A','0','0','0','2'};
+    static const uint8_t magicV3[8]={'M','U','T','A','0','0','0','3'};
+    static const uint8_t magicV4[8]={'M','U','T','A','0','0','0','4'};
+    uint8_t modernScale=0;
+    uint8_t data[8+PERFORMANCE_EXTRA_BYTES+2+1]={0};
+    UINT bytes=0;
+    performance_resetExtended();
+    if(f_open((FIL*)&SDFile,"MUTA.CFG",FA_OPEN_EXISTING|FA_READ)==FR_OK) {
+        FRESULT result=f_read((FIL*)&SDFile,data,sizeof(data),&bytes);
+        f_close((FIL*)&SDFile);
+        if(result==FR_OK) {
+            uint8_t count=0;
+            if(bytes==sizeof(data)&&!memcmp(data,magicV4,8))count=PERFORMANCE_EXTRA_BYTES+2;
+            else if(bytes==8+PERFORMANCE_EXTRA_BYTES+1&&(!memcmp(data,magicV2,8)||!memcmp(data,magicV3,8)))count=PERFORMANCE_EXTRA_BYTES;
+            else if(bytes==8+18+1&&!memcmp(data,magicV1,8))count=18;
+            if(count) {
+                uint8_t checksum=0;
+                for(uint8_t i=8;i<8+count;i++)checksum=(uint8_t)(checksum+data[i]);
+                if(checksum==data[8+count]) {
+                    modernScale=(uint8_t)(!memcmp(data,magicV3,8)||!memcmp(data,magicV4,8));
+                    memcpy(&activeParameters[PAR_FX_OUTPUT_MODE],&data[8],count>PERFORMANCE_EXTRA_BYTES ? PERFORMANCE_EXTRA_BYTES : count);
+                    if(count==PERFORMANCE_EXTRA_BYTES+2) {
+                        activeParameters[PAR_PERF_RANDOM_VELO]=data[8+PERFORMANCE_EXTRA_BYTES];
+                        activeParameters[PAR_PERF_AVL]=data[9+PERFORMANCE_EXTRA_BYTES];
+                    }
+                    performance_validateExtended();
+                }
+            }
+        }
+    }
+    if(!modernScale)activeParameters[PAR_GLOBAL_SCALE]=perf_scaleLegacyOverride(activeParameters[PAR_GLOBAL_SCALE]);
+    performance_prepareLoaded();
+}
+static FRESULT preset_savePerformanceExtension(void)
+{
+    uint8_t data[8+PERFORMANCE_EXTRA_BYTES+2+1]={'M','U','T','A','0','0','0','4'};
+    UINT bytes=0;
+    memcpy(&data[8],&activeParameters[PAR_FX_OUTPUT_MODE],PERFORMANCE_EXTRA_BYTES);
+    data[8+PERFORMANCE_EXTRA_BYTES]=activeParameters[PAR_PERF_RANDOM_VELO];
+    data[9+PERFORMANCE_EXTRA_BYTES]=activeParameters[PAR_PERF_AVL];
+    uint8_t checksum=0;
+    for(uint8_t i=8;i<sizeof(data)-1;i++)checksum=(uint8_t)(checksum+data[i]);
+    data[sizeof(data)-1]=checksum;
+    FRESULT result=f_open((FIL*)&SDFile,"MUTA.CFG",FA_CREATE_ALWAYS|FA_WRITE);
+    if(result!=FR_OK)return result;
+    result=f_write((FIL*)&SDFile,data,sizeof(data),&bytes);
+    FRESULT closeResult=f_close((FIL*)&SDFile);
+    if(result!=FR_OK)return result;
+    if(bytes!=sizeof(data))return FR_DISK_ERR;
+    return closeResult;
+}
 static void preset_writeGlobalData()
 {
 	unsigned int bytesWritten;
@@ -965,7 +1082,7 @@ FRESULT preset_saveGlobals()
 	f_close((FIL*)&SDFile);
 
 	//f_unmount((TCHAR const*)SDPath);
-	return FR_OK;
+	return preset_savePerformanceExtension();
 #else
 #endif	
 }
@@ -989,9 +1106,47 @@ static uint8_t preset_readGlobalData()
 #else
 	const uint8_t legacyGlobals = PAR_MIDI_CHAN_PC - PAR_BEGINNING_OF_GLOBALS;
 	const uint8_t storedGlobals = PAR_CPU_USE - PAR_BEGINNING_OF_GLOBALS;
+	activeParameters[PAR_MASTER_FILTER_ENABLE]=0;
+	activeParameters[PAR_GLOBAL_SCALE]=0;
+	activeParameters[PAR_FX_SEND_MODE]=0;
+	const uint8_t keepLiveGroove = activeParameters[PAR_SHUFFLE_LOAD] == 0;
+	uint8_t previousGroove[3];
+	for(uint8_t i=0;i<3;i++) {
+		const uint8_t value=activeParameters[PAR_GROOVE_SH2+i];
+		previousGroove[i]=value>127?63:value;
+	}
+	activeParameters[PAR_GROOVE_SH2] = 63;
+	activeParameters[PAR_GROOVE_SH3] = 63;
+	activeParameters[PAR_GROOVE_SH4] = 63;
 	activeParameters[PAR_MIDI_CHAN_PC] = 2;
 	activeParameters[PAR_SHUFFLE_LOAD] = 1;
 	activeParameters[PAR_LOAD_MORPH] = 0;
+	activeParameters[PAR_LOAD_SAMPLE_RATE] = 1;
+	activeParameters[PAR_GLOBAL_PITCH] = 63;
+	activeParameters[PAR_PITCH_BEND_RANGE] = 12;
+	activeParameters[PAR_GLOBAL_DECAY] = 63;
+	activeParameters[PAR_RANDOM_STEP] = 0;
+	activeParameters[PAR_PERF_NOTE_REPEAT_CHANCE] = 0;
+	activeParameters[PAR_PERF_SCARCITY] = 100;
+	activeParameters[PAR_PERF_PROB] = 100;
+	activeParameters[PAR_PERF_NOTE_PROB] = 100;
+	activeParameters[PAR_PERF_DELAY_CHANCE] = 0;
+	activeParameters[PAR_PERF_DELAY_SYNC] = 6;
+	activeParameters[PAR_PERF_DELAY_COUNT] = 0;
+	activeParameters[PAR_PERF_DELAY_BOUNCE] = 63;
+	activeParameters[PAR_PERF_DELAY_TARGET] = 5;
+	activeParameters[PAR_PERF_DELAY_MODE] = 0;
+	activeParameters[PAR_PERF_DELAY_EXP] = 64;
+	activeParameters[PAR_PERF_DELAY_PITCH] = 64;
+	activeParameters[PAR_PERF_DELAY_INPUT_MASK] = 127;
+	activeParameters[PAR_PERF_VELO_DECAY] = 63;
+	activeParameters[PAR_PERF_VELO_SAMPLE_RATE] = 63;
+	activeParameters[PAR_PERF_VELO_FILTER] = 63;
+	activeParameters[PAR_PERF_VELO_COARSE] = 63;
+	activeParameters[PAR_PERF_VELO_SLOPE] = 63;
+	activeParameters[PAR_PERF_VELO_MOD_AMOUNT] = 63;
+	activeParameters[PAR_PERF_VELO_DRIVE] = 63;
+	activeParameters[PAR_PERF_VELO_LEVEL] = 63;
 	f_read((FIL*)&SDFile,&activeParameters[PAR_BEGINNING_OF_GLOBALS],storedGlobals,&bytesRead);
 	if(bytesRead < legacyGlobals) return 0;
 	// Old glo.cfg ends here; old project files contain 0xFF padding instead.
@@ -1002,6 +1157,68 @@ static uint8_t preset_readGlobalData()
 		activeParameters[PAR_SHUFFLE_LOAD] = 1;
 	if(activeParameters[PAR_LOAD_MORPH] > 1)
 		activeParameters[PAR_LOAD_MORPH] = 0;
+	if(activeParameters[PAR_LOAD_SAMPLE_RATE] > 1)
+		activeParameters[PAR_LOAD_SAMPLE_RATE] = 1;
+	if(activeParameters[PAR_GLOBAL_PITCH] > 127)
+		activeParameters[PAR_GLOBAL_PITCH] = 63;
+	if(activeParameters[PAR_PITCH_BEND_RANGE] > 48)
+		activeParameters[PAR_PITCH_BEND_RANGE] = 12;
+	if(activeParameters[PAR_GLOBAL_DECAY] > 127)
+		activeParameters[PAR_GLOBAL_DECAY] = 63;
+	if(activeParameters[PAR_RANDOM_STEP] > 100)
+		activeParameters[PAR_RANDOM_STEP] = 0;
+	if(activeParameters[PAR_PERF_NOTE_REPEAT_CHANCE] > 127)
+		activeParameters[PAR_PERF_NOTE_REPEAT_CHANCE] = 0;
+	if(activeParameters[PAR_PERF_SCARCITY] > 100)
+		activeParameters[PAR_PERF_SCARCITY] = 100;
+	if(activeParameters[PAR_PERF_PROB] > 100)
+		activeParameters[PAR_PERF_PROB] = 100;
+	if(activeParameters[PAR_PERF_NOTE_PROB] > 100)
+		activeParameters[PAR_PERF_NOTE_PROB] = 100;
+	if(activeParameters[PAR_PERF_DELAY_CHANCE] > 100)
+		activeParameters[PAR_PERF_DELAY_CHANCE] = 0;
+	if(activeParameters[PAR_PERF_DELAY_SYNC] > 15)
+		activeParameters[PAR_PERF_DELAY_SYNC] = 6;
+	if(activeParameters[PAR_PERF_DELAY_COUNT] > 32)
+		activeParameters[PAR_PERF_DELAY_COUNT] = 0;
+	if(activeParameters[PAR_PERF_DELAY_BOUNCE] > 127)
+		activeParameters[PAR_PERF_DELAY_BOUNCE] = 63;
+	if(activeParameters[PAR_PERF_DELAY_TARGET] > 10)
+		activeParameters[PAR_PERF_DELAY_TARGET] = 5;
+	if(activeParameters[PAR_PERF_DELAY_MODE] > 1)
+		activeParameters[PAR_PERF_DELAY_MODE] = 0;
+	if(activeParameters[PAR_PERF_DELAY_EXP] > 127)
+		activeParameters[PAR_PERF_DELAY_EXP] = 64;
+	if(activeParameters[PAR_PERF_DELAY_PITCH] > 127)
+		activeParameters[PAR_PERF_DELAY_PITCH] = 64;
+	if(activeParameters[PAR_PERF_DELAY_INPUT_MASK] > 127)
+		activeParameters[PAR_PERF_DELAY_INPUT_MASK] = 127;
+	if(activeParameters[PAR_PERF_VELO_DECAY] > 127)
+		activeParameters[PAR_PERF_VELO_DECAY] = 63;
+	if(activeParameters[PAR_PERF_VELO_SAMPLE_RATE] > 127)
+		activeParameters[PAR_PERF_VELO_SAMPLE_RATE] = 63;
+	if(activeParameters[PAR_PERF_VELO_FILTER] > 127)
+		activeParameters[PAR_PERF_VELO_FILTER] = 63;
+	if(activeParameters[PAR_PERF_VELO_COARSE] > 127)
+		activeParameters[PAR_PERF_VELO_COARSE] = 63;
+	if(activeParameters[PAR_PERF_VELO_SLOPE] > 127)
+		activeParameters[PAR_PERF_VELO_SLOPE] = 63;
+	if(activeParameters[PAR_PERF_VELO_MOD_AMOUNT] > 127)
+		activeParameters[PAR_PERF_VELO_MOD_AMOUNT] = 63;
+	if(activeParameters[PAR_PERF_VELO_DRIVE] > 127)
+		activeParameters[PAR_PERF_VELO_DRIVE] = 63;
+	for(uint16_t p=PAR_GROOVE_SH2;p<=PAR_GROOVE_SH4;p++)
+		if(activeParameters[p]>127) activeParameters[p]=63;
+	if(activeParameters[PAR_MASTER_FILTER_ENABLE]>1)activeParameters[PAR_MASTER_FILTER_ENABLE]=0;
+	if(activeParameters[PAR_GLOBAL_SCALE]>8)activeParameters[PAR_GLOBAL_SCALE]=0;
+	if(activeParameters[PAR_FX_SEND_MODE]>3)activeParameters[PAR_FX_SEND_MODE]=0;
+	// Save always includes the groove. Loading obeys the live load lock and
+	// a stored OFF setting. A project change must not silently unlock it.
+	if(keepLiveGroove) activeParameters[PAR_SHUFFLE_LOAD]=0;
+	if(!activeParameters[PAR_SHUFFLE_LOAD])
+		for(uint8_t i=0;i<3;i++) activeParameters[PAR_GROOVE_SH2+i]=previousGroove[i];
+
+
 	return 1;
 
 #endif
@@ -1033,6 +1250,7 @@ uint8_t preset_loadGlobals()
 		return 0;
 	}
 	f_close((FIL*)&SDFile);
+	preset_loadPerformanceExtension();
 	menu_sendAllGlobals();
 	
 	//f_unmount((TCHAR const*)SDPath);
@@ -1047,6 +1265,13 @@ uint8_t preset_loadGlobals()
 //----------------------------------------------------
 void preset_loadDefaultGlobals()
 {
+	activeParameters[PAR_MASTER_FILTER_ENABLE]=0;
+	activeParameters[PAR_GLOBAL_SCALE]=0;
+	activeParameters[PAR_FX_SEND_MODE]=0;
+	performance_resetExtended();
+	activeParameters[PAR_GROOVE_SH2] = 63;
+	activeParameters[PAR_GROOVE_SH3] = 63;
+	activeParameters[PAR_GROOVE_SH4] = 63;
 	activeParameters[PAR_BPM] = 120;
 
 	activeParameters[PAR_MIDI_CHAN_1] = 1;
@@ -1089,6 +1314,32 @@ void preset_loadDefaultGlobals()
 	activeParameters[PAR_MIDI_CHAN_PC] = 2;
 	activeParameters[PAR_SHUFFLE_LOAD] = 1;
 	activeParameters[PAR_LOAD_MORPH] = 0;
+	activeParameters[PAR_LOAD_SAMPLE_RATE] = 1;
+	activeParameters[PAR_GLOBAL_PITCH] = 63;
+	activeParameters[PAR_PITCH_BEND_RANGE] = 12;
+	activeParameters[PAR_GLOBAL_DECAY] = 63;
+	activeParameters[PAR_RANDOM_STEP] = 0;
+	activeParameters[PAR_PERF_NOTE_REPEAT_CHANCE] = 0;
+	activeParameters[PAR_PERF_SCARCITY] = 100;
+	activeParameters[PAR_PERF_PROB] = 100;
+	activeParameters[PAR_PERF_NOTE_PROB] = 100;
+	activeParameters[PAR_PERF_DELAY_CHANCE] = 0;
+	activeParameters[PAR_PERF_DELAY_SYNC] = 6;
+	activeParameters[PAR_PERF_DELAY_COUNT] = 0;
+	activeParameters[PAR_PERF_DELAY_BOUNCE] = 63;
+	activeParameters[PAR_PERF_DELAY_TARGET] = 5;
+	activeParameters[PAR_PERF_DELAY_MODE] = 0;
+	activeParameters[PAR_PERF_DELAY_EXP] = 64;
+	activeParameters[PAR_PERF_DELAY_PITCH] = 64;
+	activeParameters[PAR_PERF_DELAY_INPUT_MASK] = 127;
+	activeParameters[PAR_PERF_VELO_DECAY] = 63;
+	activeParameters[PAR_PERF_VELO_SAMPLE_RATE] = 63;
+	activeParameters[PAR_PERF_VELO_FILTER] = 63;
+	activeParameters[PAR_PERF_VELO_COARSE] = 63;
+	activeParameters[PAR_PERF_VELO_SLOPE] = 63;
+	activeParameters[PAR_PERF_VELO_MOD_AMOUNT] = 63;
+	activeParameters[PAR_PERF_VELO_DRIVE] = 63;
+	activeParameters[PAR_PERF_VELO_LEVEL] = 63;
 	activeParameters[PAR_CPU_USE] = 0;
 
 }
@@ -1177,6 +1428,10 @@ static FRESULT preset_readDrumsetData(uint8_t presetNr, uint8_t isMorph)
 		// set to 0 for any that were not read from the file
 		if(END_OF_SOUND_PARAMETERS-bytesRead)
 			memset(para+bytesRead,0,END_OF_SOUND_PARAMETERS-bytesRead);
+		uint8_t magic[SNARE_NOISE_KIT_BYTES]={0};
+		UINT magicBytes=0;
+		FRESULT magicResult=f_read((FIL*)&SDFile,magic,sizeof(magic),&magicBytes);
+		preset_validateSnareExtension(para,bytesRead,magic,magicResult==FR_OK?magicBytes:0);
 		
 		//special case mod targets. normalize.
 		const uint8_t nmt=getNumModTargets();
@@ -1328,6 +1583,13 @@ IN_ITCM_RAM void preset_sendDrumsetParametersImmediate()
 		{
 
 			uint8_t paramNumber = parameterOrder[i];
+			// Destinations were translated from stored menu indices above.
+			// Sending those indices again through the voice CC map changes
+			// their meaning to parameter IDs and may create recursive targets.
+			if(paramNumber==PAR_NONE || paramNumber==PAR_BANK_CHANGE ||
+			   (paramNumber>=PAR_VEL_DEST_1 && paramNumber<=PAR_VEL_DEST_6) ||
+			   (paramNumber>=PAR_VOICE_LFO1 && paramNumber<=PAR_VOICE_LFO6) ||
+			   (paramNumber>=PAR_TARGET_LFO1 && paramNumber<=PAR_TARGET_LFO6)) continue;
 
 			//const uint8_t morph = activeParameters[PAR_MORPH];
 
@@ -1644,6 +1906,7 @@ static void preset_writePatternData(uint8_t patternNr)
 
 		//write associated kit nr
 		f_write((FIL*)&SDFile,&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesWritten);
+		preset_writePatternScale(patternNr);
 
 #endif
 }
@@ -1722,6 +1985,7 @@ FRESULT preset_savePatternSD(uint8_t presetNr)
 // returns 1 on success
 static uint8_t preset_readPatternData(uint8_t patternNr, uint8_t dataVersion)
 {
+	seq_patternSet.scale[patternNr]=16;
 
 #if 0
 
@@ -1985,6 +2249,7 @@ static uint8_t preset_readPatternData(uint8_t patternNr, uint8_t dataVersion)
 	if(dataVersion > 1)
 	{
 		f_read((FIL*)&SDFile,(void*)&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesRead);
+		preset_readPatternScale(patternNr);
 		if(bytesRead == 0) success = 0;
 
 	}
@@ -2165,8 +2430,7 @@ void preset_morph_tick()
 		// Audio routing always comes from the source kit.
 		const uint8_t morph = (paramNr >= PAR_AUDIO_OUT1 &&
 			paramNr <= PAR_AUDIO_OUT6) ? 0 : activeParameters[PAR_MORPH];
-		const uint8_t val = interpolate(activeParameters[paramNr],
-			morphParameters[paramNr], morph);
+		const uint8_t val = preset_getMorphValue(paramNr, morph);
 		MidiMsg msg = {0};
 		msg.data2 = val;
 		if(paramNr < 128)
@@ -2231,6 +2495,10 @@ void preset_morph(uint8_t morph)
 //----------------------------------------------------
 uint8_t preset_getMorphValue(uint16_t index, uint8_t morph)
 {
+	// PERF sample rate is a live master control for both Morph endpoints.
+	// Keep per-voice decimation in the kit interpolation.
+	if(index == PAR_VOICE_DECIMATION_ALL)
+		return activeParameters[index];
 	return interpolate(activeParameters[index],morphParameters[index],morph);
 };
 //----------------------------------------------------
@@ -2525,7 +2793,7 @@ FRESULT preset_saveProject(uint8_t presetNr)
 
 	// write some more padding (we'll allocate 512 bytes for kit data. This should be more than
 	// we'll ever need. Right now we use about 228 bytes).
-	remain = 512 - (END_OF_SOUND_PARAMETERS);
+	remain = 512 - (END_OF_SOUND_PARAMETERS + SNARE_NOISE_KIT_BYTES);
 	while(remain){
 		if(remain < GEN_BUF_LEN)
 			siz=(uint8_t)remain;
@@ -2696,7 +2964,10 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 
 	lcd_clear();
 	lcd_home();
-	lcd_string(PSTR("Loading Project"));
+	memcpy(text,"Loading ",8);
+	memcpy(text+8,savefileNames[presetNr][PROJECT_NAMES],8);
+	text[16]='\0';
+	lcd_string(text);
 	lcd_setcursor(0,2);
 	lcd_string(PSTR("0%"));
 
@@ -2798,6 +3069,13 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 	f_close((FIL*)&SDFile);
 
 	//load globals
+	// Refresh from the name actually read from this project's prj.nfo.
+	memcpy(text,"Loading ",8);
+	memcpy(text+8,savefileNames[presetNr][PROJECT_NAMES],8);
+	text[16]='\0';
+	lcd_home();
+	lcd_string(text);
+	perf_clearLoop();
 	preset_loadGlobals();
 	//load all drumkits, patterns and songs
 	for(uint8_t i=0;i<NUM_KIT_SLOTS;i++)
@@ -2853,6 +3131,9 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 
 	//init morph target to peset 0
 	morphParameters = mainParameters[0];
+	// The previous project's edit backup must not overwrite a freshly loaded
+	// pattern when the pending pattern is activated below.
+	seq_copyPatternToBackupBuffer(seq_activePattern);
 
 
 	//if pattern change mode is 'auto' load corresponding kit
@@ -2963,7 +3244,7 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 		goto closeFile;
 
 	// read padding
-	remain = 512 - (END_OF_SOUND_PARAMETERS);
+	remain = 512 - (END_OF_SOUND_PARAMETERS + SNARE_NOISE_KIT_BYTES);
 	while(remain){
 		if(remain < GEN_BUF_LEN)
 			siz=(uint8_t)remain;
@@ -3041,6 +3322,7 @@ static FRESULT preset_makeFileNameLoad(char *buf, uint8_t num, uint8_t type)
 	FRESULT fr;     /* Return value */
     DIR dj;         /* Directory object */
     FILINFO fno;    /* File information */
+	char selected[13] = {0};
 
 	const char *ext;
 	numtostrpu_2Bytes(&buf[0],num,'0');
@@ -3071,12 +3353,24 @@ static FRESULT preset_makeFileNameLoad(char *buf, uint8_t num, uint8_t type)
 
 
     fr = f_findfirst(&dj, &fno, "", buf);  /* Start to search for preset files */
-    f_closedir(&dj);
-    if(fr == FR_OK && fno.fname[0])
-    {
-    	fr = f_open((FIL*)&SDFile,fno.fname,FA_OPEN_EXISTING | FA_READ);
-    	return fr;
-    }
+	while(fr == FR_OK && fno.fname[0])
+	{
+		// Old cards can contain both "00-.PAT" and "00-NAME.PAT".
+		// Prefer the named file; the blank-named copy may contain no notes.
+		if(!selected[0] || fno.fname[3] != '.')
+		{
+			strncpy(selected, fno.fname, sizeof(selected) - 1);
+			selected[sizeof(selected) - 1] = 0;
+		}
+		if(selected[0] && selected[3] != '.')
+			break;
+		fr = f_findnext(&dj, &fno);
+	}
+	f_closedir(&dj);
+	if(fr != FR_OK)
+		return fr;
+	if(selected[0])
+		return f_open((FIL*)&SDFile,selected,FA_OPEN_EXISTING | FA_READ);
 
     return FR_NO_FILE;
 }

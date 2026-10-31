@@ -14,11 +14,28 @@
 
 
 #include "Soundengine/Sequencer/clockSync.h"
+#include "Soundengine/Sequencer/PerformanceScale.h"
 
 static float sync_window[WINDOW_SIZE];
 float sync_timeLast = 0;
 uint8_t sync_writePos = 0;
 uint8_t sync_armed = 0;
+static uint8_t sync_samples;
+static uint32_t sync_lastClockTick;
+static uint32_t sync_lastClockCycles;
+static uint32_t sync_cycleWindow[WINDOW_SIZE];
+static uint8_t sync_cycleSamples;
+static uint8_t sync_cycleWritePos;
+static uint32_t sync_nextLeadCycles;
+static uint8_t sync_leadArmed;
+static uint8_t sync_leadConsumed;
+static uint8_t sync_barClockCnt;
+static uint8_t sync_barPhaseValid;
+static uint8_t sync_startOnNextBar;
+static uint8_t sync_startLeadArmed;
+static uint32_t sync_nextStartCycles;
+static uint8_t sync_clockOffsetTenths=50;
+static uint8_t sync_clockOffsetHundredths=0;
 
 uint8_t sync_clockCnt = 0;
 
@@ -32,114 +49,159 @@ uint16_t sync_calcBpm(float timePerPulse)
 	//we have 24 pulses per quarter
 	//120 bpm = 120 quarters per minute
 
+	if(timePerPulse<=0.f) return seq_getBpm();
 	float quarterDuration = 24 * (timePerPulse/4);
 	float bpm = (60 * 1000) / quarterDuration;
 
-	return bpm>0?bpm:1;
+	if(bpm>65535.f) return 65535;
+	return bpm>0?(uint16_t)bpm:1;
 }
 //---------------------------------------------------------
 //called by midi clock
 void sync_tick()
 {
-
-#if 1
-	//with the new sequencer without substeps we have classical 4ppq resolution
-	//MIDI clock is 24ppq
-	//so we can simply advance the sequencer every 6 clock pulses
-	if(sync_clockCnt == 0)
-	{
-		uint8_t isStepShuffled = seq_getMasterStepCnt()%2 == 1;
-
-		if(isStepShuffled)
-		{
-			float dt = seq_getDeltaTShuffleDelay(seq_getBpm());
-			sync_delayedStepTimer = systick_ticks + dt;
-		}
-		else
-		{
-			seq_nextStep();
-			seq_prescaleCounter=0;
-			seq_MidiSyncQueue(0);
-		}
-	}
-
-	sync_clockCnt++;
-	if(sync_clockCnt >= 6)
-	{
-		sync_clockCnt = 0;
-
-
-	}
-
-	//Fix for external sync LFO sync calculation
-
-	float time = systick_ticks - sync_timeLast;
-	sync_timeLast = systick_ticks;
-
-	sync_window[sync_writePos++] = time;
-	sync_writePos &= WINDOW_MASK;
-
-	//calc average time in [ms] between midi clock pulses
-	int i;
-	float avg=0;
-	for(i=0;i<WINDOW_SIZE;i++)
-	{
-		avg += sync_window[i];
-	}
-	avg /= WINDOW_SIZE;
-	seq_setBpm(sync_calcBpm(avg));
-
-
-
-
-#else
-	float time = systick_ticks - sync_timeLast;
-	sync_timeLast = systick_ticks;
-
-	sync_window[sync_writePos++] = time;
-	sync_writePos &= WINDOW_MASK;
-
-	//calc average time in [ms] between midi clock pulses
-	int i;
-	float avg=0;
-	for(i=0;i<WINDOW_SIZE;i++)
-	{
-		avg += sync_window[i];
-	}
-	avg /= WINDOW_SIZE;
-
-	seq_setBpm(sync_calcBpm(avg));
-
-	sync_clockCnt++;
-
-	if(seq_isRunning())
-	{
-		//now handle sequencer transport (4 steps every 3 clocks)
-		if(sync_clockCnt == 1 || sync_clockCnt >= 4) {
-			sync_clockCnt = 1;
-			seq_resetDeltaAndTick();
-		}
-	}
-    
-#endif
-
-
+    sync_tickAtCycles(DWT->CYCCNT);
+}
+void sync_tickAtCycles(uint32_t nowCycles)
+{
+    const uint32_t now=systick_ticks;
+    const uint32_t cycleInterval=nowCycles-sync_lastClockCycles;
+    sync_lastClockTick=now;
+    if(sync_armed && cycleInterval) {
+        sync_cycleWindow[sync_cycleWritePos++]=cycleInterval;
+        sync_cycleWritePos&=WINDOW_MASK;
+        if(sync_cycleSamples<WINDOW_SIZE)sync_cycleSamples++;
+        sync_window[sync_writePos++]=(float)cycleInterval*4000.f/(float)SystemCoreClock;
+        sync_writePos&=WINDOW_MASK;
+        if(sync_samples<WINDOW_SIZE) sync_samples++;
+        float total=0.f;
+        for(uint8_t i=0;i<sync_samples;i++) total+=sync_window[i];
+        seq_setBpm(sync_calcBpm(total/sync_samples));
+    }
+    sync_lastClockCycles=nowCycles;
+    sync_armed=1;
+    if(!sync_barPhaseValid) {sync_barClockCnt=0;sync_barPhaseValid=1;}
+    sync_barClockCnt=(uint8_t)((sync_barClockCnt+1u)%96u);
+    if(sync_startOnNextBar && sync_barClockCnt==0) {
+        sync_startOnNextBar=0;
+        sync_startLeadArmed=0;
+        sync_clockCnt=0;
+        seq_setRunning(1);
+    }
+    if(sync_barClockCnt==0 && seq_applyPendingScale()) {
+        sync_clockCnt=0;
+        sync_leadArmed=sync_leadConsumed=0;
+    }
+    const uint8_t clocksPerStep=perf_scaleMidiClocks();
+    if(sync_clockCnt==0) {
+        if(sync_leadConsumed)sync_leadConsumed=0;
+        else {seq_nextStep();seq_MidiSyncQueue(0);}
+    }
+    if(++sync_clockCnt>=clocksPerStep) {
+        sync_clockCnt=0;
+        sync_leadArmed=0;
+        if(sync_cycleSamples && sync_clockOffsetTenths+sync_clockOffsetHundredths) {
+            uint64_t total=0;
+            for(uint8_t i=0;i<sync_cycleSamples;i++)total+=sync_cycleWindow[i];
+            const uint32_t period=(uint32_t)(total/sync_cycleSamples);
+            const uint32_t cyclesPerUs=SystemCoreClock/1000000u;
+            const uint32_t offsetUs=(uint32_t)sync_clockOffsetTenths*100u+
+                (uint32_t)sync_clockOffsetHundredths*10u;
+            const uint32_t lead=offsetUs*cyclesPerUs;
+            if(period>lead+250u*cyclesPerUs) {
+                sync_nextLeadCycles=nowCycles+period-lead;
+                sync_leadArmed=1;
+            }
+        }
+    }
+    if(sync_startOnNextBar && sync_barClockCnt==95 && sync_cycleSamples &&
+            (sync_clockOffsetTenths || sync_clockOffsetHundredths)) {
+        uint64_t total=0;
+        for(uint8_t i=0;i<sync_cycleSamples;i++)total+=sync_cycleWindow[i];
+        const uint32_t period=(uint32_t)(total/sync_cycleSamples);
+        const uint32_t cyclesPerUs=SystemCoreClock/1000000u;
+        const uint32_t offsetUs=(uint32_t)sync_clockOffsetTenths*100u+
+            (uint32_t)sync_clockOffsetHundredths*10u;
+        const uint32_t lead=offsetUs*cyclesPerUs;
+        if(period>lead+250u*cyclesPerUs) {
+            sync_nextStartCycles=nowCycles+period-lead;
+            sync_startLeadArmed=1;
+        }
+    }
+}
+void sync_requestStartOnNextBar(void)
+{
+    sync_startLeadArmed=0;
+    if(!sync_barPhaseValid || sync_barClockCnt==0) {
+        sync_startOnNextBar=0;
+        sync_clockCnt=0;
+        seq_setRunning(1);
+    } else sync_startOnNextBar=1;
+}
+uint8_t sync_processStartLead(void)
+{
+    if(!sync_startLeadArmed || (int32_t)(DWT->CYCCNT-sync_nextStartCycles)<0)return 0;
+    sync_startLeadArmed=0;
+    sync_startOnNextBar=0;
+    sync_clockCnt=0;
+    sync_leadArmed=0;
+    sync_leadConsumed=1;
+    seq_setRunning(1);
+    seq_nextStep();
+    seq_MidiSyncQueue(0);
+    return 1;
+}
+void sync_setClockOffset(uint8_t tenths,uint8_t hundredths)
+{
+    sync_clockOffsetTenths=tenths>80?50:tenths;
+    sync_clockOffsetHundredths=(hundredths>9 || sync_clockOffsetTenths==80)?0:hundredths;
+    sync_leadArmed=0;
+}
+uint8_t sync_shouldLeadStep(void)
+{
+    return sync_leadArmed && !sync_leadConsumed &&
+        (int32_t)(DWT->CYCCNT-sync_nextLeadCycles)>=0;
+}
+void sync_markLeadStep(void)
+{
+    if(sync_barClockCnt==95)seq_applyPendingScale();
+    sync_leadArmed=0;
+    sync_leadConsumed=1;
 }
 //---------------------------------------------------------
 void sync_midiResetPosition()
 {
 	sync_clockCnt = 0;
+	sync_barClockCnt=0;
+	sync_barPhaseValid=1;
+	sync_startOnNextBar=0;
+	sync_startLeadArmed=0;
+	sync_leadArmed=0;
+	sync_leadConsumed=0;
 	seq_resetPosition();
 }
 //---------------------------------------------------------
 void sync_midiStartStop(uint8_t isStart)
 {
 	if(isStart) {
+		sync_startOnNextBar=0;
+		sync_startLeadArmed=0;
 		// this message does NOT mean start immediately! it just 'arms' the seq to start at the next MIDI_CLOCK received
 
 		seq_setRunning(1);
 		sync_timeLast = systick_ticks;
+		sync_armed=0;
+		sync_samples=0;
+		sync_writePos=0;
+		sync_cycleSamples=0;
+		sync_cycleWritePos=0;
+		sync_leadArmed=0;
+		sync_leadConsumed=0;
 	} else {
+		sync_startOnNextBar=0;
+		sync_startLeadArmed=0;
+		sync_leadArmed=0;
+		sync_leadConsumed=0;
 		seq_setRunning(0);
 	}
 }

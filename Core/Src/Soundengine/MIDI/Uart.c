@@ -34,6 +34,8 @@ uint8_t midi_process_block = 0;
 
 static Fifo fifo_midiTx;
 static Fifo fifo_midiRx;
+static volatile uint32_t midiClockCycles[BUFFER_SIZE];
+static volatile uint8_t midiClockCycleRead,midiClockCycleWrite;
 
 static Fifo fifo_frontTx;
 static FifoBig fifo_frontRx; //we use a bigger fifo here because we have lots of data coming in for the preset
@@ -60,8 +62,12 @@ void USART3_IRQHandler(void)
 
 		// put the received data in the RX midi buffer
     // fifo_bufferIn(&fifo_midiRx, data);
-    if (fifo_bufferIn(&fifo_midiRx, data) == 0)
-    {
+    if(fifo_bufferIn(&fifo_midiRx,data) && data==MIDI_CLOCK) {
+        const uint8_t next=(uint8_t)(midiClockCycleWrite+1u);
+        if(next!=midiClockCycleRead) {
+            midiClockCycles[midiClockCycleWrite]=DWT->CYCCNT;
+            midiClockCycleWrite=next;
+        }
     }
     //  if (!midi_process_block)
     //  {
@@ -87,11 +93,24 @@ void USART3_IRQHandler(void)
 //-----------------------------------------------------------------------------
 void uart_processMidi()
 {
+	// Kit/parameter loading calls soundengine_process from MIDI handlers.
+	// Let the outer drain dispatch queued bytes after that handler returns.
+	static uint8_t processing;
+	if(processing) return;
+	processing=1;
 	uint8_t data;
 	while(fifo_bufferOut(&fifo_midiRx, &data))
 	{
 		midiParser_parseUartData(data);
 	}
+	processing=0;
+}
+uint32_t uart_takeMidiClockCycles(void)
+{
+    if(midiClockCycleRead==midiClockCycleWrite)return DWT->CYCCNT;
+    const uint32_t cycles=midiClockCycles[midiClockCycleRead];
+    midiClockCycleRead=(uint8_t)(midiClockCycleRead+1u);
+    return cycles;
 }
 
 void uart_sendMidi(MidiMsg msg)
@@ -166,6 +185,7 @@ void initMidiUart()
 	//init the fifo
 	fifo_init(&fifo_midiTx);
 	fifo_init(&fifo_midiRx);
+	midiClockCycleRead=midiClockCycleWrite=0;
 
 	/*
 	 * UART2, APB1

@@ -7,7 +7,8 @@ the LXR Eurorack module.
 
 The firmware version is defined in `CMakeLists.txt`. This fork currently
 starts from Erica Synths' version 1.7 code. See the [changelog](../../CHANGELOG.md)
-for the changes made in this fork.
+for the changes made in this fork. The current preview identifies itself as
+`Mutador 0.1.26` on startup.
 
 ## Finding your way around
 

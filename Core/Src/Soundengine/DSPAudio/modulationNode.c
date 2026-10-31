@@ -36,6 +36,8 @@ void modNode_init(ModulationNode* vm)
 //-----------------------------------------------------------------------
 static void modNode_setOriginalValueChanged(ModulationNode* vm, uint16_t idx)
 {
+	// Empty/off destinations have no backing parameter storage.
+	if(idx>=END_OF_SOUND_PARAMETERS || !parameterArray[idx].ptr) return;
 	// TODO this code is repeated (approximately. not exactly) inside modNode_setDestination. can we combine?
 
 
@@ -175,6 +177,10 @@ void modNode_updateValue(ModulationNode* vm, float val)
 
 	MidiMsg msg;
 	float originalValue = activeParameters[vm->destination]/127.f;
+	if(vm->destination==PAR_SNARE_LAYER_MODE)
+		originalValue=activeParameters[vm->destination]/2.f;
+	else if(vm->destination==PAR_SNARE_LAYER_WAVE)
+		originalValue=(float)activeParameters[vm->destination]/menu_getWaveformMax();
 	//val is [0:1] make [-1:1] for bipolar modulation around original value
 	float newValue = originalValue + vm->amount * (val*2.f-1.f);
 	newValue = newValue < 0.f ? 0 : newValue > 1.f ? 1.f : newValue;

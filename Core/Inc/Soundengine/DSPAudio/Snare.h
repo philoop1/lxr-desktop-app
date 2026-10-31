@@ -34,6 +34,11 @@ typedef struct SnareStruct
 {
 	OscInfo 	osc;		// the tonal oscillator
 	OscInfo 	noiseOsc;	// the noise osc
+	OscInfo layerOsc;
+	float layerAmount;
+	uint8_t layerMode;
+	uint8_t layerAmountControl;
+	uint8_t layerFreqControl;
 
 
 	uint8_t		filterType; // bit 0 = lp, bit 1 = hp, bit 3 = bp on/off
@@ -65,6 +70,12 @@ typedef struct SnareStruct
 
 	SlopeEg2		oscVolEg;
 	float 		egValueOscVol;
+	SlopeEg2		noiseVolEg;
+	float		noiseEgValue;
+	uint8_t		noiseAttackControl;
+	uint8_t		noiseDecayControl;
+	uint8_t		noiseSlopeControl;
+	uint8_t		noiseEnvelopeEnabled;
 
 	Distortion distortion;
 	SnapEg snapEg;
@@ -94,4 +105,11 @@ void Snare_calcAsync();
 
 //-0.5 = left 0=both max 0.5=right*/
 void Snare_setPan(const uint8_t pan);
+void Snare_setNoiseAttack(uint8_t value);
+void Snare_setNoiseDecay(uint8_t value);
+void Snare_setNoiseSlope(uint8_t value);
+void Snare_setLayerWave(uint8_t value);
+void Snare_setLayerAmount(uint8_t value);
+void Snare_setLayerFreq(uint8_t value);
+void Snare_setLayerMode(uint8_t value);
 #endif /* SNARE_H_ */

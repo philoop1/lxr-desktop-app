@@ -42,6 +42,13 @@
 #define MENU_PAT_MODE	 	23
 #define MENU_STEP_FLAM	 	24
 #define MENU_STEP_SHIFT	 	25
+#define MENU_REPEAT_SYNC 27
+#define MENU_DELAY_MODE 28
+#define MENU_GLOBAL_SCALE 29
+#define MENU_FX_SEND_MODE 30
+#define MENU_FX_OUTPUT_MODE 31
+#define MENU_SNARE_LAYER_MODE 32
+#define MENU_PATTERN_SCALE 33
 #define MENU_AUDIO_OUT_FX	26
 
 //-----------------------------------------------------------------
@@ -50,6 +57,7 @@
 const char menuText_ok[] 	= 	"ok ";
 const char menuText_off[] 	= "off";
 const char menuText_on[] 	= 	"on ";
+const char menuText_aut[] = "aut";
 const char menuText_mix[] 	= "mix";
 const char menuText_fm[] 	= 	"fm ";
 const char menuText_dash[] 	="---";
@@ -92,11 +100,16 @@ const char stepShiftNames[][4] =
 
 };
 //-----------------------------------------------------------------
+
+const char globalScaleNames[][4]={{9},{"pat"},{"2"},{"4"},{"6"},{"8"},{"12"},{"16"},{"24"},{"32"}};
+const char fxSendModeNames[][4]={{4},{"nor"},{"afl"},{"pfl"},{"cfl"}};
+const char fxOutputModeNames[][4]={{2},{"st2"},{"lr2"}};
+
 const char patModeNames[][4] =
 {
 	{2},		//number of entries
 	{"off"},
-	{"Aut"},
+	{"aut"},
 
 };
 //-----------------------------------------------------------------
@@ -164,15 +177,16 @@ const char followNames[][4] =
 	{"p+b"}
 };
 //-----------------------------------------------------------------
-const char ppqOutNames[][4] =
+const char ppqOutNames[][5] =
 {
-	{6},		//number of entries
+	{7},		//number of entries
 	{"2"},
 	{"4"},
 	{"8"},
 	{"16"},
 	{"24"},
 	{"48"},
+	{"16sh"},
 };
 //-----------------------------------------------------------------
 const char midiModes[][4]  =
@@ -248,7 +262,7 @@ const char retriggerNames[][4]  =
 //-----------------------------------------------------------------
 const char lfoWaveNames[][4]  =
 {
-	{8},		//number of entries
+	{10},		//number of entries
 	{"sin"},
 	{"tri"},
 	{"sup"},
@@ -257,8 +271,12 @@ const char lfoWaveNames[][4]  =
 	{"rnd"},
 	{"xup"},
 	{"xdn"},
+	{"str"},
+	{"gld"},
 };
 //-----------------------------------------------------------------
+const char repeatSyncNames[][4]={{16},{"1"},{"2d"},{"2"},{"4d"},{"3"},{"4"},{"8d"},{"6"},{"8"},{"16d"},{"12"},{"16"},{"24"},{"32"},{"64"},{"128"}};
+const char delayModeNames[][4]={{2},{"mon"},{"pol"}};
 const char rollRateNames[][4]  =
 {
 	{6},		//number of entries
@@ -360,11 +378,14 @@ const char midiRoutingNames[][6] =
 //-----------------------------------------------------------------
 const char mixFmNames[][6] =
 {
-		{2},	// number of entries
+		{3},	// number of entries
 		{"FM"},
 		{"Mix"},
+		{"rng"},
 
 };
+const char patternScaleNames[][4]={{8},{"2"},{"4"},{"6"},{"8"},{"12"},{"16"},{"24"},{"32"}};
+const char snareLayerModeNames[][4]={{3},{"mix"},{"FM "},{"rng"}};
 //-----------------------------------------------------------------
 const char midiFilterNames[][16] =
 {
@@ -477,13 +498,78 @@ const char shortNames[][4]  =
 	{"p2"},
 	{"p3"},
 	{"p4"},
-	{"kcm"},
+	{"lki"},
 	{"flm"},
 	{"shf"},
 	{"Pch"},
 	{"CPU"},
 	{"lsh"},
 	{"lmp"},
+	{"lsr"},
+	{"gpt"},
+	{"pbr"},
+	{"gdc"},
+	{"rst"},
+	{"csr"},
+	{"pSc"},
+	{"pst"},
+	{"cnt"},
+	{"rpt"},
+	{"rcl"},
+	{"rpn"},
+	{"bb"},
+	{"vel"},
+	{"pol"},
+	{"bxp"},
+	{"d2p"},
+	{"din"},
+	{"vdc"},
+	{"vsr"},
+	{"vfi"},
+	{"vco"},
+	{"vsl"},
+	{"vma"},
+	{"vdr"},
+	{"vlv"},
+	{"sh2"},
+	{"sh3"},
+	{"sh4"},
+	{"mfl"},
+	{"scl"},
+	{"fxs"},
+	{"fxo"},
+	{"mfl"},
+	{"mfr"},
+	{"mfd"},
+	{"s1"},
+	{"s2"},
+	{"s3"},
+	{"s4"},
+	{"s5"},
+	{"s6"},
+	{"sm"},
+	{"v1"},
+	{"v2"},
+	{"v3"},
+	{"v4"},
+	{"v5"},
+	{"v6"},
+	{"mst"},
+	{"nat"},
+	{"ndc"},
+	{"nsl"},
+	{"cof"},
+	{"cfn"},
+	{"slw"},
+	{"sla"},
+	{"slf"},
+	{"wmd"},
+	{"scl"},
+	{"rvl"},
+	{"avl"},
+
+
+
 
 };
 //-----------------------------------------------------------------
@@ -611,13 +697,78 @@ const char longNames[][16] =
 	{"Param 2"},
 	{"Param 3"},
 	{"Param 4"},
-	{"KitChMde"},
+	{"Load Kit"},
 	{"Flam"},
 	{"Shift"},
 	{"CtrlChan"},
 	{"CPU use"},
 	{"Load Shuffle"},
 	{"Load Morph"},
+	{"Load SampleRate"},
+	{"Global Pitch"},
+	{"Bend Range"},
+	{"Global Decay"},
+	{"Random Step"},
+	{"Step Repeat"},
+	{"Scarcity"},
+	{"Step Prob"},
+	{"Note Chance"},
+	{"Delay Chance"},
+	{"Delay Rate"},
+	{"Delay Repeats"},
+	{"Bounce"},
+	{"Velocity Target"},
+	{"Delay Mode"},
+	{"Bounce Curve"},
+	{"Repeat Pitch"},
+	{"Delay Inputs"},
+	{"Velocity Decay"},
+	{"Velocity Rate"},
+	{"Velocity Filter"},
+	{"Velocity Pitch"},
+	{"Velocity Slope"},
+	{"Velocity Mod"},
+	{"Velocity Drive"},
+	{"Velocity Level"},
+	{"Groove Step 2"},
+	{"Groove Step 3"},
+	{"Groove Step 4"},
+	{"Master Filter"},
+	{"Global Scale"},
+	{"FX Send Mode"},
+	{"FX Outputs"},
+	{"Master Cutoff"},
+	{"Master Resonance"},
+	{"Master Drive"},
+	{"FX Send Voice 1"},
+	{"FX Send Voice 2"},
+	{"FX Send Voice 3"},
+	{"FX Send Voice 4"},
+	{"FX Send Voice 5"},
+	{"FX Send Voice 6"},
+	{"FX Send Master"},
+	{"VCA Voice 1"},
+	{"VCA Voice 2"},
+	{"VCA Voice 3"},
+	{"VCA Voice 4"},
+	{"VCA Voice 5"},
+	{"VCA Voice 6"},
+	{"Master VCA"},
+	{"Noise Attack"},
+	{"Noise Decay"},
+	{"Noise Slope"},
+	{"Clock Offset"},
+	{"Clock Fine"},
+	{"Layer Wave"},
+	{"Layer Amount"},
+	{"Layer Frequency"},
+	{"Wave Mixer"},
+	{"Pattern Scale"},
+	{"Random Velocity"},
+	{"Velocity Gain"},
+
+
+
 };
 
 

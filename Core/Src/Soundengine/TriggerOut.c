@@ -29,6 +29,14 @@ uint8_t trigger_prescalerClockInput = PRE_4_PPQ_IN;
 uint8_t trigger_prescaleCounterClockInput = 0;
 
 uint8_t trigger_nextPulseOut1 = 0xff;
+static uint8_t trigger_grooveClock;
+void trigger_setPin(uint8_t index,uint8_t isOn);
+void trigger_setGrooveClock(uint8_t enabled) { trigger_grooveClock=enabled; }
+void trigger_clockGrooveTick(uint8_t on2,uint8_t on4)
+{
+    (void)on2;
+    if(trigger_dividerClockOut1==PRE_16SH_OUT) trigger_setPin(CLOCK_1,on4);
+}
 //uint8_t trigger_nextPulseOut2 = 0xff;
 
 /*
@@ -495,6 +503,7 @@ void trigger_clockTick(uint8_t onOff, uint8_t cnt)
 
 		default:
 		case PRE_4_PPQ_OUT:
+		case PRE_16SH_OUT:
 			prescaler = 24;
 			break;
 
@@ -519,7 +528,11 @@ void trigger_clockTick(uint8_t onOff, uint8_t cnt)
 	//if(onOff)
 	//{
 
-	if(trigger_nextPulseOut1%prescaler==0)
+	if(trigger_grooveClock && trigger_dividerClockOut1==PRE_16SH_OUT)
+	{
+		// The fine groove clock owns the dedicated shuffled output.
+	}
+	else if(trigger_nextPulseOut1%prescaler==0)
 	{
 		trigger_setPin(CLOCK_1,1);
 	}

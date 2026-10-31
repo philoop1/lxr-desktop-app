@@ -95,6 +95,7 @@ uint8_t copyClear_srcSet()
 {
 	return buttonHandler_copySrc != SRC_DST_NONE;
 }
+int8_t copyClear_getSrc(void){return buttonHandler_copySrc;}
 //-----------------------------------------------------------------------------
 void copyClear_clearCurrentTrack()
 {

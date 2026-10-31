@@ -34,6 +34,8 @@ enum
 	LFO_NOISE,
 	LFO_EXP_UP,
 	LFO_EXP_DOWN,
+	LFO_STRAY,
+	LFO_GLIDE,
 	NUM_LFO_WAVEFORMS
 };
 
@@ -49,6 +51,7 @@ typedef struct LfoStruct
 	uint8_t 	retrigger;	// defines the voice nr that retriggers the LFO (0=no retrigger)
 	uint32_t 	phaseOffset;// the phase value to which the LFO is retriggered
 	float 		rnd;
+	float rndTarget;
 	uint8_t 	sync;
 	float 		freq;
 	ModulationNode modTarget;
@@ -60,6 +63,8 @@ void lfo_dispatchNextValue(Lfo* lfo);
 void lfo_setFreq(Lfo *lfo, float f);
 void lfo_setSync(Lfo* lfo, uint8_t sync);
 void lfo_recalcSync();
+void lfo_setWaveform(Lfo *lfo,uint8_t waveform);
+void lfo_setPhaseOffset(Lfo *lfo,uint8_t offset);
 void lfo_retrigger(uint8_t voiceNr);
 
 #endif /* LFO_H_ */

@@ -40,6 +40,7 @@
 #define SONG_LOOP SONG_END+1
 
 #define SEQ_DEFAULT_NOTE 60
+#define SEQ_DEFAULT_VELOCITY 100
 
 #define STEP_ACTIVE_MASK 0x80
 #define STEP_VOLUME_MASK 0x7f
@@ -103,6 +104,7 @@ typedef struct PatternSetStruct
 	uint8_t length[NUM_PATTERN][NUM_TRACKS];	//only used in euklid generator?
 	uint8_t shuffle[NUM_PATTERN];
 	uint8_t kitNr[NUM_PATTERN];
+	uint8_t scale[NUM_PATTERN];
 }PatternSet;
 
 typedef struct PatternBackupBufferStruct
@@ -114,6 +116,7 @@ typedef struct PatternBackupBufferStruct
 	uint8_t length[NUM_TRACKS];	//only used in euklid generator?
 	uint8_t shuffle;
 	uint8_t kitNr;
+	uint8_t scale;
 }PatternBackupBuffer;
 
 /*
@@ -170,12 +173,15 @@ void seq_MidiSyncQueue(uint8_t cnt);
 uint8_t seq_isAutomationStepArmed();
 //------------------------------------------------------------------------------
 void seq_nextStep();
+void seq_setPatternScale(uint8_t pattern,uint8_t scale);
+uint8_t seq_applyPendingScale(void);
 //------------------------------------------------------------------------------
 void seq_processFlam(uint8_t idx);
 //------------------------------------------------------------------------------
 void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note);
 //------------------------------------------------------------------------------
 void seq_setShuffle(float shuffle);
+void seq_setGrooveStep(uint8_t step,uint8_t value);
 //------------------------------------------------------------------------------
 void seq_setTrackLength(uint8_t trackNr, uint8_t length);
 //------------------------------------------------------------------------------
@@ -213,6 +219,8 @@ void seq_sync();
 uint8_t seq_getMasterStepCnt();
 //------------------------------------------------------------------------------
 //void seq_nextStep();
+void seq_setPatternScale(uint8_t pattern,uint8_t scale);
+uint8_t seq_applyPendingScale(void);
 //------------------------------------------------------------------------------
 uint8_t seq_getExtSync();
 //------------------------------------------------------------------------------
@@ -279,6 +287,9 @@ void seq_clearPattern(uint8_t pattern);
 void seq_copyTrack(uint8_t srcNr, uint8_t dstNr, uint8_t pattern);
 //------------------------------------------------------------------------------
 void seq_copyPattern(uint8_t src, uint8_t dst);
+void seq_copyTrackPattern(uint8_t track,uint8_t srcPattern,uint8_t dstPattern);
+void seq_copyStep(uint8_t track,uint8_t pattern,uint8_t src,uint8_t dst);
+void seq_copyStepGroup(uint8_t track,uint8_t pattern,uint8_t srcGroup,uint8_t dstGroup);
 //------------------------------------------------------------------------------
 //selects the automation track (0:1) that is recorded to
 void seq_setActiveAutomationTrack(uint8_t trackNr);

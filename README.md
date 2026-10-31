@@ -10,6 +10,39 @@ records in [docs/sessions](docs/sessions/README.md). The chapter-based
 The proposed [mutador import plan](docs/IMPORT_MUTADOR_PLAN.md) tracks future
 work; its checkboxes do not claim that a feature has already been ported.
 
+## Experimental Mutador changes
+
+Current preview: **Mutador 0.1.28**, experimental and awaiting broader physical-device
+checks of its new controls. The startup display identifies this version.
+
+- **SHIFT+Step 1 from every mode:** opens pattern selection with the first PERF view.
+- **Velocity headroom:** new/reset steps default to 100. The active projects and TMP on the mounted card were proportionally converted once, with verified backups.
+- **rvl then avl after cnt:** Mutador Random Velocity plus a -100 to +100 percent proportional velocity gain for all sequencer voices and MIDI output: +50 is x1.5, +100 is x2, clipped at 127. Both persist with project settings; pbr moves to the last field.
+- **Pattern Scale 2/4/6/8/12/16/24/32:** hold PERFORMANCE, turn the encoder to preview, then click to confirm. A running change starts Step 1 on the next transport bar; stopped changes apply immediately. Confirmation enables `scl=pat`. Save the pattern/project to retain it.
+- At **12**, each 16-step page plays slots 1-12; slots 13-16 remain stored. Other divisions retain all 64 steps. At **32**, 64 steps take two bars; **6** and **24** provide triplet timing.
+- **Stray/Glide LFOs** (`str`/`gld`), with smooth random motion, Offset bias and Retrigger behavior. `ofs=63` is neutral.
+- **Common Voice-CC map** on the voice channels, including Snare CC112-118, LFO controls and destination selection. Global/Pch channels retain priority; the first matching voice wins on a shared channel.
+- **Snare noise envelope and second oscillator** with Mix/FM/Ring, kit storage, Morph and LFO/velocity/step destinations. Snare OSC/FM names and ordering follow Mutador, retaining PWM in place of Membrane.
+- Dedicated **SHIFT+2 Accent**, **SHIFT+3 MIDI Delay** and **SHIFT+4 Groove** windows stay out of regular PERF navigation. The separate VCA volume view is hidden; the VCAs remain active.
+
+See the [Performance chapter](manual/chapters/07_performance.md),
+[MIDI map](manual/chapters/05_midi_and_clock.md), and
+[latest session](docs/sessions/030-pattern-bank-freeze-investigation.md).
+The release build and native source/timing/storage tests passed. This does
+not establish sound, timing or CPU parity on the physical instrument.
+
+The performance corrections through 0.1.4 cover Morph updates, master `srt`
+across the full Morph range, the `lsh`/`lmp`/`lsr` load choices, and
+SHIFT + Step 1 pattern selection while retaining the PERF display.
+The user reported that 0.1.4 works on the physical LXR V2 on 2026-10-29.
+This is a targeted device check, not validation of every setting or old project.
+
+According to the project author, these performance issues had been reported
+to Erica Synths over several years. This fork records that account and the
+current fixes; it does not establish the history or status of upstream reports.
+The additional `Pch` MIDI control channel is separate import work under P01,
+and is not part of these longstanding performance corrections.
+
 > **Licence and trademarks:** the firmware source code is free software under the GNU GPL version 3
 > ([LICENSE](LICENSE)). You're welcome to study, change and share it, for example to write your own
 > updates for your LXR. The names **"Erica Synths" and "LXR"** and the **LXR hardware** are the property
@@ -17,12 +50,60 @@ work; its checkboxes do not claim that a feature has already been ported.
 > at your own risk: Erica Synths provides no support for self-built or modified firmware. See
 > [Licence, trademarks and hardware](#licence-trademarks-and-hardware) below and [NOTICE.md](NOTICE.md).
 
+0.1.6 additionally imports Mutador's Global drum-map/ANY fallback, chromatic
+Voice input without echo and live Pch-note master transpose. It includes the
+CC channel-index correction. Build and native tests pass; device testing is
+pending. See the [MIDI chapter](manual/chapters/05_midi_and_clock.md).
+
+0.1.7 completes the Mutador pitch calculation and adds PERF **gpt** and **pbr**.
+It is built and copied to the SD card; hardware validation is pending.
+
+0.1.8 adds PERF **gdc** next to **gpt**, plus **rst**, **csr**, BC **pSc**,
+and global **pst** on the next PERF page. Hold first/last pattern buttons
+to form a 606-style live loop. Source patterns remain editable and unchanged.
+The image is built, tested natively and copied to the card; hardware checks
+remain open. See the [sequencer chapter](manual/chapters/03_sequencer_and_patterns.md).
+
+0.1.10 adds the Velocity/Accent page (SHIFT + Step 2), MIDI Delay page
+(SHIFT + Step 3) and per-step chance scaling `cnt`. On the Delay page the
+instrument buttons and LEDs select incoming voices. The image passed the
+release build and native tests and was copied to the SD card. Hardware tests
+remain open; see [session 018](docs/sessions/018-accent-and-midi-delay.md).
+
+0.1.12 adds Mutador's four-point Groove with exact fine positions, source
+automation and Delay follow-up timing. SHIFT + Step 4 opens `shf/sh2/sh3/sh4`.
+The shapes are saved, while `lsh=off` preserves the live groove during loading.
+It also includes the project file-selection and edit-backup fixes from the
+local 0.1.11 build. Release and native tests passed; physical-device checks
+remain open. See [session 020](docs/sessions/020-four-point-groove.md).
+
 ## Updating your LXR
+
+Mutador 0.1.17 synchronizes the PLAY button and its LED with incoming MIDI
+START, CONTINUE and STOP. A local PLAY stop resets the step position; the
+next PLAY begins at Step 1 on the next MIDI Clock bar. See
+[session 025](docs/sessions/025-midi-transport-play-state.md).
+
+Mutador 0.1.16 adds Snare Layer (`slw/sla/slf/slm`), COPY gestures for
+individual steps, eight-step groups and tracks across patterns, plus a
+manual PLAY that can start at the next MIDI Clock bar boundary. Device tests
+for these changes are still pending; see [session 024](docs/sessions/024-copy-start-snare-layer.md).
+
+Mutador 0.1.15 adds the Snare Noise Envelope, Ring mode for Drum Voices 1–3,
+and adjustable MIDI Clock Offset in Global. The release image and native
+tests passed; sound and timing on the physical LXR still need testing. See
+[session 023](docs/sessions/023-snare-ring-clock.md).
+
+0.1.13 renames `kcm` to `lki`, groups the four load controls together and
+adds the explicit `cko=16sh` output for shuffled sixteenths. The user reported
+that 0.1.12 works; 0.1.13 passed the release build and clock tests and was
+copied to the card with hash verification. Its new display/output controls
+still need a device check. See [session 021](docs/sessions/021-load-labels-and-16sh-clock.md).
 
 Every LXR has a built-in updater (the bootloader) that installs new firmware from the SD card. You
 don't need any extra hardware:
 
-1. [Build the firmware](#building-the-firmware). This fork creates `LXR_V2_V1.7_Mutador0.1.2.img`.
+1. [Build the firmware](#building-the-firmware). The latest archived image is `LXR_V2_V1.7_Mutador0.1.26.img`.
 2. [Copy it to the SD card and install it](#installing-the-update) on the LXR.
 
 ### Building the firmware
@@ -70,19 +151,19 @@ When the build has finished it shows where the update file is and how to install
 ```
 ======================================================================
   Firmware update file:
-    .../lxr2-Mutador/build/release/LXR_V2_V1.7_Mutador0.1.2.img
+    .../lxr2-Mutador/build/release/LXR_V2_V1.7_Mutador0.1.26.img
   ...
 ```
 
 The base version `1.7` comes from `project(VERSION ...)` in
-[CMakeLists.txt](CMakeLists.txt). The `Mutador0.1.2` suffix identifies this
-experimental fork image. The startup screen still shows the base version.
-Two verified build artifacts and their hashes are in the
+[CMakeLists.txt](CMakeLists.txt). The `Mutador0.1.26` suffix identifies this
+experimental fork image. The startup screen shows `Mutador 0.1.26`.
+Verified build artifacts and their hashes are in the
 [firmware image archive](firmware-archive/README.md).
 
 ### Installing the update
 
-1. Copy `LXR_V2_V1.7_Mutador0.1.2.img` from `build/release/` to the top folder of the SD card. Delete any
+1. Copy `LXR_V2_V1.7_Mutador0.1.26.img` from `build/release/` to the top folder of the SD card. Delete any
    older `LXR*.img` files from the card: the updater installs the first one it finds.
    On a Mac, eject the card in Finder before you take it out. Finder also leaves hidden files starting
    with `._` on the card; the updater ignores them.
@@ -124,7 +205,7 @@ All files the build creates (in `build/<preset>/`):
 
 | File                     | Purpose                                                        |
 |--------------------------|----------------------------------------------------------------|
-| `LXR_V2_V1.7_Mutador0.1.2.img` | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
+| `LXR_V2_V1.7_Mutador0.1.26.img` | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
 | `LXR_V2_STM32F765.elf`   | Firmware with debug information, for a debugger               |
 | `LXR_V2_STM32F765.bin`   | Raw firmware image (from 0x08008000)                          |
 | `LXR_V2_STM32F765.hex`   | Intel HEX of the same                                         |
@@ -164,8 +245,8 @@ The `build/` folder is never committed to git.
 
 | Region   | Address                   | Size   | Contents                                              |
 |----------|---------------------------|--------|-------------------------------------------------------|
-| FLASH    | 0x08000000 – 0x08007FFF   | 32 KB  | Bootloader (`LXR_V2_STM32F765_Bootloader`)            |
-| FLASH    | 0x08008000 –              | 992 KB | This firmware (`VECT_TAB_OFFSET` 0x8000)              |
+| FLASH    | 0x08000000 Ã¢â‚¬â€œ 0x08007FFF   | 32 KB  | Bootloader (`LXR_V2_STM32F765_Bootloader`)            |
+| FLASH    | 0x08008000 Ã¢â‚¬â€œ              | 992 KB | This firmware (`VECT_TAB_OFFSET` 0x8000)              |
 | ITCM     | 0x00000000                | 16 KB  | `IN_ITCM_RAM` hot DSP code, copied there by `main()`  |
 | DTCM     | 0x20000000                | 128 KB | `INDTCM`/`INDTCMZ` data, DMA buffers, the stack       |
 | RAM      | 0x20020000                | 384 KB | `.data`, `.bss`, heap                                 |
@@ -247,7 +328,7 @@ To go back to a firmware-only build, clear the setting: `-DLXR_BOOTLOADER_HEX=` 
 The bootloader write-protects its own flash sector (sector 0) every time it boots, so on a unit that
 has run before, sector 0 cannot simply be erased. `flash_full` therefore clears that protection first;
 the new bootloader sets it again on its first boot. Other programming tools need the same step
-(in STM32CubeProgrammer: Option bytes → Write protection → uncheck nWRP0).
+(in STM32CubeProgrammer: Option bytes Ã¢â€ â€™ Write protection Ã¢â€ â€™ uncheck nWRP0).
 
 The OpenOCD settings can be changed with `LXR_OPENOCD_INTERFACE`, `LXR_OPENOCD_TRANSPORT`,
 `LXR_OPENOCD_SPEED` (default 1000 kHz) and `LXR_OPENOCD_WORKAREA` (default 0x8000). The defaults are

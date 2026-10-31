@@ -22,6 +22,8 @@
 #include "Soundengine/FxBus.h"
 
 INDTCMZ HiHatVoice hatVoice;
+static uint32_t hatTriggerTick;
+static uint8_t hatTriggerMask,hatTriggerVelocity,hatTriggerTickValid;
 
 //---------------------------------------------------
 void HiHat_setPan(const uint8_t pan)
@@ -34,6 +36,7 @@ void HiHat_setPan(const uint8_t pan)
 
 void HiHat_init()
 {
+	hatTriggerTickValid=0;
 	initOnePole(&hatVoice.FaderVolumeFilter);
 	setOnePoleCoef(&hatVoice.FaderVolumeFilter,0.1);
 
@@ -89,6 +92,18 @@ void HiHat_updatePan()
 //---------------------------------------------------
 void HiHat_trigger( uint8_t vel, uint8_t isOpen, const uint8_t note)
 {
+	uint8_t isHalfOpen;
+	if(!hatTriggerTickValid || hatTriggerTick != systick_ticks) {
+		hatTriggerTick=systick_ticks;
+		hatTriggerMask=0;
+		hatTriggerVelocity=vel;
+		hatTriggerTickValid=1;
+	} else if(vel>hatTriggerVelocity) {
+		hatTriggerVelocity=vel;
+	}
+	hatTriggerMask |= isOpen ? 0x02 : 0x01;
+	isHalfOpen=(hatTriggerMask==0x03);
+	if(isHalfOpen) vel=hatTriggerVelocity;
 	lfo_retrigger(5);
 
 	//update velocity modulation
@@ -114,7 +129,9 @@ void HiHat_trigger( uint8_t vel, uint8_t isOpen, const uint8_t note)
 	osc_setBaseNote(&hatVoice.modOsc2,note);
 
 	hatVoice.isOpen = isOpen;
-	hatVoice.oscVolEg.decay = isOpen?hatVoice.decayOpen:hatVoice.decayClosed;
+	hatVoice.oscVolEg.decay = isHalfOpen
+		? sqrtf(hatVoice.decayClosed*hatVoice.decayOpen)
+		: (isOpen?hatVoice.decayOpen:hatVoice.decayClosed);
 
 	slopeEg2_trigger(&hatVoice.oscVolEg);
 	hatVoice.velo = vel/127.f;

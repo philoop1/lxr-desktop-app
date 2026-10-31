@@ -37,9 +37,15 @@
 
 //called by midi clock
 void sync_tick();
+void sync_tickAtCycles(uint32_t cycles);
 void sync_midiResetPosition();
 void sync_midiStartStop(uint8_t isStart);
 uint8_t sync_getClockCnt();
+void sync_setClockOffset(uint8_t tenths,uint8_t hundredths);
+uint8_t sync_shouldLeadStep(void);
+void sync_markLeadStep(void);
+void sync_requestStartOnNextBar(void);
+uint8_t sync_processStartLead(void);
 extern uint32_t sync_delayedStepTimer;
 
 #endif /* CLOCKSYNC_H_ */

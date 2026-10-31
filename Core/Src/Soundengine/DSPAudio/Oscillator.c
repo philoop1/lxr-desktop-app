@@ -787,31 +787,87 @@ void osc_calcUserSampleFreq(OscInfo* osc)
 		}
  }
  //-----------------------------------------------------------
- void osc_setBaseNote(OscInfo* osc, uint8_t baseNote)
+static int8_t osc_globalPitchOffset = 0;
+static int8_t osc_notePitchOffset = 0;
+static float osc_globalPitchBend = 0.f;
+static const float OSC_SEMITONE_UP = 1.0594630943592953f;
+
+static float osc_calcMidiNoteFrequency(float note)
+{
+	float octaveScale = 1.f;
+
+	while(note > 127)
+	{
+		note -= 12;
+		octaveScale *= 2.f;
+	}
+
+	while(note < 0)
+	{
+		note += 12;
+		octaveScale *= 0.5f;
+	}
+
+	const int16_t noteIndex = (int16_t)note;
+	const float frac = note - (float)noteIndex;
+	const float base = MidiNoteFrequencies[noteIndex];
+	const float next = (noteIndex < 127) ? MidiNoteFrequencies[noteIndex + 1] : (base * OSC_SEMITONE_UP);
+
+	return (base + ((next - base) * frac)) * octaveScale;
+}
+
+void osc_setBaseNote(OscInfo* osc, uint8_t baseNote)
  {
 
 	 //get fine tune
 	 const float cent = midiParser_calcDetune(osc->midiFreq&0xff);
 	 //calc coarse tune
-	 int16_t note =  (osc->midiFreq>>8) + (baseNote-SEQ_DEFAULT_NOTE);
-	 if(note>127)note=127;
-	 if(note<0)note=0;
+	 const float note =  (osc->midiFreq>>8) + (baseNote-SEQ_DEFAULT_NOTE) + osc_globalPitchOffset + osc_notePitchOffset + osc_globalPitchBend + osc->pitchBend;
 
-	 osc->freq = MidiNoteFrequencies[note]*cent;
+	 osc->freq = osc_calcMidiNoteFrequency(note)*cent;
 	 osc->baseNote = baseNote;
- };
+ }
 
- //-----------------------------------------------------------
- IN_ITCM_RAM void osc_recalcFreq(OscInfo* osc)
+void osc_recalcFreq(OscInfo* osc)
  {
 	 //get fine tune
 	 const float cent = midiParser_calcDetune(osc->midiFreq&0xff);
 	 //calc coarse tune
-	 int16_t note =  (osc->midiFreq>>8) + (osc->baseNote-SEQ_DEFAULT_NOTE);
+	 const float note =  (osc->midiFreq>>8) + (osc->baseNote-SEQ_DEFAULT_NOTE) + osc_globalPitchOffset + osc_notePitchOffset + osc_globalPitchBend + osc->pitchBend;
 
-	 if(note>127)note=127;
- 	 if(note<0)note=0;
-
-	 osc->freq = MidiNoteFrequencies[note]*cent;
+	 osc->freq = osc_calcMidiNoteFrequency(note)*cent;
  }
- //-----------------------------------------------------------
+
+void osc_setGlobalPitchOffset(uint8_t value)
+ {
+	 int16_t offset = (int16_t)value - 63;
+
+	 if(offset < -63)
+		 offset = -63;
+	 else if(offset > 64)
+		 offset = 64;
+
+	 osc_globalPitchOffset = (int8_t)offset;
+}
+
+void osc_setNotePitchOffset(int8_t offset)
+{
+	if(offset < -63)
+		offset = -63;
+	else if(offset > 64)
+		offset = 64;
+
+	osc_notePitchOffset = offset;
+}
+
+void osc_setGlobalPitchBend(int16_t bend, uint8_t range)
+{
+	const float semitones = (bend / 8192.f) * range;
+	osc_globalPitchBend = semitones;
+}
+
+void osc_setPitchBend(OscInfo* osc, int16_t bend, uint8_t range)
+{
+	osc->pitchBend = (bend / 8192.f) * range;
+	osc_recalcFreq(osc);
+}
