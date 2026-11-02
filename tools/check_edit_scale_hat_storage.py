@@ -20,13 +20,17 @@ prelude=r'''
 #include <math.h>
 #include "Parameters.h"
 #define PERFORMANCE_EXTRA_BYTES 20
+#define PERF_SPEED_NEUTRAL 3
 #define NUM_PATTERN 64
+enum {TRIG_COND_ALWAYS,TRIG_COND_FIRST,TRIG_COND_NOT_FIRST,
+      TRIG_COND_FILL,TRIG_COND_NOT_FILL,TRIG_COND_RATIO_BASE,
+      TRIG_COND_PRE=TRIG_COND_RATIO_BASE+36,TRIG_COND_NOT_PRE,TRIG_COND_NEI,TRIG_COND_NOT_NEI,TRIG_COND_LAST,TRIG_COND_NOT_LAST,TRIG_COND_COUNT};
 static unsigned checks;
 static void check(int ok,const char *what){checks++;if(!ok){fprintf(stderr,"FAIL %s\n",what);exit(1);}}
 '''
 prelude+=read(ROOT/'Core/Inc/Preset/SeqStep.h')
 prelude+=r'''
-struct {Step seq_subStepPattern[64][7][64];StepTiming seq_stepTiming[64][7][64];uint8_t flamProbability[64][7][64];struct{uint8_t scale;}seq_patternSettings[64];}seq_patternSet;
+struct {Step seq_subStepPattern[64][7][64];StepTiming seq_stepTiming[64][7][64];uint8_t flamProbability[64][7][64];uint8_t trigCondition[64][7][64];struct{uint8_t scale;}seq_patternSettings[64];}seq_patternSet;
 typedef struct {uint16_t param;} ModTarg;
 const ModTarg modTargets[3]={{0},{5},{130}};
 uint8_t getNumModTargets(void){return 3;}
@@ -109,7 +113,7 @@ int main(void){
  stepEdit_clear();check(!stepEdit_mask(2,3),"mode/context reset clears group");
  // The new grid keeps all steps except the last four slots of each page at /12.
  for(unsigned mode=1;mode<=8;mode++)for(unsigned length=1;length<=64;length++) {
-   perf_scaleSet((uint8_t)mode,0);
+   perf_scaleSetPattern(mode?perf_scaleDivision((uint8_t)(mode-1)):16,0);
    unsigned count=0;
    for(unsigned i=0;i<length;i++) {
      unsigned allowed=mode!=5 || (i%16)<12;
@@ -122,7 +126,7 @@ int main(void){
      check(perf_scaleNext(source,(uint8_t)length)==perf_scaleToSource((uint8_t)((i+1)%count),(uint8_t)length),"new scale wrap");
    }
  }
- perf_scaleSet(6,0);perf_scaleSet(5,1);check(perf_scaleMode()==16,"running scale waits for confirmation boundary");
+ perf_scaleSetPattern(16,0);perf_scaleSetPattern(12,1);check(perf_scaleMode()==16,"running scale waits for confirmation boundary");
  check(!perf_scaleCommitOnBar(767)&&perf_scaleMode()==16,"scale waits until downbeat");
  check(perf_scaleCommitOnBar(0)&&perf_scaleMode()==12,"pending scale commits on downbeat");
  // Same-tick open/closed hits must match original in both orders and every velocity pair.
@@ -157,7 +161,7 @@ int main(void){
  check(clockCoarse==37&&clockFine==4,"clock offset restored");
  disk[7]='3';fileLength=29;uint8_t v3sum=0;for(unsigned i=8;i<28;i++)v3sum=(uint8_t)(v3sum+disk[i]);disk[28]=v3sum;
  activeParameters[PAR_GLOBAL_SCALE]=6;
- preset_loadPerformanceExtension();check(activeParameters[PAR_PERF_RANDOM_VELO]==100&&activeParameters[PAR_PERF_AVL]==100&&activeParameters[PAR_GLOBAL_SCALE]==6,"v3 preserves scale and defaults both new velocity controls");
+ preset_loadPerformanceExtension();check(activeParameters[PAR_PERF_RANDOM_VELO]==100&&activeParameters[PAR_PERF_AVL]==100&&activeParameters[PAR_GLOBAL_SCALE]==PERF_SPEED_NEUTRAL,"v3 resets spd and defaults both new velocity controls");
  disk[7]='4';fileLength=31;disk[28]=255;disk[29]=255;uint8_t v4sum=0;for(unsigned i=8;i<30;i++)v4sum=(uint8_t)(v4sum+disk[i]);disk[30]=v4sum;
  preset_loadPerformanceExtension();check(activeParameters[PAR_PERF_RANDOM_VELO]==100&&activeParameters[PAR_PERF_AVL]==100,"v4 invalid velocity fields default neutral");
  disk[7]='1';fileLength=27;uint8_t oldSum=0;for(unsigned i=8;i<26;i++)oldSum=(uint8_t)(oldSum+disk[i]);disk[26]=oldSum;

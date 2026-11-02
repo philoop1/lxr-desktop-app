@@ -78,3 +78,16 @@ ends an incomplete operation. Pattern bank selection addresses all 64 slots.
 ## Flam Probability (0.2)
 
 The Step screen now has fpr next to the ordinary Step probability, Flam and Shift controls. The normal probability first decides whether the Step sounds. If it does, fpr decides whether its Flam repeats also sound. fpr=0 leaves only the main hit; fpr=100 keeps the full Flam. This decision is shared by all repeats of that Step. fpr is copied with Steps and saved in an FLP1 trailer after the existing pattern scale; older patterns load with fpr=100.
+
+## Trig Conditions (0.2.9)
+
+`cnd` follows `prob` on the first Step screen. A Step sounds only when its condition is true and its existing probability passes. Available conditions are `---` (always), `1st` (first track loop only), `n1s` (every loop except the first), `fil` (Fill on), `nfl` (Fill off), and every `A:B` combination from `1:1` through `8:8` where A is at most B. `1:2` plays on loops 1, 3, 5, ...; `2:4` on loops 2, 6, 10, ... . Each track counts its own loops and resets on transport restart or pattern change. Shifted Steps use their source position's loop. Flam repeats share the Step's condition.
+
+Fill is currently a latched `fil` on/off control on the second half of the SHIFT + Step 4 Groove page. It defaults to off and is not saved. A dedicated Fill button may be added later. Since 0.2.10, `pre`/`npr` follow the most recent evaluated condition on the same track, ignoring PRE variants as history sources. `nei`/`nne` follow the preceding track (track 1 has no neighbor). A failed Step probability counts as false. A result is retained for the whole Flam group. `lst`/`nls` test whether this pattern is due to leave at its next boundary, including a queued change, Song end/next entry or the performance pattern loop. A change queued after a Step has passed cannot affect that earlier Step.
+
+Conditions are copied with Steps, tracks and patterns. New pattern saves append a `CND1` block after the Flam Probability data; older patterns load with `cnd=---` for every Step.
+
+## Scale Transform (0.2.10)
+
+`sct` is a live control on the second PERF page (Mutador 0.2.18). It reads the active rate: on 2/4/8/16/32 it offers `4 3a 3b 3c`, on 6/12/24 it offers `3 4a 4b 4c`. `3a/3b/3c` leave out step 4, 2 or 3 of each four and play the rest as triplets, so `1 2 3`, `1 3 4` or `1 2 4`. `4a/4b/4c` play three stored steps across four slots as `1 2 3 -`, `1 - 2 3` or `1 2 - 3`. Each pair is an exact inverse and a bar keeps its length. A change applies on the next quarter from rate 12 upward, on the next half note at 6 and 8 and on the next bar at 2 and 4, without restarting. `sct` is not stored and starts on `4`/`3`. Pch CC 88-91 select its four positions.
+

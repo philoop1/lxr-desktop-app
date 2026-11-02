@@ -111,6 +111,7 @@ enum PageNames
 	KIT_SAVE_PAGE_OK,
 	SONG_MODE_PAGE,
 	LFO_EXTRA1_PAGE,LFO_EXTRA2_PAGE,LFO_EXTRA3_PAGE,LFO_EXTRA4_PAGE,LFO_EXTRA5_PAGE,LFO_EXTRA6_PAGE,
+	TRANSFER_PAGE,
 
 	//must be last... special case
 	//CLEAR_PAGE,
@@ -136,8 +137,10 @@ enum PageNames
 #define PERF_DELAY_SUBPAGE 2
 #define PERF_ACCENT_SUBPAGE 3
 #define PERF_GROOVE_SUBPAGE 4
+#define PERF_SEND_SUBPAGE 6
 void menu_openPerformanceLayer(uint8_t subPage);
 void menu_openLfoExtra(uint8_t secondScreen);
+uint8_t menu_cycleVoiceLfo(uint8_t buttonNr);
 
 enum NamesEnum
 {
@@ -346,6 +349,8 @@ enum NamesEnum
 	TEXT_PERF_AVL,
 	TEXT_STEP_FLAM_PROB,
 	TEXT_LFO_SLEW,TEXT_LFO_POL,
+	TEXT_STEP_CONDITION,TEXT_PERF_FILL,
+	TEXT_SCALE_TRANSFORM,
 
 
 
@@ -521,6 +526,8 @@ enum shortNamesEnum
 	,SHORT_SNARE_LAYER_AMOUNT
 	,SHORT_SNARE_LAYER_FREQ
 	,SHORT_SNARE_LAYER_MODE, SHORT_PATTERN_SCALE, SHORT_PERF_RANDOM_VELO, SHORT_PERF_AVL, SHORT_STEP_FLAM_PROB, SHORT_LFO_SLEW, SHORT_LFO_POL
+	,SHORT_STEP_CONDITION,SHORT_PERF_FILL
+	,SHORT_SCALE_TRANSFORM
 
 	
 };
@@ -713,6 +720,8 @@ enum longNamesEnum
 	,LONG_SNARE_LAYER_AMOUNT
 	,LONG_SNARE_LAYER_FREQ
 	,LONG_SNARE_LAYER_MODE, LONG_PATTERN_SCALE, LONG_PERF_RANDOM_VELO, LONG_PERF_AVL, LONG_STEP_FLAM_PROB, LONG_LFO_SLEW, LONG_LFO_POL
+	,LONG_STEP_CONDITION,LONG_PERF_FILL
+	,LONG_SCALE_TRANSFORM
 	
 };
 
@@ -868,6 +877,11 @@ void menu_setNumSamples(uint8_t num);
 void menu_resetSaveParameters();
 //-----------------------------------------------------------------
 void menu_setLoadSaveCategory(uint8_t cat);
+uint8_t menu_isProjectLoadSavePage(uint8_t exportMode);
+void menu_openTransfer(uint8_t exportMode);
+uint8_t menu_isTransferActive(void);
+void menu_transferSelectType(uint8_t pattern);
+void menu_transferSelectProject(void);
 //-----------------------------------------------------------------
 void menu_init();
 //-----------------------------------------------------------------

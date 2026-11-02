@@ -48,7 +48,7 @@ void seq_setPendingPatternActive();
 
 #define SEQ_PRESCALER_MASK 	0x03
 #define MIDI_PRESCALER_MASK	0x04
-uint8_t seq_prescaleCounter = 0;
+uint16_t seq_prescaleCounter = 0;
 static uint8_t seq_finePhase,seq_usesFineClock;
 static uint16_t seq_scaleBarFrame;
 static uint8_t seq_scaleRestart;
@@ -112,6 +112,11 @@ struct
 	uint8_t next;
 }seq_rndValue[NUM_TRACKS];
 static const PerfTrack *seq_perfTracks[NUM_TRACKS];
+static uint32_t seq_conditionLoop[NUM_TRACKS];
+static uint8_t seq_conditionTimingOnly;
+static uint8_t seq_conditionHistory[NUM_TRACKS],seq_conditionHistoryValid[NUM_TRACKS];
+static struct {uint32_t id;uint8_t result;} seq_conditionCache[NUM_TRACKS][8];
+static uint8_t seq_conditionCacheIndex[NUM_TRACKS];
 static PerfTrack seq_scaledTracks[NUM_TRACKS];
 static uint8_t seq_triggerSourceStep[NUM_TRACKS]={255,255,255,255,255,255,255};
 static uint32_t seq_triggerEventId;
@@ -138,6 +143,62 @@ static void seq_perfAdvance(uint8_t track, uint8_t timeline, uint8_t length)
 	seq_rndValue[track].prev=state->prev.probability;
 	seq_rndValue[track].current=state->current.probability;
 	seq_rndValue[track].next=state->next.probability;
+}
+
+/* Conditions belong to the planned step. A shifted step may come from the
+ * preceding or following track loop, so use its timeline when counting. */
+static uint8_t seq_conditionLastLoop(void);
+static uint8_t seq_conditionAllows(uint8_t track,const PerfStep *planned,int8_t relative)
+{
+	if(!planned || track>=NUM_TRACKS || planned->source>=NUM_STEPS)return 0;
+	uint8_t condition=seq_patternSet.trigCondition[seq_activePattern][track][planned->source];
+	if(condition==TRIG_COND_ALWAYS || condition>=TRIG_COND_COUNT)return 1;
+	int32_t loop=(int32_t)seq_conditionLoop[track];
+	uint8_t current=(uint8_t)seq_stepIndex[track];
+	if(relative>0 && planned->timeline<=current)loop++;
+	else if(relative<0 && planned->timeline>=current)loop--;
+	if(loop<0)return 0;
+	switch(condition) {
+	case TRIG_COND_FIRST:return loop==0;
+	case TRIG_COND_NOT_FIRST:return loop!=0;
+	case TRIG_COND_FILL:return activeParameters[PAR_PERF_FILL]!=0;
+	case TRIG_COND_NOT_FILL:return activeParameters[PAR_PERF_FILL]==0;
+	case TRIG_COND_PRE:return seq_conditionHistoryValid[track] && seq_conditionHistory[track];
+	case TRIG_COND_NOT_PRE:return !seq_conditionHistoryValid[track] || !seq_conditionHistory[track];
+	case TRIG_COND_NEI:return track && seq_conditionHistoryValid[track-1] && seq_conditionHistory[track-1];
+	case TRIG_COND_NOT_NEI:return !track || !seq_conditionHistoryValid[track-1] || !seq_conditionHistory[track-1];
+	case TRIG_COND_LAST:return seq_conditionLastLoop();
+	case TRIG_COND_NOT_LAST:return !seq_conditionLastLoop();
+	default: {
+		uint8_t ordinal=(uint8_t)(condition-TRIG_COND_RATIO_BASE);
+		for(uint8_t b=1;b<=8;b++) {
+			if(ordinal<b)return (uint32_t)loop%b==ordinal;
+			ordinal-=b;
+		}
+		return 1;
+	}
+	}
+}
+
+/* Called only when the event is due, never while inspecting lookahead timing. */
+static uint8_t seq_conditionResolve(uint8_t track,const PerfStep *planned,int8_t relative)
+{
+	if(!planned || track>=NUM_TRACKS)return 0;
+	for(uint8_t i=0;i<8;i++)
+		if(seq_conditionCache[track][i].id==planned->eventId && planned->eventId)
+			return seq_conditionCache[track][i].result;
+	uint8_t condition=seq_patternSet.trigCondition[seq_activePattern][track][planned->source];
+	uint8_t result=seq_conditionAllows(track,planned,relative) &&
+		planned->probability<=perf_scaleProbability(seq_patternSet.seq_subStepPattern[seq_activePattern][track][planned->source].prob);
+	uint8_t index=seq_conditionCacheIndex[track]++&7u;
+	seq_conditionCache[track][index].id=planned->eventId;
+	seq_conditionCache[track][index].result=result;
+	if(condition!=TRIG_COND_PRE && condition!=TRIG_COND_NOT_PRE &&
+	   (condition!=TRIG_COND_ALWAYS || seq_patternSet.seq_subStepPattern[seq_activePattern][track][planned->source].prob<100)) {
+		seq_conditionHistory[track]=result;
+		seq_conditionHistoryValid[track]=1;
+	}
+	return result;
 }
 
 
@@ -190,6 +251,17 @@ PatternBackupBuffer patternBackupBuffer;
 uint8_t seq_songData[NUM_KIT_SLOTS][MAX_SONG_LENGTH];
 uint8_t *seq_activeSong;
 uint8_t seq_songPositionPointer = 0;	//for song playback, current song position
+static uint8_t seq_conditionLastLoop(void)
+{
+	if(seq_pendingPattern!=seq_activePattern || seq_loadPendigFlag)return 1;
+	if(seq_songModeEnabled && seq_activeSong) {
+		uint8_t next=seq_activeSong[(uint8_t)(seq_songPositionPointer+1u)%MAX_SONG_LENGTH];
+		if(next==SONG_END)return 1;
+		if(next==SONG_LOOP)next=seq_activeSong[0];
+		return next!=seq_activePattern;
+	}
+	return perf_nextPattern(seq_activePattern)!=seq_activePattern;
+}
 //uint8_t seq_bankPreloadPendingFlag = NO_PRELOAD_PENDING;
 
 //for the automation tracks each track needs 2 modNodes
@@ -266,6 +338,7 @@ void seq_copyPatternToBackupBuffer(uint8_t patternNr)
 	memcpy(&patternBackupBuffer.seq_subStepPattern, &seq_patternSet.seq_subStepPattern[patternNr],  sizeof(Step)*NUM_TRACKS*NUM_STEPS);
 	memcpy(&patternBackupBuffer.seq_stepTiming, &seq_patternSet.seq_stepTiming[patternNr],  sizeof(uint8_t)*NUM_TRACKS*NUM_STEPS);
 	memcpy(&patternBackupBuffer.flamProbability, &seq_patternSet.flamProbability[patternNr], NUM_TRACKS*NUM_STEPS);
+	memcpy(&patternBackupBuffer.trigCondition, &seq_patternSet.trigCondition[patternNr], NUM_TRACKS*NUM_STEPS);
 	for(uint8_t i=0; i<NUM_BARS; i++)
 	{
 		memcpy(&patternBackupBuffer.seq_mainSteps[i], &seq_patternSet.seq_mainSteps[i][patternNr],  sizeof(uint16_t)*NUM_TRACKS);
@@ -277,6 +350,7 @@ void seq_copyPatternToBackupBuffer(uint8_t patternNr)
 	patternBackupBuffer.shuffle = seq_patternSet.shuffle[patternNr];;
 	patternBackupBuffer.kitNr = seq_patternSet.kitNr[patternNr];
 	patternBackupBuffer.scale=seq_patternSet.scale[patternNr];
+	patternBackupBuffer.transform=seq_patternSet.transform[patternNr];
 
 }
 //------------------------------------------------------------------------------
@@ -285,6 +359,7 @@ void seq_copyBackupBufferToPattern(uint8_t patternNr)
 	memcpy(&seq_patternSet.seq_subStepPattern[patternNr], &patternBackupBuffer.seq_subStepPattern,  sizeof(Step)*NUM_TRACKS*NUM_STEPS);
 	memcpy(&seq_patternSet.seq_stepTiming[patternNr]    , &patternBackupBuffer.seq_stepTiming,      sizeof(uint8_t)*NUM_TRACKS*NUM_STEPS);
 	memcpy(&seq_patternSet.flamProbability[patternNr], &patternBackupBuffer.flamProbability, NUM_TRACKS*NUM_STEPS);
+	memcpy(&seq_patternSet.trigCondition[patternNr], &patternBackupBuffer.trigCondition, NUM_TRACKS*NUM_STEPS);
 	for(uint8_t i=0; i<NUM_BARS; i++)
 	{
 		memcpy(&seq_patternSet.seq_mainSteps[i][patternNr], &patternBackupBuffer.seq_mainSteps[i],  sizeof(uint16_t)*NUM_TRACKS);
@@ -294,6 +369,7 @@ void seq_copyBackupBufferToPattern(uint8_t patternNr)
 	seq_patternSet.shuffle[patternNr] = patternBackupBuffer.shuffle;
 	seq_patternSet.kitNr[patternNr] = patternBackupBuffer.kitNr;
 	seq_patternSet.scale[patternNr]=patternBackupBuffer.scale;
+	seq_patternSet.transform[patternNr]=patternBackupBuffer.transform;
 }
 /*
 //------------------------------------------------------------------------------
@@ -1017,6 +1093,11 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 #else
 		uint8_t currentStepActive = seq_intIsMainStepActive(track,step,seq_activePattern);
 		if(!currentStepActive) return 0;
+		const PerfTrack *conditionTrack=seq_perfTracks[track];
+		const PerfStep *planned=conditionTrack ?
+			(stepPos==STEP_PREV ? &conditionTrack->prev :
+			 stepPos==STEP_NEXT ? &conditionTrack->next : &conditionTrack->current) : 0;
+		if(!seq_conditionTimingOnly && !seq_conditionAllows(track,planned,stepPos==STEP_PREV?-1:stepPos==STEP_NEXT?1:0))return 0;
 
 
 		const  uint8_t flamCurrentStep = seq_patternSet.seq_stepTiming[seq_activePattern][track][step].flam;
@@ -1025,7 +1106,7 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 		uint32_t stepPattern;
 
 		//check probability
-		switch(stepPos)
+		if(!seq_conditionTimingOnly)switch(stepPos)
 		{
 		case STEP_PREV:
 			if( (seq_rndValue[track].prev) > perf_scaleProbability(seq_patternSet.seq_subStepPattern[seq_activePattern][track][step].prob) ) currentStepActive = 0;
@@ -1179,14 +1260,19 @@ void seq_processFlam(uint8_t idx)
 			 * - current step data
 			 * - negative shifted data from the next step
 			 */
+			seq_conditionTimingOnly=1;
 			uint32_t currentStepPattern = state->current.drop ? 0 : seq_getShiftFlamPattern(track, currentStep, STEP_CURRENT);
 			uint32_t nextStepPattern 	= state->next.drop ? 0 : seq_getShiftFlamPattern(track, nextStep, STEP_NEXT);
 			uint32_t prevStepPattern 	= state->prev.drop ? 0 : seq_getShiftFlamPattern(track, prevStep, STEP_PREV);
+			seq_conditionTimingOnly=0;
 
 			//calc priotity (next > current > prev)
 			uint8_t prevActive 		= (prevStepPattern 		& (1UL<<(23-idx)) ) != 0;
 			uint8_t currentActive 	= (currentStepPattern 	& (1UL<<(23-idx)) ) != 0;
 			uint8_t nextActive 		= (nextStepPattern 		& (1UL<<(23-idx)) ) != 0;
+			if(prevActive)prevActive=seq_conditionResolve(track,&state->prev,-1);
+			if(currentActive)currentActive=seq_conditionResolve(track,&state->current,0);
+			if(nextActive)nextActive=seq_conditionResolve(track,&state->next,1);
 
 			if(nextActive)
 			{
@@ -1345,12 +1431,12 @@ static void seq_processGrooveFine(uint8_t frame)
             uint8_t source=planned->source;
             if(planned->drop || !seq_intIsMainStepActive(track,source,seq_activePattern)) continue;
             const Step *step=&seq_patternSet.seq_subStepPattern[seq_activePattern][track][source];
-            if(planned->probability>perf_scaleProbability(step->prob)) continue;
             uint32_t pattern=flamIdxToPattern(seq_patternSet.seq_stepTiming[seq_activePattern][track][source].flam);
             if(planned->flamRoll>seq_patternSet.flamProbability[seq_activePattern][track][source])
                 pattern &= (1UL<<23);
             int8_t shift=getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][source].shift);
             if(!perf_grooveDue(&seq_groove,pattern,shift,planned->timeline,n,frame)) continue;
+			if(!seq_conditionResolve(track,planned,n))continue;
             if(perf_allowHit(seq_perfRandom)) {
                 seq_triggerSourceStep[track]=source;
                 seq_triggerEventId=planned->eventId;
@@ -1386,6 +1472,23 @@ uint8_t seq_applyPendingScale(void)
     menu_repaint();
     return 1;
 }
+/* Called on a group edge, so the pattern keeps its place. Dropping a step may
+ * have left a track short of its group end: step on from the group end. */
+uint8_t seq_applyPendingTransform(void)
+{
+    if(!seq_running || !perf_transformCommit())return 0;
+    const uint8_t mask=perf_scaleGroupMask();
+    for(uint8_t i=0;i<NUM_TRACKS;i++) {
+        uint8_t length=seq_patternSet.length[seq_activePattern][i];
+        if(!length||length>64)length=16;
+        if(seq_stepIndex[i]<0)continue;
+        uint8_t step=(uint8_t)(seq_stepIndex[i]|mask);
+        seq_stepIndex[i]=(int8_t)(step<length?step:length-1u);
+    }
+    perf_scaleSlotReset();
+    menu_repaint();
+    return 1;
+}
 static void seq_processScaleFrame(uint8_t frame)
 {
     if(perf_grooveActive(&seq_groove)) {
@@ -1416,8 +1519,9 @@ static void seq_processFineFrame(void)
     const uint16_t rawFrame=(uint16_t)(seq_prescaleCounter*2u+seq_finePhase);
     const uint16_t span=perf_scaleFrames();
     if(!seq_finePhase) {
-        trigger_clockTick(0,seq_prescaleCounter);
-        if(!seq_getExtSync() && seq_prescaleCounter%MIDI_PRESCALER_MASK==0)
+        trigger_clockTick(0,(uint16_t)(seq_scaleBarFrame/2u));
+        /* Step length may not divide the clock, so count from the bar. */
+        if(!seq_getExtSync() && !(seq_scaleBarFrame%(2u*MIDI_PRESCALER_MASK)))
             seq_sendRealtime(MIDI_CLOCK);
     }
     seq_delayFiredMask=0;
@@ -1425,7 +1529,7 @@ static void seq_processFineFrame(void)
     // Cover every canonical Flam/Groove frame, including odd frames at /32.
     const uint8_t first=(uint8_t)((rawFrame*48u+span-1u)/span);
     const uint8_t end=(uint8_t)(((rawFrame+1u)*48u+span-1u)/span);
-    for(uint8_t frame=first;frame<end;frame++)seq_processScaleFrame(frame);
+    if(!perf_scaleInGap())for(uint8_t frame=first;frame<end;frame++)seq_processScaleFrame(frame);
     seq_scaleBarFrame=(uint16_t)((seq_scaleBarFrame+1u)%768u);
 }
 
@@ -1451,6 +1555,7 @@ void seq_MidiSyncQueue(uint8_t cnt)
 
 IN_ITCM_RAM void seq_nextStep()
 {
+  if(seq_running && perf_scaleSlotIsGap())return;
   midi_process_block = 1;
 	led_blinkHandler(); //blink leds in sync to tempo/seq
 
@@ -1516,7 +1621,8 @@ IN_ITCM_RAM void seq_nextStep()
 	}
 
 	//---------- now check if the master track is at a full beat position to flash the start/stop button --------
-	if((masterStepPos&3) == 0)
+	const uint8_t beatStep=perf_scaleIsTernary()?(uint8_t)(masterStepPos%3u):(uint8_t)(masterStepPos&3u);
+	if(beatStep == 0)
 	{
 		//&32 <=> %32
 		//a quarter beat occured (multiple of 4 steps in the 16 step pattern)
@@ -1524,7 +1630,7 @@ IN_ITCM_RAM void seq_nextStep()
 		led_setValue(1,LED_START_STOP);
 
 	}
-	else if ((masterStepPos&3) == 1)
+	else if (beatStep == 1)
 	{
 		//TODO datenmenge zur front reduzieren
 		//turn it of again on the next step
@@ -1540,7 +1646,9 @@ IN_ITCM_RAM void seq_nextStep()
 	{
 		seqlen=seq_patternSet.length[seq_activePattern][i];
         if(!seqlen||seqlen>64)seqlen=16;
-        seq_stepIndex[i]=(int8_t)perf_scaleNext(seq_stepIndex[i],seqlen);
+		int8_t oldStep=seq_stepIndex[i];
+		seq_stepIndex[i]=(int8_t)perf_scaleNext(seq_stepIndex[i],seqlen);
+		if(seq_stepIndex[i]==0 && oldStep>=0)seq_conditionLoop[i]++;
 
 
 		seq_perfAdvance((uint8_t)i,seq_stepIndex[i],seqlen);
@@ -1865,6 +1973,8 @@ float seq_getElapsedStepTimePercent()
     if(rest<seq_deltaT) seq_deltaT-=rest;
     uint8_t restarted=0;
     if(seq_getExtSync()!=2 && !seq_scaleBarFrame)restarted=seq_applyPendingScale();
+    if(seq_getExtSync()!=2 && !restarted && !seq_prescaleCounter && !seq_finePhase &&
+       perf_transformBoundary(seq_scaleBarFrame))seq_applyPendingTransform();
     if(restarted || (!seq_getExtSync() && !seq_prescaleCounter && !seq_finePhase))
         seq_nextStep();
     seq_processFineFrame();
@@ -1973,8 +2083,9 @@ void seq_resetPosition()
 void seq_setRunning(uint8_t isRunning)
 {
 	seq_running = isRunning;
-	if(isRunning){perf_scaleSetPattern(seq_patternSet.scale[seq_activePattern],0);seq_scaleBarFrame=0;seq_scaleRestart=0;}
-	if(!isRunning)perf_scaleCommit();
+	if(isRunning){perf_scaleSetPattern(seq_patternSet.scale[seq_activePattern],0);
+		seq_scaleBarFrame=0;seq_scaleRestart=0;}
+	if(!isRunning){perf_scaleCommit();perf_transformCommit();}
 	//jump to 1st step if sequencer is stopped
 	if(!seq_running)
 	{
@@ -2566,6 +2677,7 @@ void seq_clearTrack(uint8_t trackNr, uint8_t pattern)
 		seq_patternSet.seq_stepTiming[pattern][trackNr][k].flam = 0;
 		seq_patternSet.seq_stepTiming[pattern][trackNr][k].shift = 7;   // 7 = no shift
 		seq_patternSet.flamProbability[pattern][trackNr][k] = 100;
+		seq_patternSet.trigCondition[pattern][trackNr][k] = TRIG_COND_ALWAYS;
 
 		//every 1st step in a substep pattern active
 		if( (k%8) == 0)
@@ -2584,8 +2696,20 @@ void seq_setPatternScale(uint8_t pattern,uint8_t scale)
 {
     if(pattern>=NUM_PATTERN)return;
     scale=perf_scaleDivision(scale);
+    /* Rates above 16 need more than one page for a bar. Tracks on the default
+     * length follow the rate; hand-set lengths stay. */
+    const uint8_t oldLength=seq_patternSet.scale[pattern]>16?seq_patternSet.scale[pattern]:16;
+    const uint8_t newLength=scale>16?scale:16;
+    for(uint8_t track=0;track<NUM_TRACKS;track++) {
+        const uint8_t length=seq_patternSet.length[pattern][track];
+        if(length && length!=oldLength)continue;
+        seq_patternSet.length[pattern][track]=newLength;
+        if(pattern==seq_activePattern)patternBackupBuffer.length[track]=newLength;
+    }
     seq_patternSet.scale[pattern]=scale;
     if(pattern==seq_activePattern) {
+        /* Leaving a pattern restores it from the backup, which holds this too. */
+        patternBackupBuffer.scale=scale;
         activeParameters[PAR_PATTERN_SCALE]=perf_scaleIndex(scale);
         perf_scaleSetPattern(scale,seq_running);
     }
@@ -2593,6 +2717,7 @@ void seq_setPatternScale(uint8_t pattern,uint8_t scale)
 void seq_clearPattern(uint8_t pattern)
 {
 	seq_patternSet.scale[pattern]=16;
+	seq_patternSet.transform[pattern]=0;
 	int i;
 	for(i=0;i<NUM_TRACKS;i++)
 		seq_clearTrack(i, pattern);
@@ -2639,6 +2764,7 @@ void seq_copyTrack(uint8_t srcNr, uint8_t dstNr, uint8_t pattern)
 
 		seq_patternSet.seq_stepTiming[pattern][dstNr][k] = seq_patternSet.seq_stepTiming[pattern][srcNr][k];
 		seq_patternSet.flamProbability[pattern][dstNr][k] = seq_patternSet.flamProbability[pattern][srcNr][k];
+		seq_patternSet.trigCondition[pattern][dstNr][k] = seq_patternSet.trigCondition[pattern][srcNr][k];
 	}
 
 	// copy which main steps are on/off
@@ -2670,6 +2796,7 @@ void seq_copyPattern(uint8_t src, uint8_t dst)
 
 			seq_patternSet.seq_stepTiming[dst][j][k] = seq_patternSet.seq_stepTiming[src][j][k];
 			seq_patternSet.flamProbability[dst][j][k] = seq_patternSet.flamProbability[src][j][k];
+			seq_patternSet.trigCondition[dst][j][k] = seq_patternSet.trigCondition[src][j][k];
 		}
 
 		for( uint8_t i=0;i<NUM_BARS;i++)
@@ -2683,6 +2810,7 @@ void seq_copyPattern(uint8_t src, uint8_t dst)
 		seq_patternSet.shuffle[dst] = seq_patternSet.shuffle[src];
 		seq_patternSet.kitNr[dst] = seq_patternSet.kitNr[src];
 		seq_patternSet.scale[dst]=seq_patternSet.scale[src];
+		seq_patternSet.transform[dst]=seq_patternSet.transform[src];
 	}
 }
 void seq_copyTrackPattern(uint8_t track,uint8_t srcPattern,uint8_t dstPattern)
@@ -2692,6 +2820,7 @@ void seq_copyTrackPattern(uint8_t track,uint8_t srcPattern,uint8_t dstPattern)
 		seq_patternSet.seq_subStepPattern[dstPattern][track][step]=seq_patternSet.seq_subStepPattern[srcPattern][track][step];
 		seq_patternSet.seq_stepTiming[dstPattern][track][step]=seq_patternSet.seq_stepTiming[srcPattern][track][step];
 		seq_patternSet.flamProbability[dstPattern][track][step]=seq_patternSet.flamProbability[srcPattern][track][step];
+		seq_patternSet.trigCondition[dstPattern][track][step]=seq_patternSet.trigCondition[srcPattern][track][step];
 	}
 	for(uint8_t bar=0;bar<NUM_BARS;bar++)
 		seq_patternSet.seq_mainSteps[bar][dstPattern][track]=seq_patternSet.seq_mainSteps[bar][srcPattern][track];
@@ -2703,6 +2832,7 @@ void seq_copyStep(uint8_t track,uint8_t pattern,uint8_t src,uint8_t dst)
 	seq_patternSet.seq_subStepPattern[pattern][track][dst]=seq_patternSet.seq_subStepPattern[pattern][track][src];
 	seq_patternSet.seq_stepTiming[pattern][track][dst]=seq_patternSet.seq_stepTiming[pattern][track][src];
 	seq_patternSet.flamProbability[pattern][track][dst]=seq_patternSet.flamProbability[pattern][track][src];
+	seq_patternSet.trigCondition[pattern][track][dst]=seq_patternSet.trigCondition[pattern][track][src];
 	const uint16_t srcBit=(uint16_t)(1u<<(src%16u));
 	const uint16_t dstBit=(uint16_t)(1u<<(dst%16u));
 	if(seq_patternSet.seq_mainSteps[src/16u][pattern][track]&srcBit)
@@ -2840,7 +2970,12 @@ static void seq_sendProgChg(const uint8_t ptn)
 
 static void seq_setStepIndexToStart()
 {
+	memset(seq_conditionLoop,0,sizeof(seq_conditionLoop));
+	memset(seq_conditionHistoryValid,0,sizeof(seq_conditionHistoryValid));
+	memset(seq_conditionCache,0,sizeof(seq_conditionCache));
+	memset(seq_conditionCacheIndex,0,sizeof(seq_conditionCacheIndex));
 	seq_finePhase=0;
+	perf_scaleSlotReset();
 	seq_prescaleCounter=seq_getExtSync()?perf_scaleTicks():0;
 	memset(seq_grooveNoteOff,0,sizeof(seq_grooveNoteOff));
 	perf_resetSteps();

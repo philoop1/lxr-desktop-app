@@ -50,6 +50,8 @@
 #define MENU_SNARE_LAYER_MODE 32
 #define MENU_PATTERN_SCALE 33
 #define MENU_LFO_POL 34
+#define MENU_TRIG_CONDITION 35
+#define MENU_SCALE_TRANSFORM 36
 #define MENU_AUDIO_OUT_FX	26
 
 //-----------------------------------------------------------------
@@ -102,7 +104,8 @@ const char stepShiftNames[][4] =
 };
 //-----------------------------------------------------------------
 
-const char globalScaleNames[][4]={{9},{"pat"},{"2"},{"4"},{"6"},{"8"},{"12"},{"16"},{"24"},{"32"}};
+const char globalScaleNames[][4]={{6},{"/8"},{"/4"},{"/2"},{"1"},{"*2"},{"*4"}};
+const char scaleTransformNames[][4]={{4},{"4"},{"3a"},{"3b"},{"3c"},{"3"},{"4a"},{"4b"},{"4c"}};
 const char fxSendModeNames[][4]={{4},{"nor"},{"afl"},{"pfl"},{"cfl"}};
 const char fxOutputModeNames[][4]={{2},{"st2"},{"lr2"}};
 
@@ -193,7 +196,7 @@ const char ppqOutNames[][5] =
 const char midiModes[][4]  =
 {
 	{2},		//number of entries
-	{"trg"},
+	{"rtg"},
 	{"nte"},
 };
 //-----------------------------------------------------------------
@@ -538,7 +541,7 @@ const char shortNames[][4]  =
 	{"sh3"},
 	{"sh4"},
 	{"mfl"},
-	{"scl"},
+	{"spd"},
 	{"fxs"},
 	{"fxo"},
 	{"mfl"},
@@ -573,6 +576,9 @@ const char shortNames[][4]  =
 	{"fpr"},
 	{"slw"},
 	{"pol"},
+	{"cnd"},
+	{"fil"},
+	{"sct"},
 
 
 
@@ -740,7 +746,7 @@ const char longNames[][16] =
 	{"Groove Step 3"},
 	{"Groove Step 4"},
 	{"Master Filter"},
-	{"Global Scale"},
+	{"Speed"},
 	{"FX Send Mode"},
 	{"FX Outputs"},
 	{"Master Cutoff"},
@@ -775,6 +781,9 @@ const char longNames[][16] =
 	{"Flam Probability"},
 	{"LFO Slew"},
 	{"LFO Polarity"},
+	{"Trig Condition"},
+	{"Fill Mode"},
+	{"Scale Transform"},
 
 
 

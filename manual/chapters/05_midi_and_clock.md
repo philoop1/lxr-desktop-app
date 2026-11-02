@@ -30,8 +30,9 @@ In 0.1.16, pressing PLAY while stopped and receiving MIDI Clock queues a
 manual start for the next 96-pulse bar. With a stable incoming period and
 nonzero `cof/cfn`, the first step is played early by the configured offset;
 the confirming MIDI edge does not replay it. MIDI START and external
-analogue trigger follow their existing transport paths. When no bar phase
-has been received, manual PLAY starts immediately.
+analogue trigger follow their existing transport paths. Only MIDI START sets a
+bar phase. Without one, or after 1 s without clock, manual PLAY starts at once
+and the next clock becomes the downbeat, without the early offset.
 
 ## Pattern and kit load settings
 
@@ -129,9 +130,8 @@ From 0.1.8, Pch also accepts CC5 (rst, scaled 0..100), CC6 (csr, 0..127),
 CC7 (pst, scaled 0..100), and CC28 (gdc, bipolar mapping with a center
 neutral zone). These controls require RX C and take Pch precedence on
 channel overlap, like CC27. On Global/Voice channels distinct from Pch,
-the legacy CC meanings remain. The BC Scarcity control pSc is currently
-menu-only; its BC CC25 assignment is not imported because it conflicts with
-the Mutador performance map. See the [numeric CC table](../../docs/P01_CC_MAP.csv).
+the legacy CC meanings remain. The BC Scarcity control pSc uses Pch CC54 from 0.2.22; its BC CC25
+assignment conflicts with the Mutador performance map. See the [numeric CC table](../../docs/P01_CC_MAP.csv).
 
 The `CPU` value shows the peak audio-block calculation time as a percentage
 of the available block time, sampled every 500 ms. It does not include all
@@ -291,12 +291,31 @@ The full destination list, including the new Snare targets, remains available
 from the menu. Incoming aliases update the sound and display and use their
 translated internal parameter when recording automation.
 
-The new Pch Scale shortcuts are CC79=`pat`, CC80=2, CC81=4, CC82=6,
-CC83=8, CC84=12, CC85=16, CC86=24, CC87=32. Values 0 or 64–127 select
-the division; values 1–63 are ignored. Changes take effect on the next bar
-while running. These Pch shortcuts are separate from the voice-channel
-aliases using the same numbers.
+Pch CC79-84 select `spd` /8, /4, /2, 1, *2 and *4, and Pch CC88-91 select
+`sct` off, a, b and c. Values 0 or 64-127 select; values 1-63 are ignored.
+Running changes wait for the bar (`spd`) or the group edge (`sct`). These Pch
+shortcuts are separate from the voice-channel aliases using the same numbers.
+
+## Further Pch controls (0.2.23)
+
+| CC | Control | Values |
+|---|---|---|
+| 54 | Scarcity (`pSc`) | scaled 0-100 |
+| 55 | All Velocity (`avl`) | scaled 0-200 |
+| 56 | Fill | 64-127 on |
+| 57 | Master filter enable | 64-127 on |
+| 58 | Pitch bend range | 0-48 semitones, higher clamps |
+| 59 | FX send mode | scaled 0-3 |
+| 67 | FX output mode | 64-127 second mode; resets the sends |
+| 68 / 69 | Clock offset / fine | scaled 0-80 / 0-9 |
+| 92-97 | Voice PWM 1-6 | 0-127 |
+| 102-107 | LFO slew 1-6 | 0-127 |
+| 108-113 | LFO polarity 1-6 | scaled 0-2 |
+| 114-119 | Random step LFO depth 1-6 | 0-127 |
+
+The other random step LFO settings stay menu-only. Like Morph CC2, these controls need a Pch
+of its own: if Pch equals `ch` or a Voice channel, these numbers keep their
+existing meaning.
 
 From 0.1.23, Pch CC9 controls rvl, scaling MIDI 0-127 to 0-100 percent as in
-Mutador. Voice-channel CC9 still selects the oscillator waveform. AVL is
-controlled from PERF; no additional external CC is assigned to it here.
+Mutador. Voice-channel CC9 still selects the oscillator waveform. AVL has Pch CC55 from 0.2.22.

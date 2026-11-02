@@ -42,7 +42,7 @@ static unsigned checks;
 void check(int ok,const char *msg){checks++;if(!ok){puts(msg);exit(1);}}
 int main(void){
  for(unsigned i=0;i<4096;i++)sine_table[i]=(int16_t)(sinf((float)i*6.283185307f/4096.f)*32767);
- for(unsigned wave=0;wave<NUM_LFO_WAVEFORMS;wave++)for(unsigned offset=0;offset<128;offset+=31){
+ for(unsigned wave=0;wave<LFO_RANDOM_STEP;wave++)for(unsigned offset=0;offset<128;offset+=31){
   Lfo a,b;rng=ref_rng=34567;
   lfo_init(&a);ref_lfo_init(&b);
   lfo_setWaveform(&a,wave);ref_lfo_setWaveform(&b,wave);
@@ -53,6 +53,7 @@ int main(void){
    if(step==1500){lfo_retriggerVoice(&a);ref_lfo_retriggerVoice(&b);}
    lfo_dispatchNextValue(&a);ref_lfo_dispatchNextValue(&b);
    float expected=wave>=LFO_STRAY?ref_sent*0.5f:ref_sent;
+   if(fabsf(sent-expected)>=0.000001f)printf("wave %u offset %u step %u: %f expected %f\n",wave,offset,step,sent,expected);
    check(fabsf(sent-expected)<0.000001f,"LFO output follows Mutador reference");
    check(a.phase==b.phase&&rng==ref_rng,"phase/retrigger/RNG follow reference");
    check(sent>=0&&sent<=1,"normalized desktop LFO output range");

@@ -101,6 +101,11 @@ int main(void){
   check(lfos[voice].modTarget.destination==PAR_PAN4&&activeParameters[PAR_VOICE_LFO1+voice]==4,"CC81 connects target and display");
   targetCc(CC2_VOICE_LFO1+voice,1);
   check(lfos[voice].modTarget.destination==PAR_PAN1&&activeParameters[PAR_VOICE_LFO1+voice]==1,"CC80 moves logical target to selected voice");
+  if(voice<3){
+    const uint8_t coarse[3]={PAR_COARSE1,PAR_COARSE2,PAR_COARSE3};
+    targetCc(CC2_TARGET_LFO1+voice,coarse[voice]);
+    check(lfos[voice].modTarget.destination==coarse[voice],"each drum LFO reaches its own coarse parameter");
+  }
   targetCc(CC2_TARGET_LFO1+voice,0);
   check(lfos[voice].modTarget.destination==0&&activeParameters[PAR_TARGET_LFO1+voice]==0,"CC81 off");
   targetCc(CC2_VEL_DEST_1+voice,PAR_PAN4);

@@ -69,6 +69,7 @@ void soundengine_init()
 	Snare_init();
 	HiHat_init();
 	Cymbal_init();
+	lfo_initRandomSteps();
 
 	//precalc the first dma buffer block
 	soundengine_calcNextSampleBlock();

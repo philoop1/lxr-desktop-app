@@ -55,6 +55,52 @@ char currentFolder[13];
 #define SNARE_NOISE_KIT_BYTES 4u
 static const uint8_t snareNoiseKitMagic[SNARE_NOISE_KIT_BYTES]={'S','N','E','2'};
 static const uint8_t oldSnareNoiseKitMagic[SNARE_NOISE_KIT_BYTES]={'S','N','E','1'};
+#define RPS_EXTRA_BYTES 46u
+static uint8_t mainRpsExtras[NUM_KIT_SLOTS][42];
+static void preset_defaultRpsExtras(uint8_t *data)
+{
+    memset(data,0,42);
+    for(uint8_t v=0;v<6;v++){data[v]=v+1;data[6+v]=v+1;data[36+v]=2;}
+}
+static void preset_captureRpsExtras(uint8_t *data)
+{
+    for(uint8_t v=0;v<6;v++){
+        data[v]=activeParameters[PAR_RPS_TRG1+v];
+        data[6+v]=activeParameters[PAR_RPS_VOI1+v];
+        data[12+v]=activeParameters[PAR_RPS_DST1+v];
+        data[18+v]=activeParameters[PAR_RPS_AMT1+v];
+        data[24+v]=activeParameters[PAR_RPS_OFS1+v];
+        data[30+v]=activeParameters[PAR_RPS_SLW1+v];
+        data[36+v]=activeParameters[PAR_RPS_POL1+v];
+    }
+}
+static void preset_applyRpsExtras(const uint8_t *data)
+{
+    for(uint8_t v=0;v<6;v++){
+        activeParameters[PAR_RPS_TRG1+v]=data[v]>7?0:data[v];
+        activeParameters[PAR_RPS_VOI1+v]=(data[6+v]<1||data[6+v]>6)?v+1:data[6+v];
+        activeParameters[PAR_RPS_DST1+v]=data[12+v]>=getNumModTargets()?0:data[12+v];
+        activeParameters[PAR_RPS_AMT1+v]=data[18+v]>127?127:data[18+v];
+        activeParameters[PAR_RPS_OFS1+v]=data[24+v]>127?127:data[24+v];
+        activeParameters[PAR_RPS_SLW1+v]=data[30+v]>127?127:data[30+v];
+        activeParameters[PAR_RPS_POL1+v]=data[36+v]>2?2:data[36+v];
+        lfo_applyRandomStepSettings(v);
+    }
+}
+static void preset_writeRpsExtras(const uint8_t *data)
+{
+    UINT written;
+    f_write((FIL*)&SDFile,"RPS2",4,&written);
+    f_write((FIL*)&SDFile,data,42,&written);
+}
+static void preset_readRpsExtras(uint8_t *data)
+{
+    UINT read=0;uint8_t block[RPS_EXTRA_BYTES]={0};
+    preset_defaultRpsExtras(data);
+    if(f_read((FIL*)&SDFile,block,sizeof(block),&read)!=FR_OK ||
+       read!=sizeof(block) || memcmp(block,"RPS2",4))return;
+    memcpy(data,block+4,42);
+}
 #define LFO_EXTRA_BYTES 16u
 static uint8_t mainLfoExtras[NUM_KIT_SLOTS][12];
 static void preset_defaultLfoExtras(uint8_t *data)
@@ -136,6 +182,35 @@ static void preset_readFlamProbability(uint8_t pattern)
         for(uint8_t step=0;step<NUM_STEPS;step++)
             if(seq_patternSet.flamProbability[pattern][track][step]>100)
                 seq_patternSet.flamProbability[pattern][track][step]=100;
+}
+static void preset_writeTrigConditions(uint8_t pattern)
+{
+    UINT written;
+    f_write((FIL*)&SDFile,"CND2",4,&written);
+    f_write((FIL*)&SDFile,&seq_patternSet.transform[pattern],1,&written);
+    f_write((FIL*)&SDFile,seq_patternSet.trigCondition[pattern],
+            NUM_TRACKS*NUM_STEPS,&written);
+}
+static void preset_readTrigConditions(uint8_t pattern)
+{
+    UINT read=0;
+    uint8_t magic[4]={0};
+    memset(seq_patternSet.trigCondition[pattern],TRIG_COND_ALWAYS,NUM_TRACKS*NUM_STEPS);
+    seq_patternSet.transform[pattern]=0;
+    if(f_read((FIL*)&SDFile,magic,4,&read)!=FR_OK || read!=4)return;
+    if(!memcmp(magic,"CND2",4)) {
+        if(f_read((FIL*)&SDFile,&seq_patternSet.transform[pattern],1,&read)!=FR_OK || read!=1)return;
+        if(seq_patternSet.transform[pattern]>3)seq_patternSet.transform[pattern]=0;
+    } else if(memcmp(magic,"CND1",4))return;
+    if(f_read((FIL*)&SDFile,seq_patternSet.trigCondition[pattern],NUM_TRACKS*NUM_STEPS,&read)!=FR_OK ||
+       read!=NUM_TRACKS*NUM_STEPS) {
+        memset(seq_patternSet.trigCondition[pattern],TRIG_COND_ALWAYS,NUM_TRACKS*NUM_STEPS);
+        return;
+    }
+    for(uint8_t track=0;track<NUM_TRACKS;track++)
+        for(uint8_t step=0;step<NUM_STEPS;step++)
+            if(seq_patternSet.trigCondition[pattern][track][step]>=TRIG_COND_COUNT)
+                seq_patternSet.trigCondition[pattern][track][step]=TRIG_COND_ALWAYS;
 }
 static void preset_defaultSnareLayer(uint8_t *parameters)
 {
@@ -346,6 +421,7 @@ FRESULT preset_saveTmpKit()
 	uint8_t lfoExtras[12];
 	preset_captureLfoExtras(lfoExtras);
 	preset_writeLfoExtras(lfoExtras);
+	uint8_t rpsExtras[42];preset_captureRpsExtras(rpsExtras);preset_writeRpsExtras(rpsExtras);
 
 	//close the file
 	f_close((FIL*)&SDFile);
@@ -397,6 +473,7 @@ FRESULT preset_LoadTmpKit()
 			uint8_t lfoExtras[12];
 			preset_readLfoExtras(lfoExtras);
 			preset_applyLfoExtras(lfoExtras);
+			uint8_t rpsExtras[42];preset_readRpsExtras(rpsExtras);preset_applyRpsExtras(rpsExtras);
 
 			//special case mod targets. normalize.
 			const uint8_t nmt=getNumModTargets();
@@ -576,6 +653,7 @@ FRESULT preset_LoadTmpPat()
 			f_read((FIL*)&SDFile,(void*)&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesRead);
 		preset_readPatternScale(patternNr);
 		preset_readFlamProbability(patternNr);
+		preset_readTrigConditions(patternNr);
 			if(bytesRead == 0) success = 0;
 
 		}
@@ -705,6 +783,7 @@ FRESULT preset_saveTmpPat()
 		f_write((FIL*)&SDFile,&seq_patternSet.kitNr[presetNr],sizeof(uint8_t),&bytesWritten);
 		preset_writePatternScale(presetNr);
 		preset_writeFlamProbability(presetNr);
+		preset_writeTrigConditions(presetNr);
 
 #endif
 
@@ -906,6 +985,7 @@ void preset_init(uint8_t presetNr)
 	}
 	preset_defaultSnareNoise(para);
 	preset_defaultLfoExtras(mainLfoExtras[presetNr]);
+	preset_defaultRpsExtras(mainRpsExtras[presetNr]);
 
 	//special case mod targets. normalize.
 	const uint8_t nmt=getNumModTargets();
@@ -921,6 +1001,7 @@ void preset_init(uint8_t presetNr)
 	//copy parameters to edit buffer
 	memcpy(activeParameters, mainParameters[presetNr], sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
 	preset_applyLfoExtras(mainLfoExtras[presetNr]);
+	preset_applyRpsExtras(mainRpsExtras[presetNr]);
 	preset_sendDrumsetParameters();
 	//frontPanel_sendData(PRESET,PRESET_LOAD,presetNr);
 
@@ -962,6 +1043,7 @@ static void preset_writeDrumsetData(uint8_t presetNr, uint8_t isMorph)
 	}
 	f_write((FIL*)&SDFile,snareNoiseKitMagic,SNARE_NOISE_KIT_BYTES,&bytesWritten);
 	preset_writeLfoExtras(mainLfoExtras[presetNr]);
+	preset_writeRpsExtras(mainRpsExtras[presetNr]);
 }
 
 //----------------------------------------------------
@@ -978,6 +1060,7 @@ void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmedi
 		const uint8_t masterSampleRate = activeParameters[PAR_VOICE_DECIMATION_ALL];
 		memcpy(activeParameters, mainParameters[presetNr], sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
 		preset_applyLfoExtras(mainLfoExtras[presetNr]);
+	preset_applyRpsExtras(mainRpsExtras[presetNr]);
 		if(!activeParameters[PAR_LOAD_SAMPLE_RATE])
 			activeParameters[PAR_VOICE_DECIMATION_ALL] = masterSampleRate;
 		if(activeParameters[PAR_LOAD_MORPH])
@@ -1038,6 +1121,7 @@ void preset_saveDrumsetRam(uint8_t presetNr, uint8_t isMorph)
 		//copy edit buffer to parameter array
 		memcpy(mainParameters[presetNr], activeParameters, sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
 		preset_captureLfoExtras(mainLfoExtras[presetNr]);
+	preset_captureRpsExtras(mainRpsExtras[presetNr]);
 	}
 }
 //----------------------------------------------------
@@ -1108,7 +1192,8 @@ static void preset_loadPerformanceExtension(void)
             }
         }
     }
-    if(!modernScale)activeParameters[PAR_GLOBAL_SCALE]=perf_scaleLegacyOverride(activeParameters[PAR_GLOBAL_SCALE]);
+    (void)modernScale;
+    activeParameters[PAR_GLOBAL_SCALE]=PERF_SPEED_NEUTRAL; // spd is live only
     performance_prepareLoaded();
 }
 static FRESULT preset_savePerformanceExtension(void)
@@ -1185,7 +1270,7 @@ static uint8_t preset_readGlobalData()
 	const uint8_t legacyGlobals = PAR_MIDI_CHAN_PC - PAR_BEGINNING_OF_GLOBALS;
 	const uint8_t storedGlobals = PAR_CPU_USE - PAR_BEGINNING_OF_GLOBALS;
 	activeParameters[PAR_MASTER_FILTER_ENABLE]=0;
-	activeParameters[PAR_GLOBAL_SCALE]=0;
+	activeParameters[PAR_GLOBAL_SCALE]=PERF_SPEED_NEUTRAL;
 	activeParameters[PAR_FX_SEND_MODE]=0;
 	const uint8_t keepLiveGroove = activeParameters[PAR_SHUFFLE_LOAD] == 0;
 	uint8_t previousGroove[3];
@@ -1288,7 +1373,7 @@ static uint8_t preset_readGlobalData()
 	for(uint16_t p=PAR_GROOVE_SH2;p<=PAR_GROOVE_SH4;p++)
 		if(activeParameters[p]>127) activeParameters[p]=63;
 	if(activeParameters[PAR_MASTER_FILTER_ENABLE]>1)activeParameters[PAR_MASTER_FILTER_ENABLE]=0;
-	if(activeParameters[PAR_GLOBAL_SCALE]>8)activeParameters[PAR_GLOBAL_SCALE]=0;
+	activeParameters[PAR_GLOBAL_SCALE]=PERF_SPEED_NEUTRAL; // spd is live only
 	if(activeParameters[PAR_FX_SEND_MODE]>3)activeParameters[PAR_FX_SEND_MODE]=0;
 	// Save always includes the groove. Loading obeys the live load lock and
 	// a stored OFF setting. A project change must not silently unlock it.
@@ -1344,7 +1429,7 @@ uint8_t preset_loadGlobals()
 void preset_loadDefaultGlobals()
 {
 	activeParameters[PAR_MASTER_FILTER_ENABLE]=0;
-	activeParameters[PAR_GLOBAL_SCALE]=0;
+	activeParameters[PAR_GLOBAL_SCALE]=PERF_SPEED_NEUTRAL;
 	activeParameters[PAR_FX_SEND_MODE]=0;
 	performance_resetExtended();
 	activeParameters[PAR_GROOVE_SH2] = 63;
@@ -1510,7 +1595,7 @@ static FRESULT preset_readDrumsetData(uint8_t presetNr, uint8_t isMorph)
 		UINT magicBytes=0;
 		FRESULT magicResult=f_read((FIL*)&SDFile,magic,sizeof(magic),&magicBytes);
 		preset_validateSnareExtension(para,bytesRead,magic,magicResult==FR_OK?magicBytes:0);
-		if(!isMorph)preset_readLfoExtras(mainLfoExtras[presetNr]);
+		if(!isMorph){preset_readLfoExtras(mainLfoExtras[presetNr]);preset_readRpsExtras(mainRpsExtras[presetNr]);}
 		
 		//special case mod targets. normalize.
 		const uint8_t nmt=getNumModTargets();
@@ -1987,6 +2072,7 @@ static void preset_writePatternData(uint8_t patternNr)
 		f_write((FIL*)&SDFile,&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesWritten);
 		preset_writePatternScale(patternNr);
 		preset_writeFlamProbability(patternNr);
+		preset_writeTrigConditions(patternNr);
 
 #endif
 }
@@ -2066,6 +2152,8 @@ FRESULT preset_savePatternSD(uint8_t presetNr)
 static uint8_t preset_readPatternData(uint8_t patternNr, uint8_t dataVersion)
 {
 	seq_patternSet.scale[patternNr]=16;
+	seq_patternSet.transform[patternNr]=0;
+	memset(seq_patternSet.trigCondition[patternNr],TRIG_COND_ALWAYS,NUM_TRACKS*NUM_STEPS);
 
 #if 0
 
@@ -2331,6 +2419,7 @@ static uint8_t preset_readPatternData(uint8_t patternNr, uint8_t dataVersion)
 		f_read((FIL*)&SDFile,(void*)&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesRead);
 		preset_readPatternScale(patternNr);
 		preset_readFlamProbability(patternNr);
+		preset_readTrigConditions(patternNr);
 		if(bytesRead == 0) success = 0;
 
 	}
@@ -2874,7 +2963,7 @@ FRESULT preset_saveProject(uint8_t presetNr)
 
 	// write some more padding (we'll allocate 512 bytes for kit data. This should be more than
 	// we'll ever need. Right now we use about 228 bytes).
-	remain = 512 - (END_OF_SOUND_PARAMETERS + SNARE_NOISE_KIT_BYTES + LFO_EXTRA_BYTES);
+	remain = 512 - (END_OF_SOUND_PARAMETERS + SNARE_NOISE_KIT_BYTES + LFO_EXTRA_BYTES + RPS_EXTRA_BYTES);
 	while(remain){
 		if(remain < GEN_BUF_LEN)
 			siz=(uint8_t)remain;
@@ -3325,7 +3414,7 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 		goto closeFile;
 
 	// read padding
-	remain = 512 - (END_OF_SOUND_PARAMETERS + SNARE_NOISE_KIT_BYTES + LFO_EXTRA_BYTES);
+	remain = 512 - (END_OF_SOUND_PARAMETERS + SNARE_NOISE_KIT_BYTES + LFO_EXTRA_BYTES + RPS_EXTRA_BYTES);
 	while(remain){
 		if(remain < GEN_BUF_LEN)
 			siz=(uint8_t)remain;
@@ -3454,6 +3543,356 @@ static FRESULT preset_makeFileNameLoad(char *buf, uint8_t num, uint8_t type)
 		return f_open((FIL*)&SDFile,selected,FA_OPEN_EXISTING | FA_READ);
 
     return FR_NO_FILE;
+}
+
+/* Cross-project transfer uses absolute paths. In particular, it must not
+ * f_chdir() into the source: currentFolder and the running project stay put. */
+static FRESULT preset_findProjectItemPath(uint8_t project,uint8_t slot,uint8_t pattern,char path[32])
+{
+    if(project>=NUM_KIT_SLOTS || slot>=NUM_KIT_SLOTS || pattern>1)return FR_INVALID_PARAMETER;
+    const char *ext=pattern?"pat":"snd";
+    char dirName[16],mask[16],selected[13]={0};
+    DIR dir;
+    FILINFO info;
+    sprintf(dirName,"/proj%02u",project);
+    sprintf(mask,"%02u-*.%s",slot,ext);
+    FRESULT result=f_findfirst(&dir,&info,dirName,mask);
+    if(result!=FR_OK)return result;
+    while(result==FR_OK && info.fname[0]) {
+        if(!selected[0] || info.fname[3]!='.') {
+            strncpy(selected,info.fname,sizeof(selected)-1);
+            selected[sizeof(selected)-1]=0;
+        }
+        if(selected[0] && selected[3]!='.')break;
+        result=f_findnext(&dir,&info);
+    }
+    f_closedir(&dir);
+    if(result!=FR_OK)return result;
+    if(selected[0])sprintf(path,"%s/%s",dirName,selected);
+    else sprintf(path,"%s/p%03u.%s",dirName,slot,ext);
+    return FR_OK;
+}
+
+FRESULT preset_getProjectItemName(uint8_t project,uint8_t slot,uint8_t pattern,char name[9])
+{
+    char path[32];
+    FIL file;
+    UINT read=0;
+    FRESULT result=preset_findProjectItemPath(project,slot,pattern,path);
+    if(result!=FR_OK)return result;
+    result=f_open(&file,path,FA_READ|FA_OPEN_EXISTING);
+    if(result!=FR_OK)return result;
+    result=f_read(&file,name,8,&read);
+    f_close(&file);
+    if(result!=FR_OK || read!=8)return FR_DISK_ERR;
+    name[8]=0;
+    for(uint8_t i=0;i<8;i++)if((uint8_t)name[i]<32 || (uint8_t)name[i]==127)name[i]=' ';
+    return FR_OK;
+}
+
+/* The running project lives in RAM and /tmp; /projNN is only its saved state.
+ * Saved slot files in /tmp replace the project's files at boot. */
+static void preset_tmpSlotMask(uint8_t slot,uint8_t pattern,char mask[16],char oldPath[20])
+{
+    const char *ext=pattern?"pat":"snd";
+    sprintf(mask,"%02u-*.%s",slot,ext);
+    sprintf(oldPath,"/tmp/p%03u.%s",slot,ext);
+}
+static uint8_t preset_tmpHasItem(uint8_t slot,uint8_t pattern)
+{
+    char mask[16],oldPath[20];
+    DIR dir;
+    FILINFO info;
+    preset_tmpSlotMask(slot,pattern,mask,oldPath);
+    const FRESULT result=f_findfirst(&dir,&info,"/tmp",mask);
+    const uint8_t found=(uint8_t)(result==FR_OK && info.fname[0]);
+    if(result==FR_OK)f_closedir(&dir);
+    return (uint8_t)(found || f_stat(oldPath,&info)==FR_OK);
+}
+static FRESULT preset_removeTmpItem(uint8_t slot,uint8_t pattern)
+{
+    char mask[16],oldPath[20],path[24];
+    DIR dir;
+    FILINFO info;
+    preset_tmpSlotMask(slot,pattern,mask,oldPath);
+    FRESULT result=FR_OK;
+    /* A find handle cannot survive the delete, so restart after each one. */
+    while(result==FR_OK) {
+        result=f_findfirst(&dir,&info,"/tmp",mask);
+        if(result!=FR_OK)break;
+        const uint8_t found=(uint8_t)(info.fname[0]!=0);
+        if(found)sprintf(path,"/tmp/%s",info.fname);
+        f_closedir(&dir);
+        if(!found)break;
+        result=f_unlink(path);
+    }
+    if(result==FR_OK) {
+        result=f_unlink(oldPath);
+        if(result==FR_NO_FILE)result=FR_OK;
+    }
+    return result;
+}
+FRESULT preset_loadTransferredItem(uint8_t project,uint8_t slot,uint8_t pattern)
+{
+    char folder[16];
+    sprintf(folder,"/proj%02u",project);
+    FRESULT result=f_chdir(folder);
+    if(result!=FR_OK)return result;
+    result=pattern?preset_loadPatternSD(slot):preset_loadDrumsetSD(slot,0);
+    preset_initTmpFolder();
+    if(result==FR_OK)result=preset_removeTmpItem(slot,pattern);
+    return result;
+}
+FRESULT preset_transferRefreshActivePattern(void)
+{
+    /* The edit backup and the tmp.pat autosave would both restore the old pattern. */
+    seq_copyPatternToBackupBuffer(seq_activePattern);
+    preset_patDirty=0;
+    return preset_saveTmpPat();
+}
+
+#define TRANSFER_V3_KIT_OFFSET (14u + 7u*(64u*7u+64u) + 4u*7u*2u + 1u + 7u)
+#define TRANSFER_V2_KIT_OFFSET (14u + 7u*64u*7u + 4u*7u*2u + 1u + 7u)
+static uint32_t preset_transferKitOffset(const uint8_t header[14])
+{
+    if(!memcmp(header+8,"PatV03",6))return TRANSFER_V3_KIT_OFFSET;
+    if(!memcmp(header+8,"PatV02",6))return TRANSFER_V2_KIT_OFFSET;
+    return 0;
+}
+FRESULT preset_getProjectPatternKit(uint8_t project,uint8_t slot,uint8_t *kitSlot)
+{
+    char path[32];
+    FIL file;
+    uint8_t header[14];
+    UINT read=0;
+    FRESULT result=preset_findProjectItemPath(project,slot,1,path);
+    if(result!=FR_OK)return result;
+    result=f_open(&file,path,FA_READ|FA_OPEN_EXISTING);
+    if(result!=FR_OK)return result;
+    result=f_read(&file,header,sizeof(header),&read);
+    uint32_t offset=read==sizeof(header)?preset_transferKitOffset(header):0;
+    if(result==FR_OK && (!offset || f_size(&file)<=offset))result=FR_INVALID_OBJECT;
+    if(result==FR_OK)result=f_lseek(&file,offset);
+    if(result==FR_OK)result=f_read(&file,kitSlot,1,&read);
+    f_close(&file);
+    if(result==FR_OK && (read!=1 || *kitSlot>=NUM_KIT_SLOTS))result=FR_INVALID_OBJECT;
+    return result;
+}
+FRESULT preset_findFreeProjectKit(uint8_t project,uint8_t *kitSlot)
+{
+    char name[9];
+    if(project>=NUM_KIT_SLOTS)return FR_INVALID_PARAMETER;
+    for(uint8_t slot=0;slot<NUM_KIT_SLOTS;slot++) {
+        FRESULT result=preset_getProjectItemName(project,slot,0,name);
+        if(result==FR_NO_FILE || result==FR_NO_PATH) {
+            if(project==menu_loadedPresetNr[CURRENT_PROJECT] && preset_tmpHasItem(slot,0))continue;
+            *kitSlot=slot;
+            return FR_OK;
+        }
+        if(result!=FR_OK)return result;
+    }
+    return FR_DENIED;
+}
+
+/* sourceFile, when set, replaces the source project and slot lookup. */
+static FRESULT preset_copyItem(uint8_t sourceProject, uint8_t sourceSlot, const char *sourceFile,
+        uint8_t targetProject, uint8_t targetSlot, uint8_t pattern, uint8_t overwrite,
+        uint8_t kitOverride)
+{
+    if((!sourceFile && (sourceProject>=NUM_KIT_SLOTS || sourceSlot>=NUM_KIT_SLOTS ||
+                        sourceProject==targetProject)) ||
+       targetProject>=NUM_KIT_SLOTS || targetSlot>=NUM_KIT_SLOTS ||
+       pattern>1 || overwrite>1 ||
+       (kitOverride<NUM_KIT_SLOTS && !pattern)) return FR_INVALID_PARAMETER;
+    const char *ext=pattern?"pat":"snd";
+    char targetDir[16],mask[16],sourcePath[32],targetPath[32],tempPath[32],oldTarget[32],backupPath[32];
+    char existing[13]={0};
+    FILINFO info;
+    DIR dir;
+    FIL input,output;
+    FRESULT result;
+    UINT read=0,written=0;
+    uint8_t buffer[256];
+    uint32_t overrideOffset=0;
+    sprintf(targetDir,"/proj%02u",targetProject);
+    result=f_stat(targetDir,&info);
+    if(result==FR_NO_FILE)result=f_mkdir(targetDir);
+    if(result!=FR_OK) return result;
+    sprintf(mask,"%02u-*.%s",targetSlot,ext);
+    result=f_findfirst(&dir,&info,targetDir,mask);
+    if(result!=FR_OK)return result;
+    while(result==FR_OK && info.fname[0]) {
+        if(existing[0]){f_closedir(&dir);return FR_DENIED;}
+        strncpy(existing,info.fname,sizeof(existing)-1);
+        existing[sizeof(existing)-1]=0;
+        result=f_findnext(&dir,&info);
+    }
+    f_closedir(&dir);
+    if(result!=FR_OK)return result;
+    sprintf(oldTarget,"%s/p%03u.%s",targetDir,targetSlot,ext);
+    result=f_stat(oldTarget,&info);
+    if(result==FR_OK) {
+        if(existing[0])return FR_DENIED;
+        sprintf(existing,"p%03u.%s",targetSlot,ext);
+    } else if(result!=FR_NO_FILE)return result;
+    if(existing[0] && !overwrite)return FR_EXIST;
+    if(!overwrite && targetProject==menu_loadedPresetNr[CURRENT_PROJECT] &&
+       preset_tmpHasItem(targetSlot,pattern))return FR_EXIST;
+    if(existing[0])sprintf(targetPath,"%s/%s",targetDir,existing);
+    else sprintf(targetPath,"%s/%02u-IMPRT.%s",targetDir,targetSlot,ext);
+    sprintf(tempPath,"%s/%02u-TMP.tmp",targetDir,targetSlot);
+    sprintf(backupPath,"%s/%02u-BAK.tmp",targetDir,targetSlot);
+    result=f_stat(backupPath,&info);
+    if(result==FR_OK)return FR_DENIED;
+    if(result!=FR_NO_FILE)return result;
+    result=f_stat(tempPath,&info);
+    if(result==FR_OK)return FR_DENIED;
+    if(result!=FR_NO_FILE)return result;
+    if(sourceFile)strcpy(sourcePath,sourceFile);
+    else {
+        result=preset_findProjectItemPath(sourceProject,sourceSlot,pattern,sourcePath);
+        if(result!=FR_OK)return result;
+    }
+    result=f_open(&input,sourcePath,FA_READ|FA_OPEN_EXISTING);
+    if(result!=FR_OK)return result;
+    if(kitOverride<NUM_KIT_SLOTS) {
+        result=f_read(&input,buffer,14,&read);
+        overrideOffset=read==14?preset_transferKitOffset(buffer):0;
+        if(result==FR_OK && (!overrideOffset || f_size(&input)<=overrideOffset))
+            result=FR_INVALID_OBJECT;
+        if(result==FR_OK)result=f_lseek(&input,0);
+        if(result!=FR_OK){f_close(&input);return result;}
+    }
+    result=f_open(&output,tempPath,FA_WRITE|FA_CREATE_NEW);
+    if(result!=FR_OK){f_close(&input);return result;}
+    do {
+        result=f_read(&input,buffer,sizeof(buffer),&read);
+        if(result!=FR_OK || !read)break;
+        result=f_write(&output,buffer,read,&written);
+        if(result!=FR_OK || written!=read){result=FR_DISK_ERR;break;}
+    } while(1);
+    if(result==FR_OK && kitOverride<NUM_KIT_SLOTS) {
+        if(f_size(&output)<=overrideOffset)result=FR_INVALID_OBJECT;
+        if(result==FR_OK)result=f_lseek(&output,overrideOffset);
+        if(result==FR_OK)result=f_write(&output,&kitOverride,1,&written);
+        if(result==FR_OK && written!=1)result=FR_DISK_ERR;
+    }
+    if(result==FR_OK)result=f_sync(&output);
+    if(f_close(&output)!=FR_OK && result==FR_OK)result=FR_DISK_ERR;
+    f_close(&input);
+    if(result==FR_OK && existing[0])result=f_rename(targetPath,backupPath);
+    if(result==FR_OK) {
+        result=f_rename(tempPath,targetPath);
+        if(result!=FR_OK && existing[0])f_rename(backupPath,targetPath);
+    }
+    if(result!=FR_OK)f_unlink(tempPath);
+    else if(existing[0])f_unlink(backupPath);
+    return result;
+}
+
+FRESULT preset_copyProjectItem(uint8_t sourceProject, uint8_t sourceSlot,
+        uint8_t targetProject, uint8_t targetSlot, uint8_t pattern, uint8_t overwrite,
+        uint8_t kitOverride)
+{
+    return preset_copyItem(sourceProject,sourceSlot,NULL,targetProject,targetSlot,pattern,overwrite,kitOverride);
+}
+
+/* Converted LXR1 library: /LXR1/Pxxx/LXR2 holds one kit and eight patterns. */
+static void preset_performanceKitPath(uint8_t performance,char path[32])
+{
+    sprintf(path,"/LXR1/P%03u/LXR2/00-LXR1.SND",performance);
+}
+static void preset_performancePatternPath(uint8_t performance,uint8_t index,char path[32])
+{
+    sprintf(path,"/LXR1/P%03u/LXR2/%02u-LXR1%u.PAT",performance,index,index+1u);
+}
+FRESULT preset_getPerformanceName(uint8_t performance,char name[9])
+{
+    char path[32];
+    FIL file;
+    UINT read=0;
+    if(performance>=LXR1_PERFORMANCES)return FR_INVALID_PARAMETER;
+    preset_performanceKitPath(performance,path);
+    FRESULT result=f_open(&file,path,FA_READ|FA_OPEN_EXISTING);
+    if(result!=FR_OK)return result;
+    result=f_read(&file,name,8,&read);
+    f_close(&file);
+    if(result!=FR_OK || read!=8)return FR_DISK_ERR;
+    name[8]=0;
+    for(uint8_t i=0;i<8;i++)if((uint8_t)name[i]<32 || (uint8_t)name[i]>=127)name[i]=' ';
+    return FR_OK;
+}
+FRESULT preset_importPerformance(uint8_t performance,uint8_t targetProject,uint8_t firstPattern,
+        uint8_t overwrite,uint8_t *targetKit)
+{
+    char path[32],name[9];
+    FILINFO info;
+    uint8_t freeKit;
+    if(performance>=LXR1_PERFORMANCES || firstPattern%LXR1_PATTERNS ||
+       targetProject>=NUM_KIT_SLOTS || firstPattern+LXR1_PATTERNS>NUM_KIT_SLOTS)
+        return FR_INVALID_PARAMETER;
+    /* Check everything first, so a missing file or an occupied block writes nothing. */
+    preset_performanceKitPath(performance,path);
+    FRESULT result=f_stat(path,&info);
+    if(result!=FR_OK)return result;
+    uint8_t occupied=0;
+    for(uint8_t i=0;i<LXR1_PATTERNS;i++) {
+        preset_performancePatternPath(performance,i,path);
+        result=f_stat(path,&info);
+        if(result!=FR_OK)return result;
+        result=preset_getProjectItemName(targetProject,(uint8_t)(firstPattern+i),1,name);
+        if(result==FR_OK)occupied=1;
+        else if(result!=FR_NO_FILE && result!=FR_NO_PATH)return result;
+        if(targetProject==menu_loadedPresetNr[CURRENT_PROJECT] &&
+           preset_tmpHasItem((uint8_t)(firstPattern+i),1))occupied=1;
+    }
+    if(occupied && !overwrite)return FR_EXIST;
+    result=preset_findFreeProjectKit(targetProject,&freeKit);
+    if(result!=FR_OK)return result;
+    preset_performanceKitPath(performance,path);
+    result=preset_copyItem(0,0,path,targetProject,freeKit,0,0,255);
+    if(result!=FR_OK)return result;
+    for(uint8_t i=0;i<LXR1_PATTERNS;i++) {
+        preset_performancePatternPath(performance,i,path);
+        result=preset_copyItem(0,0,path,targetProject,(uint8_t)(firstPattern+i),1,overwrite,freeKit);
+        if(result!=FR_OK) {
+            /* Patterns already copied link to this kit, so it stays unless none exist. */
+            if(!i) {
+                sprintf(path,"/proj%02u/%02u-IMPRT.snd",targetProject,freeKit);
+                f_unlink(path);
+            }
+            return result;
+        }
+    }
+    *targetKit=freeKit;
+    return FR_OK;
+}
+
+FRESULT preset_copyProjectPatternWithKit(uint8_t sourceProject,uint8_t sourcePattern,
+        uint8_t targetProject,uint8_t targetPattern,uint8_t overwrite,uint8_t *targetKit)
+{
+    uint8_t sourceKit,freeKit;
+    char name[9],kitPath[32];
+    FRESULT result=preset_getProjectPatternKit(sourceProject,sourcePattern,&sourceKit);
+    if(result!=FR_OK)return result;
+    result=preset_getProjectItemName(sourceProject,sourceKit,0,name);
+    if(result!=FR_OK)return result;
+    result=preset_findFreeProjectKit(targetProject,&freeKit);
+    if(result!=FR_OK)return result;
+    result=preset_getProjectItemName(targetProject,targetPattern,1,name);
+    if(result==FR_OK && !overwrite)return FR_EXIST;
+    if(result!=FR_OK && result!=FR_NO_FILE && result!=FR_NO_PATH)return result;
+    result=preset_copyProjectItem(sourceProject,sourceKit,targetProject,freeKit,0,0,255);
+    if(result!=FR_OK)return result;
+    result=preset_copyProjectItem(sourceProject,sourcePattern,targetProject,targetPattern,1,overwrite,freeKit);
+    if(result!=FR_OK) {
+        /* Only the fresh, uniquely named kit from this call is removed. */
+        sprintf(kitPath,"/proj%02u/%02u-IMPRT.snd",targetProject,freeKit);
+        f_unlink(kitPath);
+        return result;
+    }
+    *targetKit=freeKit;
+    return FR_OK;
 }
 
 void clearIllegalCharacters(char *input, char* output, uint8_t sz)

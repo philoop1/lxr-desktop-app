@@ -104,6 +104,10 @@ static unsigned handled, morphed, recorded, front, din, usb, notes[7], cases;
 static uint8_t frontBytes[16], extSync, runState;
 static unsigned added[7], echoes, noteOffs, muted, repaints;
 void menu_repaintAll(void){repaints++;}
+void midiParser_setPitchBendRange(uint8_t value);
+uint8_t midiParser_isValidChannel(uint8_t chan);
+static uint16_t parsedParameter;
+void menu_parseGlobalParam(uint16_t parameter,uint8_t value){parsedParameter=parameter;(void)value;}
 static uint8_t played[7], recordedNote[7], active_voices;
 typedef struct { uint16_t midiFreq; uint8_t baseNote; float freq,pitchBend; } OscInfo;
 typedef struct { OscInfo osc,modOsc,modOsc2; uint8_t oscVolEg; float decayClosed,decayOpen; } TestVoice;
@@ -199,7 +203,9 @@ int main(void) {
             int wantPitch=rx && channel==midi_ControlChannel && cc==27;
             int wantExtra=rx && channel==midi_ControlChannel &&
                 (cc==5||cc==6||cc==7||cc==8||cc==9||cc==28||(cc>=10&&cc<=16)||cc==126||
-                 (cc>=20&&cc<=26)||(cc>=30&&cc<=44)||(cc>=79&&cc<=87)||(cc>=46&&cc<=52)||(cc>=60&&cc<=66));
+                 (cc>=20&&cc<=26)||(cc>=30&&cc<=44)||((cc>=79&&cc<=84)||(cc>=88&&cc<=91))||(cc>=46&&cc<=52)||(cc>=60&&cc<=66)||
+                 (overlap<0&&((cc>=54&&cc<=59)||(cc>=67&&cc<=69)||(cc>=92&&cc<=97)||(cc>=102&&cc<=119))));
+            int wantPwm=rx && overlap<0 && channel==midi_ControlChannel && cc>=92 && cc<=97;
             MidiMsg mapped=message(source,channel,MIDI_CC,cc,127);
             int wantVoice=rx && channel<7 && channel!=midi_ControlChannel && midiParser_mapVoiceCc((uint8_t)channel,(uint8_t)cc,&mapped);
             int wantSnare=wantVoice && channel==3 && cc>=112 && cc<=118;
@@ -207,7 +213,7 @@ int main(void) {
                 channel==target-1 || channel==7);
             reset_parameters(); reset_spies(); midiParser_setFilter(0,rx?15:11);
             midiParser_parseMidiMessage(message(source,channel,MIDI_CC,cc,127));
-            check(morphed==(unsigned)wantMorph && handled==(unsigned)(wantLegacy||wantVoice),
+            check(morphed==(unsigned)wantMorph && handled==(unsigned)(wantLegacy||wantVoice||wantPwm),
                 "CC route",overlap,channel,cc);
             check(recorded==(unsigned)(wantLegacy||wantVoice) && front==(unsigned)(3*wantLegacy),
                 "legacy automation/front feedback",overlap,channel,cc);
@@ -434,19 +440,50 @@ int main(void) {
     reset_spies();midiParser_parseMidiMessage(message(0,0,MIDI_CONTINUE,0,0));
     check(runState==1&&front==3&&frontBytes[2]==1,
       "MIDI CONTINUE updates front-panel PLAY state",0,0,0);
+    { /* Pch controls added in 0.2.22 reach the same state as the menu. */
+      static const struct {uint8_t cc;uint16_t parameter;uint8_t top;} pch[]={
+        {54,PAR_PERF_SCARCITY,100},{55,PAR_PERF_AVL,200},{56,PAR_PERF_FILL,1},
+        {57,PAR_MASTER_FILTER_ENABLE,1},{58,PAR_PITCH_BEND_RANGE,48},
+        {59,PAR_FX_SEND_MODE,3},{67,PAR_FX_OUTPUT_MODE,1},{68,PAR_CLOCK_OFFSET,80}};
+      midi_ControlChannel=15; midiParser_setFilter(0,15);
+      for(unsigned i=0;i<sizeof(pch)/sizeof(pch[0]);i++) {
+        reset_parameters(); reset_spies();
+        midiParser_parseMidiMessage(message(0,15,MIDI_CC,pch[i].cc,127));
+        check(activeParameters[pch[i].parameter]==pch[i].top&&repaints>=1,"Pch control reaches its top",pch[i].cc,127,activeParameters[pch[i].parameter]);
+      }
+      reset_parameters(); activeParameters[PAR_CLOCK_OFFSET]=50;
+      midiParser_parseMidiMessage(message(0,15,MIDI_CC,69,127));
+      check(activeParameters[PAR_CLOCK_OFFSET_FINE]==9,"Pch fine clock offset",69,127,0);
+      for(unsigned v=0;v<6;v++) {
+        reset_parameters(); reset_spies(); parsedParameter=0;
+        midiParser_parseMidiMessage(message(0,15,MIDI_CC,92+v,100));
+        check(activeParameters[PAR_PWM_1+v]==100&&handled==1,"Pch PWM",v,100,0);
+        midiParser_parseMidiMessage(message(0,15,MIDI_CC,102+v,100));
+        check(activeParameters[PAR_LFO_SLEW1+v]==100&&parsedParameter==PAR_LFO_SLEW1+v,"Pch LFO slew",v,100,0);
+        midiParser_parseMidiMessage(message(0,15,MIDI_CC,108+v,127));
+        check(activeParameters[PAR_LFO_POL1+v]==2&&parsedParameter==PAR_LFO_POL1+v,"Pch LFO polarity",v,127,0);
+        midiParser_parseMidiMessage(message(0,15,MIDI_CC,114+v,100));
+        check(activeParameters[PAR_RPS_AMT1+v]==100&&parsedParameter==PAR_RPS_AMT1+v,"Pch random step depth",v,100,0);
+      }
+    }
     printf("PASS %u assertions against extracted firmware dispatch functions\n",cases);
     { FILE *f=fopen("cc-map.csv","w"); if(!f) return 2;
       fprintf(f,"cc,legacy_symbol,legacy_target_group,dedicated_Pch_now\n");
       for(cc=0;cc<128;cc++) fprintf(f,"%d,%s,%d,%s\n",cc,cc_names[cc],
         midiParser_cc2voiceNr((uint8_t)cc),cc==2?"Morph":cc==27?"Global pitch":
           cc==28?"Global decay":cc==5?"Random step":cc==6?"Previous step repeat":
-          cc==7?"Global probability":cc==8?"Step chance scale":
+          cc==7?"Global probability":cc==8?"Step chance scale":cc==9?"Random velocity":
           cc==10?"Delay chance":cc==11?"Delay clock":cc==12?"Delay count":
           cc==13?"Delay bounce":cc==14?"Delay exponent":
           cc==15?"Delay pitch":cc==16?"Delay mode":cc==126?"Delay velocity target":
           (cc>=20&&cc<=26)?"Voice/master VCA":(cc>=30&&cc<=36)?"External FX send":
           cc==37?"Master filter cutoff":cc==38?"Master filter resonance":cc==39?"Master filter drive":
-          (cc>=79&&cc<=87)?"Global grid select":
+          (cc>=79&&cc<=84)?"spd":(cc>=88&&cc<=91)?"sct":
+          cc==54?"Scarcity":cc==55?"All velocity":cc==56?"Fill":cc==57?"Master filter enable":
+          cc==58?"Pitch bend range":cc==59?"FX send mode":cc==67?"FX output mode":
+          cc==68?"Clock offset":cc==69?"Clock offset fine":(cc>=92&&cc<=97)?"Voice PWM":
+          (cc>=102&&cc<=107)?"LFO slew":(cc>=108&&cc<=113)?"LFO polarity":
+          (cc>=114&&cc<=119)?"Random step LFO depth":
           cc==40?"Shuffle master":cc==41?"Groove SH2":cc==42?"Groove SH3":cc==43?"Groove SH4":cc==44?"Accent master":cc==46?"Accent decay":cc==47?"Accent sample rate":
           cc==48?"Accent filter":cc==49?"Accent coarse pitch":
           cc==50?"Accent slope":cc==51?"Accent mod amount":
@@ -508,7 +545,7 @@ functions += '\n' + '\n'.join(function(n) for n in (
     'midiParser_setStepPerformance',
     'midiParser_velocityLive','midiParser_velocityCc','midiParser_applyVelocityDestination','midiParser_refreshVelocityVoice',
     'midiParser_refreshVelocityParameter','midiParser_setAccentParameter',
-    'midiParser_applyPerformanceVelocity','midiParser_setDelayParameter','midiParser_extendedPerformanceCc',
+    'midiParser_applyPerformanceVelocity','midiParser_setDelayParameter','midiParser_needsOwnPch','midiParser_scaleCc','midiParser_menuCc','midiParser_extendedPerformanceCc',
     'midiParser_recalcGlobalPitch', 'midiParser_setGlobalPitch', 'midiParser_setPitchBendRange',
     'midiParser_setControlNotePitch', 'midiParser_applyVoicePitchBend',
     'midiParser_isValidChannel', 'midiParser_mapVoiceCc', 'midiParser_handleVoiceChannelCc', 'midiParser_cc2voiceNr',

@@ -1,19 +1,20 @@
 # Performance controls
 
 The main PERF page shows BPM, roll, Morph, master sample rate, shuffle,
-global pitch (`gpt`), global decay (`gdc`) and sequencer grid (`scl`).
-`scl` offers `pat` plus 2/4/6/8/12/16/24/32 steps per 4/4 bar.
+global pitch (`gpt`), global decay (`gdc`) and speed (`spd`).
+`spd` offers /8, /4, /2, 1, *2 and *4 relative to the stored pattern rate. It starts at 1 and tops out at 64 steps a bar, or 48 on ternary rates. Pch CC 79-84 select it.
+A pattern stores its own rate: 2/4/6/8/12/16/24/32 steps per 4/4 bar.
 `pat` follows the scale saved with the current pattern. Hold PERFORMANCE to
 open its Scale window. Turn the encoder to preview, then click to confirm.
-Confirmation enables `scl=pat`. While running, the new division begins at
+While running, the new division begins at
 Step 1 on the next transport bar downbeat; while stopped it applies at once.
 The window shows `click=OK` for an unconfirmed preview and `next 1` while a
 confirmed change is pending. Leaving without confirming discards the preview.
 LOAD retains its normal operation.
 
 All 64 stored steps play at 2/4/6/8/16/24/32, at the selected speed. At 12,
-each 16-step page plays slots 1–12, giving 48 played steps over four pages;
-slots 13–16 remain stored. This replaces the old 12a/b/c skip patterns.
+each 16-step page plays slots 1ï¿½12, giving 48 played steps over four pages;
+slots 13ï¿½16 remain stored. This replaces the old 12a/b/c skip patterns.
 
 | Scale | MIDI clocks/step | Duration of a full 64-slot pattern |
 |---|---:|---:|
@@ -32,11 +33,11 @@ A checked `SCL2` trailer stores the actual division after legacy PatV03 data;
 older pattern files default to 16. Existing steps and automation are retained.
 The 29-byte `MUTA.CFG` v3 sidecar marks the new global override numbering;
 v1/v2 sidecars still load, translating old 16 to 16 and 12a/b/c to 12.
-`pbr` remains on the probability page.
+`pbr` moved to the third global settings page in Mutador 0.2.18.
 SHIFT + Step 1 enters pattern selection from every mode and shows the first
 PERF display. It cancels pending step-automation selection and COPY/CLEAR
 selection before entering pattern selection.
-SHIFT + Step 4 opens the four-point Groove page: `shf`, `sh2`, `sh3`, `sh4`.
+SHIFT + Step 4 opens the Groove page: `shf`, `sh2`, `sh3`, `sh4`. Its second half has `fil`, a temporary on/off Fill latch for Step conditions.
 `shf` is the same master amount shown on the main PERF page. In each repeating
 group of four steps, the first stays fixed. The other three controls move
 their steps earlier (negative) or later (positive). Their displayed default
@@ -65,7 +66,7 @@ its behavior is unchanged. All four load controls show `off/aut`. On each
 LCD view the labels are in the upper row and their values in the lower row.
 The second PERF page contains random step (`rst`), previous-step repeat
 (`csr`), Scarcity (`pSc`), global hit chance (`pst`), `cnt`, Random Velocity
-(`rvl`), All Velocity (`avl`) and pitch-bend range (`pbr`), in that order.
+(`rvl`), All Velocity (`avl`) and `sct`, in that order.
 `cnt` scales the probability already stored on each step.
 
 `rvl` ranges from 0 to 100 and is neutral at 100. It chooses a random
@@ -118,10 +119,12 @@ when a voice is deselected. Pattern changes and transport resets clear the
 repeat queue. The ordinary mute settings are preserved. Delay input comes
 from eligible sequencer hits, not manual rolls or incoming MIDI.
 
-SHIFT + Step 2, 3 and 4 stay on their own pages; pressing PERF or scrolling
-through its regular pages does not enter them. Further regular PERF pages
-contain master filter cutoff, resonance and drive, plus external sends
-`s1`â€“`s6` and `sm`. The seven VCAs remain active but are not shown as a
+SHIFT + Step 5 opens the external sends `s1`â€“`s6` and `sm`; pressing it again
+switches between the two screens.
+
+SHIFT + Step 2, 3, 4 and 5 stay on their own pages; pressing PERF or scrolling
+through its regular pages does not enter them. A further regular PERF page
+contains master filter cutoff, resonance and drive. The seven VCAs remain active but are not shown as a
 separate PERF page. Global `mfl` switches
 the master filter on/off; `fxs` selects normal/AFL/PFL/CFL send routing and
 `fxo` selects stereo/bipolar output routing. Sends use the physical output 2.

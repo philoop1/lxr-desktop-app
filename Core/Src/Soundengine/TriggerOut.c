@@ -489,7 +489,7 @@ void trigger_triggerVoice(uint8_t voice, triggerMode mode)
 //--------------------------------------------------
 //cnt [0:23] for a 16 nothe
 // => 96ppq (96/4 = 24pulses per 16th note
-void trigger_clockTick(uint8_t onOff, uint8_t cnt)
+void trigger_clockTick(uint8_t onOff, uint16_t cnt)
 {
 #if 1
 	uint8_t prescaler = 1;

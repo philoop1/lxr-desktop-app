@@ -38,7 +38,10 @@ sync=source('Core/Src/Soundengine/Sequencer/clockSync.c')
 assert re.search(r'case SEQ_DRUM2:\s*buttonHandler_openPerformanceLayer\(PERF_ACCENT_SUBPAGE\)',btn)
 assert re.search(r'case SEQ_SNARE:\s*buttonHandler_openPerformanceLayer\(PERF_GROOVE_SUBPAGE\)',btn)
 assert re.search(r'case SEQ_DRUM3:\s*buttonHandler_openPerformanceLayer\(PERF_DELAY_SUBPAGE\)',btn)
+assert re.search(r'case SEQ_CLP:.*\s*buttonHandler_openPerformanceLayer\(PERF_SEND_SUBPAGE\)',btn)
 prelude=r'''
+#define DISABLE_CONV_WARNING
+#define END_DISABLE_CONV_WARNING
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,8 +52,12 @@ prelude=r'''
 #include "Soundengine/Sequencer/PerformanceScale.h"
 #include "Soundengine/Sequencer/PerformanceDelay.h"
 #define NUM_TRACKS 7
+#define NUM_STEPS 64
 #define MAX_SONG_LENGTH 64
 #define STEP_VOLUME_MASK 127
+enum {TRIG_COND_ALWAYS,TRIG_COND_FIRST,TRIG_COND_NOT_FIRST,
+      TRIG_COND_FILL,TRIG_COND_NOT_FILL,TRIG_COND_RATIO_BASE,
+      TRIG_COND_PRE=TRIG_COND_RATIO_BASE+36,TRIG_COND_NOT_PRE,TRIG_COND_NEI,TRIG_COND_NOT_NEI,TRIG_COND_LAST,TRIG_COND_NOT_LAST,TRIG_COND_COUNT};
 #define USE_PATTERN_EDIT_BUFFER 0
 #define USE_SD_CARD 1
 #define LED_PAGE_DOWN 16
@@ -62,6 +69,7 @@ prelude=r'''
 #define PERF_DELAY_SUBPAGE 2
 #define PERF_ACCENT_SUBPAGE 3
 #define PERF_GROOVE_SUBPAGE 4
+#define PERF_SEND_SUBPAGE 6
 #define SELECT_MODE_PERF 1
 #define PAGE_SHIFT 3
 #define NUM_SUB_PAGES 8
@@ -81,8 +89,13 @@ struct {
   Step seq_subStepPattern[64][7][64];
   struct {uint8_t shift,flam;} seq_stepTiming[64][7][64];
   uint8_t flamProbability[64][7][64];
+  uint8_t trigCondition[64][7][64];
 } seq_patternSet;
 uint8_t seq_stepIndex[7],seq_activePattern,seq_running=1,seq_mutedTracks;
+uint32_t seq_conditionLoop[7];
+uint8_t seq_conditionTimingOnly,seq_conditionHistory[7],seq_conditionHistoryValid[7],seq_conditionCacheIndex[7];
+struct {uint32_t id;uint8_t result;}seq_conditionCache[7][8];
+uint8_t seq_conditionLastLoop(void){return 0;}
 uint8_t lastWasNoteOn[7],chokeCurrent,chokeNext;
 uint8_t seq_delayFiredMask,seq_usesFineClock,seq_finePhase;
 uint8_t seq_prescaleCounter,seq_grooveNoteOff[7];
@@ -100,11 +113,12 @@ unsigned boundaryCalls,midiClocks,clockTicks,groovePulses,on2State,on4State;
 #define WINDOW_SIZE 8
 #define WINDOW_MASK 7
 float sync_window[8];
-uint8_t sync_writePos,sync_samples,sync_armed,sync_clockCnt;
+uint8_t sync_writePos,sync_samples,sync_armed,sync_stepFlip;uint16_t sync_clockCnt;
 uint32_t sync_lastClockTick;
 uint32_t sync_lastClockCycles,sync_cycleWindow[8],sync_nextLeadCycles;
 uint8_t sync_cycleSamples,sync_cycleWritePos,sync_leadArmed,sync_leadConsumed;
-uint8_t sync_barClockCnt,sync_barPhaseValid,sync_startOnNextBar,sync_startLeadArmed;
+#define SYNC_CLOCK_LOST_TICKS 4000u
+uint8_t sync_barClockCnt,sync_barPhaseValid,sync_barPhaseFromStart,sync_startOnNextBar,sync_startLeadArmed;
 uint32_t sync_nextStartCycles;
 uint8_t sync_clockOffsetTenths=50,sync_clockOffsetHundredths;
 struct {uint32_t CYCCNT;} dwtMock;
@@ -142,6 +156,7 @@ void buttonHandler_refreshVoiceDisplay(void);
 uint8_t menu_getActivePage(void){return currentPage;}
 uint8_t menu_getSubPage(void){return (uint8_t)(menuIndex>>PAGE_SHIFT);}
 uint8_t menu_getActiveVoice(void){return selectedVoice;}
+uint8_t getMenuIndx(void){return menuIndex;}
 void menu_switchPage(uint8_t page){currentPage=page;}
 void menu_repaintAll(void){repaintCount++;}
 void led_setMode2(uint8_t mode){lastMode=mode;}
@@ -194,9 +209,9 @@ int f_read(FIL *f,void *dest,unsigned count,unsigned *read){
 }
 '''
 functions='\n'.join(function(seq,n) for n in (
-    'seq_perfRandom','seq_perfAdvance','seq_intIsMainStepActive','seq_getLongestTrack','getShiftValue',
+    'seq_perfRandom','seq_perfAdvance','seq_conditionAllows','seq_conditionResolve','seq_intIsMainStepActive','seq_getLongestTrack','getShiftValue',
     'flamIdxToPattern','seq_getShiftFlamPattern','seq_triggerVoice','seq_emitDelay','seq_processFlam',
-    'seq_processGrooveFine','seq_applyPendingScale','seq_processScaleFrame','seq_processFineFrame','seq_advanceFineFrame','seq_calcDeltaT','seq_MidiSyncQueue','seq_tick','seq_determineNextPattern'))
+    'seq_processGrooveFine','seq_applyPendingScale','seq_applyPendingTransform','seq_processScaleFrame','seq_processFineFrame','seq_advanceFineFrame','seq_calcDeltaT','seq_MidiSyncQueue','seq_tick','seq_determineNextPattern'))
 functions+='\n'+'\n'.join(function(sync,n) for n in ('sync_calcBpm','sync_tick','sync_tickAtCycles','sync_requestStartOnNextBar','sync_processStartLead','sync_setClockOffset','sync_shouldLeadStep','sync_markLeadStep'))
 functions+='\n'+function(btn,'buttonHandler_selectPatternLoop')
 functions+='\n'+function(led,'led_initPatternSelectLeds')
@@ -206,9 +221,20 @@ functions+='\n'+function(btn,'buttonHandler_isMidiDelayPage')
 functions+='\n'+function(btn,'buttonHandler_refreshVoiceDisplay')
 functions+='\n'+function(btn,'buttonHandler_handleDelayVoice')
 functions+='\n'+function(menu,'menu_openPerformanceLayer')
-functions+='\n'+function(menu,'has2ndPage')+'\n'+function(menu,'menu_switchSubPage')
+functions+='\n'+function(menu,'menu_isPerfShortcutSubPage')+'\n'+function(menu,'has2ndPage')+'\n'+function(menu,'menu_switchSubPage')
+functions+='\n'+function(menu,'menu_openLfoExtra')+'\n'+function(menu,'menu_cycleVoiceLfo')+'\n'+function(menu,'menu_resetActiveParameter')
 functions+='\n'+function(btn,'buttonHandler_openPerformanceLayer')
 functions+='\n'+function(led,'led_pulseLed')
+
+page_header=source('Core/Inc/menu/menu.h')
+page_enum=re.search(r'enum PageNames\s*\{.*?\};',page_header,re.S).group(0)
+# Existing harness uses a compact page enum; add the new names using real offsets.
+extra_page_names=['VOICE7_PAGE','LFO_EXTRA1_PAGE','LFO_EXTRA6_PAGE']
+for name in extra_page_names:
+    if not re.search(r'\b'+name+r'\b',prelude):
+        names=[n.strip() for n in page_enum.split('{',1)[1].split('}',1)[0].split(',') if n.strip()]
+        prelude+='\n#define '+name+' '+str(names.index(name))+'\n'
+
 tests=r'''
 static void check(int ok,const char *what){checks++;if(!ok){fprintf(stderr,"FAIL %s\n",what);exit(1);}}
 static void clearSpies(void){hits=outputs=off=automations=0;}
@@ -216,9 +242,10 @@ static void setup(uint64_t active){
  memset(&seq_patternSet,0,sizeof(seq_patternSet));for(int t=0;t<7;t++)seq_perfTracks[t]=0;
  memset(lfoTriggers,0,sizeof(lfoTriggers));memset(seq_lastLfoEventId,0,sizeof(seq_lastLfoEventId));seq_triggerEventId=0;
  memset(lastWasNoteOn,0,sizeof(lastWasNoteOn));memset(activeParameters,0,sizeof(activeParameters));activeParameters[PAR_PERF_RANDOM_VELO]=100;activeParameters[PAR_PERF_AVL]=100;
+ memset(seq_conditionLoop,0,sizeof(seq_conditionLoop));memset(seq_conditionCache,0,sizeof(seq_conditionCache));memset(seq_conditionHistoryValid,0,sizeof(seq_conditionHistoryValid));
  seq_scaleBarFrame=0;seq_scaleRestart=0;captureFine=0;externalSync=0;fineHits=0;boundaryCalls=midiClocks=clockTicks=groovePulses=0;
  perf_grooveConfigure(&seq_groove,0,63,63,63);perf_delaySetGroove(&seq_groove);seq_usesFineClock=0;seq_finePhase=0;seq_prescaleCounter=0;
- perf_scaleSetPattern(16,0);perf_scaleSet(0,0);perf_resetSteps();seq_activePattern=0;seq_mutedTracks=126;seq_running=1;
+ perf_scaleSetPattern(16,0);perf_speedSet(PERF_SPEED_NEUTRAL,0);perf_resetSteps();seq_activePattern=0;seq_mutedTracks=126;seq_running=1;
  perf_setNoteProbability(100);
  perf_delayConfigure((PerfDelayConfig){0,6,0,63,5,0,64,127,0});perf_delayReset();
  for(int t=0;t<7;t++){
@@ -262,6 +289,33 @@ static void runFrames(unsigned count) {
 }
 
 int main(void){
+ setup(3);perf_configure(0,0,100,100);seq_perfAdvance(0,0,16);
+ PerfStep historyEvent={0,100,0,0,1,0x70000001};
+ seq_patternSet.seq_subStepPattern[0][0][0].prob=0;
+ check(!seq_conditionResolve(0,&historyEvent,0),"failed probability enters condition history");
+ PerfStep dependent={1,1,0,1,1,0x70000002};
+ seq_patternSet.trigCondition[0][0][1]=TRIG_COND_PRE;
+ check(!seq_conditionResolve(0,&dependent,1),"PRE follows failed condition");
+ dependent.eventId++;
+ seq_patternSet.trigCondition[0][0][1]=TRIG_COND_NOT_PRE;
+ check(seq_conditionResolve(0,&dependent,1),"not-PRE follows failure without replacing history");
+ check(!seq_conditionHistory[0],"PRE variants do not replace history");
+ seq_patternSet.seq_subStepPattern[0][0][0].prob=100;
+ seq_patternSet.trigCondition[0][0][0]=TRIG_COND_FIRST;historyEvent.eventId+=10;
+ check(seq_conditionResolve(0,&historyEvent,0),"true first condition enters history");
+ seq_patternSet.trigCondition[0][1][0]=TRIG_COND_NEI;historyEvent.eventId++;
+ check(seq_conditionResolve(1,&historyEvent,0),"NEI follows preceding track");
+ seq_conditionHistory[0]=0;
+ check(seq_conditionResolve(1,&historyEvent,0),"flam reuses cached NEI result");
+ setup(1);perf_configure(0,0,100,100);seq_perfAdvance(0,0,16);
+ seq_patternSet.trigCondition[0][0][0]=TRIG_COND_FILL;
+ check(seq_getShiftFlamPattern(0,0,STEP_CURRENT)==0,"FILL blocks step when off");
+ activeParameters[PAR_PERF_FILL]=1;
+ check(seq_getShiftFlamPattern(0,0,STEP_CURRENT)!=0,"FILL enables step when on");
+ seq_patternSet.trigCondition[0][0][0]=TRIG_COND_RATIO_BASE+1;
+ check(seq_getShiftFlamPattern(0,0,STEP_CURRENT)!=0,"1:2 plays first loop");
+ seq_conditionLoop[0]=1;
+ check(seq_getShiftFlamPattern(0,0,STEP_CURRENT)==0,"1:2 skips second loop");
  setup(1);perf_configure(0,0,100,100);
  seq_patternSet.seq_stepTiming[0][0][0].flam=5;
  seq_perfAdvance(0,0,16);
@@ -271,6 +325,21 @@ int main(void){
  check(seq_getShiftFlamPattern(0,0,STEP_CURRENT)==flamIdxToPattern(5),"FPR100 keeps all flam hits");
  for(unsigned frame=0;frame<24;frame++)seq_processFlam((uint8_t)frame);
  check(lfoTriggers[0]==1,"played flam group triggers step random once");
+ for(unsigned track=1;track<=2;track++){
+   setup(1);perf_configure(0,0,100,100);
+   seq_mutedTracks=(uint8_t)(127u^(1u<<track));
+   seq_perfAdvance((uint8_t)track,0,16);
+   for(unsigned frame=0;frame<24;frame++)seq_processFlam((uint8_t)frame);
+   check(lfoTriggers[track]==1,"voice 2 and 3 playback dispatch their own step event");
+ }
+ setup(1);perf_configure(0,0,100,100);
+ seq_patternSet.seq_stepTiming[0][0][0].flam=5;seq_perfAdvance(0,0,16);
+ seq_patternSet.flamProbability[0][0][0]=100;
+ for(unsigned frame=0;frame<24;frame++)seq_processFlam((uint8_t)frame);
+ check(hits==8,"FPR100 emits all eight flam notes");
+ clearSpies();seq_patternSet.flamProbability[0][0][0]=0;
+ for(unsigned frame=0;frame<24;frame++)seq_processFlam((uint8_t)frame);
+ check(hits==1,"FPR0 emits exactly the main note");
  setup(1);seq_mutedTracks=127;seq_perfAdvance(0,0,16);
  for(unsigned frame=0;frame<24;frame++)seq_processFlam((uint8_t)frame);
  check(lfoTriggers[0]==0,"muted step does not trigger random LFO");
@@ -474,6 +543,9 @@ int main(void){
  buttonHandler_openPerformanceLayer(PERF_GROOVE_SUBPAGE);
  check(menu_getSubPage()==4&&voiceMask==((uint8_t)~18&127)&&menu_muteModeActive,
        "SHIFT4 groove page keeps ordinary mute LEDs");
+ buttonHandler_openPerformanceLayer(PERF_SEND_SUBPAGE);
+ check(menu_getSubPage()==6&&voiceMask==((uint8_t)~18&127)&&menu_muteModeActive,
+       "SHIFT5 send page keeps ordinary mute LEDs");
  check(!buttonHandler_handleDelayVoice(2)&&activeParameters[PAR_PERF_DELAY_INPUT_MASK]==49,
        "voice buttons outside delay don't toggle mask");
  currentPage=0;buttonHandler_refreshVoiceDisplay();check(voiceMask==16,"normal voice LED restored");
@@ -537,7 +609,7 @@ int main(void){
  // All eight rates keep MIDI clock straight and produce exact steps per bar.
  const uint8_t divisions[8]={2,4,6,8,12,16,24,32};
  for(unsigned rate=0;rate<8;rate++) {
-   setup(UINT64_MAX);perf_scaleSet((uint8_t)(rate+1),0);perf_configure(0,0,100,100);
+   setup(UINT64_MAX);perf_scaleSetPattern(perf_scaleDivision(rate),0);perf_configure(0,0,100,100);
    memset(seq_stepIndex,255,sizeof(seq_stepIndex));seq_prescaleCounter=seq_finePhase=0;
    seq_tempo=125;seq_deltaT=0;seq_lastTick=0;
    for(systick_ticks=0;systick_ticks<7680;systick_ticks++)seq_tick();
@@ -545,15 +617,32 @@ int main(void){
        "eight scale rates preserve full-bar MIDI clock and event count");
  }
  // A confirmed selection stays pending mid-bar and restarts Step 1 once on the next 1.
- setup(UINT64_MAX);perf_scaleSet(6,0);perf_configure(0,0,100,100);
+ setup(UINT64_MAX);perf_scaleSetPattern(16,0);perf_configure(0,0,100,100);
  memset(seq_stepIndex,255,sizeof(seq_stepIndex));seq_prescaleCounter=seq_finePhase=0;
  seq_tempo=125;seq_deltaT=0;seq_lastTick=0;
  for(systick_ticks=0;systick_ticks<1000;systick_ticks++)seq_tick();
- perf_scaleSet(8,1);
+ perf_scaleSetPattern(32,1);
  for(;systick_ticks<7680;systick_ticks++)seq_tick();
  check(perf_scaleMode()==16&&boundaryCalls==16,"confirmed internal scale waits for next bar");
  seq_tick();check(perf_scaleMode()==32&&boundaryCalls==17&&seq_stepIndex[0]==0&&midiClocks==97,
        "confirmed internal scale starts Step 1 once on next downbeat");
+ // Live sct keeps the musical place: every quarter starts the same source group.
+ for(unsigned path=0;path<256;path++) {
+  setup(UINT64_MAX);perf_scaleSetPattern(16,0);perf_transformSet(0,0);perf_configure(0,0,100,100);
+  memset(seq_stepIndex,255,sizeof(seq_stepIndex));seq_prescaleCounter=seq_finePhase=0;
+  seq_tempo=125;seq_deltaT=0;seq_lastTick=0;unsigned quarter=0,mode=0,previous=0;
+  for(systick_ticks=0;systick_ticks<16u*1920u;systick_ticks++) {
+   if(systick_ticks%437u==path%437u)perf_transformSet((uint8_t)(mode=(mode+path+1u)&3u),1);
+   seq_tick();
+   const unsigned frame=seq_scaleBarFrame;
+   if(frame>=1u && frame%192u==1u && frame!=previous) {
+    previous=frame;quarter++;
+    check(seq_stepIndex[0]==(int8_t)(((quarter-1u)*4u)&15u),"live sct stays on the quarter grid");
+   }
+  }
+  perf_transformSet(0,0);
+ }
+ // Ternary gaps pause every track for one slot and keep the bar length.
  // External scheduler uses each actual MIDI edge, without groove on the transport.
  setup(2);perf_configure(0,0,100,100);externalSync=2;
  perf_grooveConfigure(&seq_groove,127,0,63,63);perf_delaySetGroove(&seq_groove);
@@ -592,6 +681,16 @@ int main(void){
  check(!sync_leadArmed&&boundaryCalls==before+2,"zero offset returns to edge-triggered playback");
  // Manual PLAY while MIDI Clock runs waits for the next 96-pulse bar.
  setup(2);externalSync=2;seq_running=0;seq_prescaleCounter=24;
+ // Without MIDI START the pulse count is no bar, so PLAY starts at once.
+ sync_barPhaseFromStart=0;sync_barPhaseValid=1;sync_barClockCnt=40;sync_startOnNextBar=0;seq_running=0;
+ sync_requestStartOnNextBar();
+ check(seq_running&&!sync_startOnNextBar&&sync_barClockCnt==95&&!sync_clockCnt,"PLAY without MIDI START starts at once");
+ seq_running=0;sync_barPhaseFromStart=1;sync_barClockCnt=40;
+ sync_requestStartOnNextBar();
+ check(!seq_running&&sync_startOnNextBar,"PLAY after MIDI START waits for the bar");
+ sync_startOnNextBar=0;sync_lastClockTick=0;systick_ticks=4001;sync_tickAtCycles(1000);
+ check(!sync_barPhaseFromStart,"lost clock forgets the MIDI START position");
+ sync_barPhaseFromStart=1;seq_running=0;
  sync_barPhaseValid=1;sync_barClockCnt=94;sync_clockCnt=4;
  sync_startOnNextBar=sync_startLeadArmed=sync_leadArmed=sync_leadConsumed=0;
  sync_armed=1;sync_cycleSamples=1;sync_cycleWindow[0]=edgeCycles;
@@ -612,7 +711,7 @@ int main(void){
  check(seq_running&&boundaryCalls==before+1,"zero-offset manual start plays on pulse 96");
  sync_setClockOffset(80,9);check(sync_clockOffsetHundredths==0,"8 ms maximum clears fine digit");
  externalSync=0;
- setup(UINT64_MAX);perf_scaleSet(5,0);externalSync=2;
+ setup(UINT64_MAX);perf_scaleSetPattern(12,0);externalSync=2;
  sync_clockCnt=sync_armed=sync_samples=sync_writePos=0;
  sync_cycleSamples=sync_cycleWritePos=sync_leadArmed=sync_leadConsumed=0;
  sync_setClockOffset(0,0);before=boundaryCalls;
@@ -621,48 +720,74 @@ int main(void){
    if(pulse==6)check(boundaryCalls==before+1,"12-grid waits beyond sixth MIDI pulse");
  }
  check(boundaryCalls==before+2,"12-grid advances on eighth MIDI pulse");
+ // Six-tick steps alternate one and two clocks, so a bar keeps all 64 of them.
+ setup(UINT64_MAX);perf_scaleSetPattern(16,0);perf_speedSet(5,0);externalSync=2;sync_setClockOffset(0,0);
+ sync_clockCnt=sync_armed=sync_samples=sync_writePos=sync_stepFlip=0;sync_barClockCnt=95;sync_barPhaseValid=1;
+ sync_cycleSamples=sync_cycleWritePos=sync_leadArmed=sync_leadConsumed=0;
+ memset(seq_stepIndex,255,sizeof(seq_stepIndex));
+ for(unsigned pulse=0;pulse<96;pulse++){systick_ticks=pulse*80;sync_tickAtCycles(pulse*edgeCycles);}
+ check(boundaryCalls==64,"six-tick steps fill the bar on MIDI clock");
+ perf_speedSet(PERF_SPEED_NEUTRAL,0);
  // External MIDI uses the transport downbeat even when a change was queued mid-bar.
- setup(UINT64_MAX);perf_scaleSet(6,0);externalSync=2;sync_setClockOffset(0,0);
+ setup(UINT64_MAX);perf_scaleSetPattern(16,0);externalSync=2;sync_setClockOffset(0,0);
  sync_clockCnt=sync_armed=sync_samples=sync_writePos=0;sync_barClockCnt=95;sync_barPhaseValid=1;
  sync_cycleSamples=sync_cycleWritePos=sync_leadArmed=sync_leadConsumed=0;
  memset(seq_stepIndex,255,sizeof(seq_stepIndex));
  for(unsigned pulse=0;pulse<96;pulse++){
-   if(pulse==20)perf_scaleSet(8,1);
+   if(pulse==20)perf_scaleSetPattern(32,1);
    systick_ticks=pulse*80;sync_tickAtCycles(pulse*edgeCycles);
  }
  check(perf_scaleMode()==16&&boundaryCalls==16,"external scale remains pending until MIDI downbeat");
  systick_ticks=96*80;sync_tickAtCycles(96*edgeCycles);
  check(perf_scaleMode()==32&&boundaryCalls==17&&seq_stepIndex[0]==0,"MIDI downbeat applies scale with one Step 1");
- externalSync=0;perf_scaleSet(0,0);
+ externalSync=0;perf_scaleSetPattern(16,0);
  for(unsigned mode=1;mode<=8;mode++) {
-   setup(UINT64_MAX);perf_configure(0,0,100,100);perf_scaleSet((uint8_t)mode,0);
+   setup(UINT64_MAX);perf_configure(0,0,100,100);perf_scaleSetPattern(mode?perf_scaleDivision((uint8_t)(mode-1)):16,0);
    unsigned count=perf_scaleCount(16);runFrames(count*perf_scaleFrames());
    check(fineHits==count,"global grid compresses actual playback timeline");
    for(unsigned i=0;i<count;i++)check(fineSources[i]==perf_scaleToSource((uint8_t)i,16)&&fineTimes[i]==i*perf_scaleFrames(),
        "actual grid dispatcher uses correct stored source and timing");
  }
- setup(8);perf_configure(0,0,100,100);perf_scaleSet(5,0);
+ setup(8);perf_configure(0,0,100,100);perf_scaleSetPattern(12,0);
  perf_grooveConfigure(&seq_groove,127,63,63,0);perf_delaySetGroove(&seq_groove);
  runFrames(192);check(fineHits==1&&fineTimes[0]==144&&fineSources[0]==3,"12-step page and negative groove use scaled timing");
- setup(UINT64_MAX);perf_configure(100,0,100,100);perf_scaleSet(5,0);runFrames(1152);
+ setup(UINT64_MAX);perf_configure(100,0,100,100);perf_scaleSetPattern(12,0);runFrames(1152);
  for(unsigned i=0;i<fineHits;i++)check((fineSources[i]&15u)<12,"RST stays inside selected global grid");
- setup(1);perf_configure(0,127,100,100);perf_scaleSet(5,0);runFrames(768);
+ setup(1);perf_configure(0,127,100,100);perf_scaleSetPattern(12,0);runFrames(768);
  check(fineHits==12,"CSR retains repeats on compressed grid");
  for(unsigned i=0;i<fineHits;i++)check(fineSources[i]==0,"CSR source metadata survives grid mapping");
- perf_scaleSet(0,0);
+ perf_scaleSetPattern(16,0);
  currentPage=PERF_PAGE;menuIndex=0;
  for(unsigned page=0;page<8;page++){menuPages[PERF_PAGE][page].top1=1;menuPages[PERF_PAGE][page].top5=(page==4||page==5)?0:1;}
- const uint8_t screens[8]={0,4,8,12,40,48,52,0};
- for(unsigned i=0;i<8;i++) {
-   check(menuIndex==screens[i],"PERF cycle excludes dedicated SHIFT windows and VCA page");
+ const uint8_t screens[6]={0,4,8,12,40,0};
+ for(unsigned i=0;i<6;i++) {
+   check(menuIndex==screens[i],"PERF cycle excludes dedicated SHIFT windows, sends and VCA page");
    menu_switchSubPage(menu_getSubPage(),1);
  }
  setup(UINT64_MAX);for(unsigned t=0;t<7;t++)seq_patternSet.length[0][t]=4;
  seq_patternSet.length[0][3]=0;
  check(seq_getLongestTrack()==3,"legacy length zero is sixteen when choosing pattern boundary");
- perf_scaleSet(5,0);check(seq_getLongestTrack()==3,"pattern boundary follows longest compressed track");
- perf_scaleSet(0,0);
+ perf_scaleSetPattern(12,0);check(seq_getLongestTrack()==3,"pattern boundary follows longest compressed track");
+ perf_scaleSetPattern(16,0);
 
+
+ for(unsigned voice=0;voice<7;voice++) {
+   selectedVoice=(uint8_t)voice;currentPage=(uint8_t)voice;menuIndex=0;
+   menuPages[voice][6].top5=1;
+   unsigned extra=LFO_EXTRA1_PAGE+(voice>5?5:voice);
+   menuPages[extra][0].top5=1;
+   for(unsigned cycle=0;cycle<3;cycle++) {
+     for(unsigned screen=0;screen<4;screen++) {
+       check(menu_cycleVoiceLfo(6),"LFO click handled in voice editing");
+       menu_resetActiveParameter();
+       check(currentPage==(screen<2?voice:extra),"LFO click reaches correct voice or random page");
+       check(menuIndex==(screen<2?(6u<<PAGE_SHIFT):0u)+(screen&1u)*4u,"LFO four-screen cycle survives parameter reset");
+     }
+   }
+   check(menu_cycleVoiceLfo(5)&&currentPage==voice&&menuIndex==(5u<<PAGE_SHIFT),"another voice button exits random page");
+ }
+ currentPage=PERF_PAGE;menuIndex=0;
+ check(!menu_cycleVoiceLfo(6)&&currentPage==PERF_PAGE,"LFO helper leaves PERF alone");
  puts("PERFORMANCE PASS");printf("%u assertions against actual performance/flam/trigger/button/LED/globals code\n",checks);
  return 0;
 }

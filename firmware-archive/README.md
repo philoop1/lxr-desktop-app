@@ -91,3 +91,42 @@ to velocity 100. The one-time active PROJ/TMP conversion was backed up and
 verified separately; it is not performed automatically by the firmware.
 0.1.25 was copied to F: on 2026-10-31 and its SHA-256 verified. Physical-device
 testing remains open. The former 0.1.24 card image is backed up locally.
+
+Mutador 0.2.1: `LXR_V2_V1.7_Mutador0.2.1.img`, 323092 bytes, SHA256 `43016B34C3BDAB6316535F059889B628CA4A31FA2B0C2D820E895CFED05AB9AF`. Built and tested on host; device retest pending. Copied to SD F: and SHA256 verified; old update image backed up before removal.
+
+Mutador 0.2.2: LXR_V2_V1.7_Mutador0.2.2.img, 323284 bytes, SHA256 095A1A96B6BCF0A8DF5E01317DD4E033DE46789C0CA174571D3B86E020530978.
+
+Mutador 0.2.3: `LXR_V2_V1.7_Mutador0.2.3.img`, 323348 bytes, SHA256 `021569213D849D80AFE1A4A21BD621F5C4C600192C1417D27516CA232B50AD79`. Hardware retest pending.
+
+Mutador 0.2.4: `LXR_V2_V1.7_Mutador0.2.4.img`, 323420 bytes, SHA256 `71641EF6B46EE127889E207C669D447BBBE355B0E271B7BF50E08A1581C7F2F8`. Hardware retest pending.
+
+Mutador 0.2.5: `LXR_V2_V1.7_Mutador0.2.5.img`, 323460 bytes, SHA256 `2E21DEC9570ED5A2BA10B0D916FC14EFBD97B2DCB499E09C4034C582E863DFA5`. Hardware dst-change retest pending.
+
+Mutador 0.2.11: `LXR_V2_V1.7_Mutador0.2.11.img`, 331300 bytes, SHA256 `0421C3E632DF2806ADA1C3D4BF4C62F25B7EAC3D718BEE69A287ED64306B6A6D`. Copied to SD F: and hash verified; physical SCT navigation test pending.
+
+Mutador 0.2.12: `LXR_V2_V1.7_Mutador0.2.12.img`, 334820 bytes, SHA256 `61CBBCA7D922443F38DECEDBF58CD239FACA3C77F14FD75EFDCE84A548AB5341`. Cross-project transfer and overwrite confirmation need hardware validation.
+SD F: 0.2.12 copied and hash verified; old image archived.
+
+Mutador 0.2.13: `LXR_V2_V1.7_Mutador0.2.13.img`, 336996 bytes, SHA256 `5E50B7C2AA635E899DE37CF28EF7A79FFE5CC56371AFBC900889FA485D30EE9A`. Copied to SD F: and hash verified; old image backed up. Project transfer, P+K and the active-slot import need hardware validation.
+
+Mutador 0.2.14: `LXR_V2_V1.7_Mutador0.2.14.img`, 336996 bytes, SHA256 `905761062A2FAA68C36C11617084D8D57EB84589533798FD4C09658B393373A3`. Fixes the PROJECT double-press window. Copied to SD F: and hash verified; device retest pending.
+
+Mutador 0.2.15: `LXR_V2_V1.7_Mutador0.2.15.img`, 338300 bytes, SHA256 `FB924EE519640BA145CD7C8DDF465ACF2041C3D361E2339EEF1C54A326E1CAC4`. Adds LXR1 performance import. Copied to SD F: and hash verified; device test pending.
+
+Mutador 0.2.16: `LXR_V2_V1.7_Mutador0.2.16.img`, 339164 bytes, SHA256 `CB9EFED3A4C72944FF2F11E2CE0CC7B3C25F78A6BEFAA9F26A27C26EFB9528C1`. Transfer imports now reach the running project. Copied to SD F: and hash verified; hardware test pending.
+
+Mutador 0.2.17: `LXR_V2_V1.7_Mutador0.2.17.img`, 339348 bytes, SHA256 `4B9C9FA1EA5F55B517E2EA223F74F1EE1945BCFF0B1352CCA4B50BE0748AEEC1`. Encoder bank selection and long LOAD shortcut. Copied to SD F: and hash verified; hardware test pending.
+
+Mutador 0.2.18: `LXR_V2_V1.7_Mutador0.2.18.img`, 338028 bytes, SHA256 `703EC9754E072CC558E8125AFB11DBB9F01997168F3DE1BF0A56ABDD147B1CE6`. Live sct with real step time and CC 88-91. Copied to SD F: and hash verified; hardware test pending.
+
+Mutador 0.2.19: `LXR_V2_V1.7_Mutador0.2.19.img`, 338092 bytes, SHA256 `80A18D336FD1B53F623A31FCDF37BB16BF18DC391303D2C7388E74077EB99F5B`. Pattern rate survives leaving a pattern; beat LED on ternary rates. Copied to SD F: and hash verified; hardware test pending.
+
+Mutador 0.2.20: `LXR_V2_V1.7_Mutador0.2.20.img`, 338308 bytes, SHA256 `2C17F4482B3228387CA468F5C510F88531C685AC031BF81529B72370C70F094B`. spd replaces scl. Copied to SD F: and hash verified; hardware test pending.
+
+Mutador 0.2.21: `LXR_V2_V1.7_Mutador0.2.21.img`, 338812 bytes, SHA256 `9FE652FDDC384965DE6D534EF091A4823D5DFB32C18E814A5F348265B28BD9C1`. Rate 24/32 sets default track length; PLAY starts at once on clock without MIDI START. Not yet on SD; hardware test pending.
+
+Mutador 0.2.22: `LXR_V2_V1.7_Mutador0.2.22.img`, 339628 bytes, SHA256 `B958AE11784F9628F7AA9FC40067D2F90AA1363B89D038A104A5CD92176D42F3`. New Pch CCs for controls that were menu-only. Not yet on SD; F: holds 0.2.20. Hardware test pending.
+
+Mutador 0.2.23: `LXR_V2_V1.7_Mutador0.2.23.img`, 339748 bytes, SHA256 `F83C5EC848C37C2A9514418D4B8D292A544A3BB2C25256E45BBEF4D23E33C71D`. The 0.2.22 Pch CCs need a Pch of their own. Copied to SD F: and hash verified; hardware test pending.
+
+Mutador 0.2.24: `LXR_V2_V1.7_Mutador0.2.24.img`, 339708 bytes, SHA256 `FE0D3C60554B80188A5303FDB4EE7927154EC7D62B126EA9892C4608CFA9C019`. FX sends on SHIFT + Step 5; correct startup version. Copied to SD F: and hash verified; hardware test pending.

@@ -31,13 +31,17 @@ static uint8_t sync_leadArmed;
 static uint8_t sync_leadConsumed;
 static uint8_t sync_barClockCnt;
 static uint8_t sync_barPhaseValid;
+/* Clock alone gives a pulse count, not a bar: only MIDI START places the downbeat. */
+static uint8_t sync_barPhaseFromStart;
+#define SYNC_CLOCK_LOST_TICKS 4000u // 1 s
 static uint8_t sync_startOnNextBar;
 static uint8_t sync_startLeadArmed;
 static uint32_t sync_nextStartCycles;
 static uint8_t sync_clockOffsetTenths=50;
 static uint8_t sync_clockOffsetHundredths=0;
 
-uint8_t sync_clockCnt = 0;
+uint16_t sync_clockCnt = 0;
+static uint8_t sync_stepFlip;
 
 uint32_t sync_delayedStepTimer = 0;
 
@@ -66,6 +70,7 @@ void sync_tickAtCycles(uint32_t nowCycles)
 {
     const uint32_t now=systick_ticks;
     const uint32_t cycleInterval=nowCycles-sync_lastClockCycles;
+    if(now-sync_lastClockTick>SYNC_CLOCK_LOST_TICKS)sync_barPhaseFromStart=0;
     sync_lastClockTick=now;
     if(sync_armed && cycleInterval) {
         sync_cycleWindow[sync_cycleWritePos++]=cycleInterval;
@@ -92,13 +97,18 @@ void sync_tickAtCycles(uint32_t nowCycles)
         sync_clockCnt=0;
         sync_leadArmed=sync_leadConsumed=0;
     }
-    const uint8_t clocksPerStep=perf_scaleMidiClocks();
+    if(sync_clockCnt==0 && perf_transformBoundary((uint16_t)(sync_barClockCnt*8u)) &&
+       seq_applyPendingTransform())
+        sync_leadArmed=sync_leadConsumed=0;
+    /* A six-tick step alternates one and two clocks. */
+    const uint16_t clocksPerStep=(uint16_t)(perf_scaleMidiClocks()+((perf_scaleTicks()%4u)?sync_stepFlip:0u));
     if(sync_clockCnt==0) {
         if(sync_leadConsumed)sync_leadConsumed=0;
         else {seq_nextStep();seq_MidiSyncQueue(0);}
     }
     if(++sync_clockCnt>=clocksPerStep) {
         sync_clockCnt=0;
+        sync_stepFlip^=1;
         sync_leadArmed=0;
         if(sync_cycleSamples && sync_clockOffsetTenths+sync_clockOffsetHundredths) {
             uint64_t total=0;
@@ -132,7 +142,14 @@ void sync_tickAtCycles(uint32_t nowCycles)
 void sync_requestStartOnNextBar(void)
 {
     sync_startLeadArmed=0;
-    if(!sync_barPhaseValid || sync_barClockCnt==0) {
+    if(!sync_barPhaseFromStart) {
+        /* The next clock becomes the downbeat. */
+        sync_barPhaseValid=1;
+        sync_barClockCnt=95;
+        sync_startOnNextBar=0;
+        sync_clockCnt=0;
+        seq_setRunning(1);
+    } else if(sync_barClockCnt==0) {
         sync_startOnNextBar=0;
         sync_clockCnt=0;
         seq_setRunning(1);
@@ -174,6 +191,8 @@ void sync_midiResetPosition()
 	sync_clockCnt = 0;
 	sync_barClockCnt=0;
 	sync_barPhaseValid=1;
+	sync_barPhaseFromStart=1;
+	sync_lastClockTick=systick_ticks;
 	sync_startOnNextBar=0;
 	sync_startLeadArmed=0;
 	sync_leadArmed=0;
@@ -206,7 +225,7 @@ void sync_midiStartStop(uint8_t isStart)
 	}
 }
 //---------------------------------------------------------
-uint8_t sync_getClockCnt()
+uint16_t sync_getClockCnt()
 {
 	return sync_clockCnt;
 }

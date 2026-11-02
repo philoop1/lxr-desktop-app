@@ -54,6 +54,19 @@
 
 #define ROLL_VOLUME 100
 
+enum TrigCondition {
+	TRIG_COND_ALWAYS,
+	TRIG_COND_FIRST,
+	TRIG_COND_NOT_FIRST,
+	TRIG_COND_FILL,
+	TRIG_COND_NOT_FILL,
+	TRIG_COND_RATIO_BASE,
+	TRIG_COND_PRE=TRIG_COND_RATIO_BASE+36,
+	TRIG_COND_NOT_PRE,TRIG_COND_NEI,TRIG_COND_NOT_NEI,
+	TRIG_COND_LAST,TRIG_COND_NOT_LAST,
+	TRIG_COND_COUNT
+};
+
 enum Seq_QuantisationEnum
 {
 	NO_QUANTISATION,
@@ -100,12 +113,14 @@ typedef struct PatternSetStruct
 	Step seq_subStepPattern[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];	//contains step data
 	StepTiming seq_stepTiming[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
 	uint8_t flamProbability[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
+	uint8_t trigCondition[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
 	uint16_t seq_mainSteps[NUM_BARS][NUM_PATTERN][NUM_TRACKS];		//bits represent if step is active
 	//PatternSetting seq_patternSettings[NUM_PATTERN];				//pattern chaining info
 	uint8_t length[NUM_PATTERN][NUM_TRACKS];	//only used in euklid generator?
 	uint8_t shuffle[NUM_PATTERN];
 	uint8_t kitNr[NUM_PATTERN];
 	uint8_t scale[NUM_PATTERN];
+	uint8_t transform[NUM_PATTERN];
 }PatternSet;
 
 typedef struct PatternBackupBufferStruct
@@ -113,12 +128,14 @@ typedef struct PatternBackupBufferStruct
 	Step seq_subStepPattern[NUM_TRACKS][NUM_STEPS];	//contains step data
 	uint8_t seq_stepTiming[NUM_TRACKS][NUM_STEPS];
 	uint8_t flamProbability[NUM_TRACKS][NUM_STEPS];
+	uint8_t trigCondition[NUM_TRACKS][NUM_STEPS];
 	uint16_t seq_mainSteps[NUM_BARS][NUM_TRACKS];		//bits represent if step is active
 	//PatternSetting seq_patternSettings[NUM_PATTERN];				//pattern chaining info
 	uint8_t length[NUM_TRACKS];	//only used in euklid generator?
 	uint8_t shuffle;
 	uint8_t kitNr;
 	uint8_t scale;
+	uint8_t transform;
 }PatternBackupBuffer;
 
 /*
@@ -133,7 +150,7 @@ typedef struct TempPatternStruct
 extern uint8_t seq_activePattern;
 extern uint8_t seq_pendingPattern;
 extern uint8_t seq_newPatternAvailable;
-extern uint8_t seq_prescaleCounter;
+extern uint16_t seq_prescaleCounter;
 
 //extern PatternSet* seq_activePatternSetPtr;
 
@@ -177,6 +194,7 @@ uint8_t seq_isAutomationStepArmed();
 void seq_nextStep();
 void seq_setPatternScale(uint8_t pattern,uint8_t scale);
 uint8_t seq_applyPendingScale(void);
+uint8_t seq_applyPendingTransform(void);
 //------------------------------------------------------------------------------
 void seq_processFlam(uint8_t idx);
 //------------------------------------------------------------------------------

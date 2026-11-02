@@ -32,6 +32,8 @@ typedef struct {uint8_t flam,shift;} Timing;
 static struct {
   Step seq_subStepPattern[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
   Timing seq_stepTiming[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
+  uint8_t flamProbability[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
+  uint8_t trigCondition[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
   uint16_t seq_mainSteps[NUM_BARS][NUM_PATTERN][NUM_TRACKS];
   uint8_t length[NUM_PATTERN][NUM_TRACKS];
 } seq_patternSet;
@@ -44,12 +46,16 @@ code += r'''
 int main(void){
   seq_patternSet.seq_subStepPattern[3][2][17]=(Step){60,97,41,5,77,6,88};
   seq_patternSet.seq_stepTiming[3][2][17]=(Timing){4,9};
+  seq_patternSet.flamProbability[3][2][17]=37;
+  seq_patternSet.trigCondition[3][2][17]=5;
   seq_patternSet.seq_mainSteps[1][3][2]=(uint16_t)(1u<<1);
   seq_copyStep(2,3,17,33);
   check(!memcmp(&seq_patternSet.seq_subStepPattern[3][2][17],
       &seq_patternSet.seq_subStepPattern[3][2][33],sizeof(Step)),"one complete step");
   check(!memcmp(&seq_patternSet.seq_stepTiming[3][2][17],
       &seq_patternSet.seq_stepTiming[3][2][33],sizeof(Timing)),"Flam and Shift");
+  check(seq_patternSet.flamProbability[3][2][33]==37,"Flam Probability");
+  check(seq_patternSet.trigCondition[3][2][33]==5,"Trig Condition");
   check(seq_patternSet.seq_mainSteps[2][3][2]&(1u<<1),"on bit across bars");
   seq_copyStep(2,3,32,33);
   check(!(seq_patternSet.seq_mainSteps[2][3][2]&(1u<<1)),"off bit across bars");
@@ -69,6 +75,8 @@ int main(void){
   check(seq_patternSet.length[63][2]==61,"track length in slot 64");
   check(seq_patternSet.seq_subStepPattern[63][2][17].note==60,"track note in slot 64");
   check(seq_patternSet.seq_stepTiming[63][2][17].flam==4,"track timing in slot 64");
+  check(seq_patternSet.flamProbability[63][2][17]==37,"track Flam Probability in slot 64");
+  check(seq_patternSet.trigCondition[63][2][17]==5,"track Trig Condition in slot 64");
   check(seq_patternSet.seq_mainSteps[3][63][2]==seq_patternSet.seq_mainSteps[3][3][2],"track main steps in slot 64");
   printf("COPY IMPORT PASS %u assertions\n",checks);
   return 0;

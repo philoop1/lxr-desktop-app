@@ -93,6 +93,175 @@ static volatile struct {
 	unsigned nameBuffer:3;					// which name char array to use (kit, pattern, song, performance
 	unsigned state:4;						/**< 0=edit kit/pat, 1=edit preset nr, 2-9 = edit name, 10=ok*/
 } menu_saveOptions;
+static uint8_t editModeActive = 0;
+
+static struct {
+    uint8_t exportMode,stage,project,pattern,sourceSlot,targetSlot,sourceKit,targetKit,noFreeKit;
+    char sourceName[9],targetName[9];
+    FRESULT result;
+} menu_transfer;
+
+#define TRANSFER_LXR1 64 // project entry after PROJ63, import only
+#define TRANSFER_PERF 3  // transfer type: LXR1 performance
+
+static void menu_transferRefreshName(uint8_t target)
+{
+    const uint8_t current=menu_loadedPresetNr[CURRENT_PROJECT];
+    const uint8_t project=target?
+        (menu_transfer.exportMode?menu_transfer.project:current):
+        (menu_transfer.exportMode?current:menu_transfer.project);
+    char *name=target?menu_transfer.targetName:menu_transfer.sourceName;
+    const FRESULT result=(menu_transfer.pattern==TRANSFER_PERF && !target)?
+        preset_getPerformanceName(menu_transfer.sourceSlot,name):
+        preset_getProjectItemName(project,target?menu_transfer.targetSlot:menu_transfer.sourceSlot,
+            menu_transfer.pattern?1:0,name);
+    if(result!=FR_OK)memcpy(name,"EMPTY   ",9);
+}
+
+uint8_t menu_isTransferActive(void){return menu_activePage==TRANSFER_PAGE;}
+uint8_t menu_isProjectLoadSavePage(uint8_t exportMode)
+{
+    return menu_activePage==(exportMode?SAVE_PAGE:LOAD_PAGE) &&
+           menu_saveOptions.category==SAVE_TYPE_PROJECT;
+}
+void menu_openTransfer(uint8_t exportMode)
+{
+    menu_transfer.exportMode=exportMode?1:0;
+    menu_transfer.stage=0;
+    menu_transfer.project=(uint8_t)((menu_loadedPresetNr[CURRENT_PROJECT]+1u)%NUM_KIT_SLOTS);
+    menu_transfer.pattern=0;
+    menu_transfer.sourceSlot=0;
+    menu_transfer.targetSlot=0;
+    menu_transfer.sourceKit=255;
+    menu_transfer.targetKit=255;
+    menu_transfer.noFreeKit=0;
+    menu_transfer.result=FR_OK;
+    memcpy(menu_transfer.sourceName,"EMPTY   ",9);
+    memcpy(menu_transfer.targetName,"EMPTY   ",9);
+    menu_activePage=TRANSFER_PAGE;
+    editModeActive=0;
+    menu_repaintAll();
+}
+void menu_transferSelectType(uint8_t pattern)
+{
+    if(!menu_isTransferActive() || menu_transfer.project==TRANSFER_LXR1)return;
+    menu_transfer.pattern=pattern>2?0:pattern;
+    menu_transfer.stage=2;
+    menu_transferRefreshName(0);
+    menu_repaintAll();
+}
+void menu_transferSelectProject(void)
+{
+    if(!menu_isTransferActive())return;
+    menu_transfer.stage=0;
+    menu_repaintAll();
+}
+static void menu_handleTransfer(int8_t inc,uint8_t clicked)
+{
+    if(inc) {
+        uint8_t *value=NULL,maximum=63;
+        const uint8_t perf=(uint8_t)(menu_transfer.pattern==TRANSFER_PERF);
+        if(menu_transfer.stage==0){value=&menu_transfer.project;if(!menu_transfer.exportMode)maximum=TRANSFER_LXR1;}
+        if(menu_transfer.stage==1){value=&menu_transfer.pattern;maximum=2;}
+        if(menu_transfer.stage==2){value=&menu_transfer.sourceSlot;if(perf)maximum=LXR1_PERFORMANCES-1;}
+        if(menu_transfer.stage==3){value=&menu_transfer.targetSlot;if(perf)maximum=64-LXR1_PATTERNS;}
+        if(value) {
+            int16_t next=(int16_t)*value+((perf && menu_transfer.stage==3)?inc*LXR1_PATTERNS:inc);
+            if(menu_transfer.stage==0 || menu_transfer.stage==1) {
+                if(next<0)next=maximum;
+                if(next>maximum)next=0;
+            } else {
+                if(next<0)next=0;
+                if(next>maximum)next=maximum;
+            }
+            *value=(uint8_t)next;
+            if(menu_transfer.stage==2)menu_transferRefreshName(0);
+            if(menu_transfer.stage==3)menu_transferRefreshName(1);
+        }
+    }
+    if(clicked) {
+        if(menu_transfer.stage==0) {
+            if(menu_transfer.project==TRANSFER_LXR1) {
+                menu_transfer.pattern=TRANSFER_PERF;
+                menu_transfer.sourceSlot=0;
+                menu_transfer.stage=2;
+                menu_transferRefreshName(0);
+            } else {
+                if(menu_transfer.pattern==TRANSFER_PERF)menu_transfer.pattern=0;
+                menu_transfer.stage=1;
+            }
+        }
+        else if(menu_transfer.stage==1){menu_transfer.stage=2;menu_transferRefreshName(0);}
+        else if(menu_transfer.stage==2){
+            if(menu_transfer.pattern==TRANSFER_PERF) {
+                char name[9];
+                menu_transfer.result=preset_getPerformanceName(menu_transfer.sourceSlot,name);
+                if(menu_transfer.result==FR_OK) {
+                    menu_transfer.result=preset_findFreeProjectKit(menu_loadedPresetNr[CURRENT_PROJECT],&menu_transfer.targetKit);
+                    menu_transfer.noFreeKit=(uint8_t)(menu_transfer.result==FR_DENIED);
+                }
+                if(menu_transfer.result!=FR_OK){menu_transfer.stage=5;menu_repaintAll();return;}
+                menu_transfer.targetSlot&=(uint8_t)~(LXR1_PATTERNS-1u);
+            }
+            else if(menu_transfer.pattern==2) {
+                const uint8_t current=menu_loadedPresetNr[CURRENT_PROJECT];
+                const uint8_t source=menu_transfer.exportMode?current:menu_transfer.project;
+                const uint8_t target=menu_transfer.exportMode?menu_transfer.project:current;
+                char kitName[9];
+                menu_transfer.result=preset_getProjectPatternKit(source,menu_transfer.sourceSlot,&menu_transfer.sourceKit);
+                if(menu_transfer.result==FR_OK)
+                    menu_transfer.result=preset_getProjectItemName(source,menu_transfer.sourceKit,0,kitName);
+                if(menu_transfer.result==FR_OK) {
+                    menu_transfer.result=preset_findFreeProjectKit(target,&menu_transfer.targetKit);
+                    menu_transfer.noFreeKit=(uint8_t)(menu_transfer.result==FR_DENIED);
+                }
+                if(menu_transfer.result!=FR_OK){menu_transfer.stage=5;menu_repaintAll();return;}
+            }
+            menu_transfer.stage=3;
+            menu_transferRefreshName(1);
+        }
+        else if(menu_transfer.stage==3)menu_transfer.stage=4;
+        else if(menu_transfer.stage==4 || menu_transfer.stage==6) {
+            const uint8_t current=menu_loadedPresetNr[CURRENT_PROJECT];
+            const uint8_t overwrite=(uint8_t)(menu_transfer.stage==6);
+            if(seq_isRunning())menu_transfer.result=FR_LOCKED;
+            else {
+                const uint8_t source=menu_transfer.exportMode?current:menu_transfer.project;
+                const uint8_t target=menu_transfer.exportMode?menu_transfer.project:current;
+                if(menu_transfer.pattern==TRANSFER_PERF)
+                    menu_transfer.result=preset_importPerformance(menu_transfer.sourceSlot,current,
+                        menu_transfer.targetSlot,overwrite,&menu_transfer.targetKit);
+                else if(menu_transfer.pattern==2)
+                    menu_transfer.result=preset_copyProjectPatternWithKit(source,menu_transfer.sourceSlot,
+                        target,menu_transfer.targetSlot,overwrite,&menu_transfer.targetKit);
+                else
+                    menu_transfer.result=preset_copyProjectItem(source,menu_transfer.sourceSlot,
+                        target,menu_transfer.targetSlot,menu_transfer.pattern,overwrite,255);
+                if(menu_transfer.result==FR_OK && !menu_transfer.exportMode) {
+                    if(menu_transfer.pattern==0)menu_transfer.result=preset_loadTransferredItem(current,menu_transfer.targetSlot,0);
+                    else if(menu_transfer.pattern==TRANSFER_PERF) {
+                        menu_transfer.result=preset_loadTransferredItem(current,menu_transfer.targetKit,0);
+                        for(uint8_t i=0;i<LXR1_PATTERNS && menu_transfer.result==FR_OK;i++)
+                            menu_transfer.result=preset_loadTransferredItem(current,(uint8_t)(menu_transfer.targetSlot+i),1);
+                        if(menu_transfer.result==FR_OK &&
+                           (uint8_t)(seq_activePattern-menu_transfer.targetSlot)<LXR1_PATTERNS)
+                            menu_transfer.result=preset_transferRefreshActivePattern();
+                    }
+                    else {
+                        if(menu_transfer.pattern==2)
+                            menu_transfer.result=preset_loadTransferredItem(current,menu_transfer.targetKit,0);
+                        if(menu_transfer.result==FR_OK)
+                            menu_transfer.result=preset_loadTransferredItem(current,menu_transfer.targetSlot,1);
+                        if(menu_transfer.result==FR_OK && menu_transfer.targetSlot==seq_activePattern)
+                            menu_transfer.result=preset_transferRefreshActivePattern();
+                    }
+                }
+            }
+            menu_transfer.stage=(uint8_t)(menu_transfer.result==FR_EXIST && !overwrite?6:5);
+        } else if(menu_transfer.stage==5){menu_transfer.stage=0;menu_transfer.noFreeKit=0;}
+    }
+    menu_repaintAll();
+}
 
 
 uint8_t menu_limitSoundParameter(uint16_t parameter,uint8_t value)
@@ -343,6 +512,9 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_STEP_FLAM_PROB,CAT_STEP,LONG_STEP_FLAM_PROB},
 		{SHORT_LFO_SLEW,CAT_LFO,LONG_LFO_SLEW},
 		{SHORT_LFO_POL,CAT_LFO,LONG_LFO_POL},
+		{SHORT_STEP_CONDITION,CAT_STEP,LONG_STEP_CONDITION},
+		{SHORT_PERF_FILL,CAT_SEQUENCER,LONG_PERF_FILL},
+		{SHORT_SCALE_TRANSFORM,CAT_SEQUENCER,LONG_SCALE_TRANSFORM},
 
 
 
@@ -736,6 +908,18 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 			DTYPE_MENU | (MENU_LFO_POL<<8),DTYPE_MENU | (MENU_LFO_POL<<8),
 
 
+	/* Independent per-step modulators, six voices per control. */
+	DTYPE_MENU | (MENU_RETRIGGER<<8),DTYPE_MENU | (MENU_RETRIGGER<<8),DTYPE_MENU | (MENU_RETRIGGER<<8),DTYPE_MENU | (MENU_RETRIGGER<<8),DTYPE_MENU | (MENU_RETRIGGER<<8),DTYPE_MENU | (MENU_RETRIGGER<<8),
+	DTYPE_1B16,DTYPE_1B16,DTYPE_1B16,DTYPE_1B16,DTYPE_1B16,DTYPE_1B16,
+	DTYPE_AUTOM_TARGET,DTYPE_AUTOM_TARGET,DTYPE_AUTOM_TARGET,DTYPE_AUTOM_TARGET,DTYPE_AUTOM_TARGET,DTYPE_AUTOM_TARGET,
+	DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,
+	DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,
+	DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,
+	DTYPE_MENU | (MENU_LFO_POL<<8),DTYPE_MENU | (MENU_LFO_POL<<8),DTYPE_MENU | (MENU_LFO_POL<<8),DTYPE_MENU | (MENU_LFO_POL<<8),DTYPE_MENU | (MENU_LFO_POL<<8),DTYPE_MENU | (MENU_LFO_POL<<8),
+	DTYPE_MENU | (MENU_TRIG_CONDITION<<8),
+	DTYPE_ON_OFF,
+	DTYPE_MENU | (MENU_SCALE_TRANSFORM<<8),
+
 };
 
 
@@ -860,7 +1044,7 @@ uint8_t menu_activePage = 0;				/**< indicates which menu page is currently show
 uint8_t menu_activeVoice = 0;
 uint8_t menu_playedPattern = 0;
 uint8_t menu_activePatternBank = 0;
-static uint8_t editModeActive = 0;			/**< when edit mode is active, only the currently active parameter is shown with full name*/
+/* editModeActive is declared beside menu_saveOptions for transfer-page entry. */
 static uint8_t lastEncoderButton = 0;		/**< stores the state of the encoder button so the edit mode is only switched once when the button is pressed*/
 
 /** array holding all the available parameter values*/
@@ -971,7 +1155,7 @@ void menu_init()
 	activeParameters[PAR_GROOVE_SH3] = 63;
 	activeParameters[PAR_GROOVE_SH4] = 63;
 	activeParameters[PAR_MASTER_FILTER_ENABLE]=0;
-	activeParameters[PAR_GLOBAL_SCALE]=0;
+	activeParameters[PAR_GLOBAL_SCALE]=PERF_SPEED_NEUTRAL;
 	activeParameters[PAR_FX_SEND_MODE]=0;
 	for(uint8_t voice=0;voice<6;voice++) {
 		activeParameters[PAR_LFO_SLEW1+voice]=0;
@@ -1277,7 +1461,64 @@ void menu_repaintAll()
 static void menu_repaintSimplePage()
 {
 
-	if(copyClear_showClearMenu == 1)
+	if(menu_activePage==TRANSFER_PAGE) {
+        memset(editDisplayBuffer,' ',2*17);
+        const char *action=menu_transfer.exportMode?"Export":"Import";
+        const char *kind=menu_transfer.pattern==TRANSFER_PERF?"PRF":
+            menu_transfer.pattern==2?"P+K":menu_transfer.pattern?"PAT":"KIT";
+        switch(menu_transfer.stage) {
+        case 0:
+            snprintf(&editDisplayBuffer[0][0],17,"%s project",action);
+            if(menu_transfer.project==TRANSFER_LXR1)
+                strcpy(&editDisplayBuffer[1][0],"LXR1 PRF click >");
+            else
+                snprintf(&editDisplayBuffer[1][0],17,"PROJ%02u  click >",menu_transfer.project);
+            break;
+        case 1:
+            snprintf(&editDisplayBuffer[0][0],17,"%s PROJ%02u",action,menu_transfer.project);
+            snprintf(&editDisplayBuffer[1][0],17,"%s  click >",kind);
+            break;
+        case 2:
+            snprintf(&editDisplayBuffer[0][0],17,"%s %s src",action,kind);
+            snprintf(&editDisplayBuffer[1][0],17,"%02u %-8.8s >",menu_transfer.sourceSlot,menu_transfer.sourceName);
+            break;
+        case 3:
+            snprintf(&editDisplayBuffer[0][0],17,"%s %s dst",action,kind);
+            snprintf(&editDisplayBuffer[1][0],17,"%02u %-8.8s >",menu_transfer.targetSlot,menu_transfer.targetName);
+            break;
+        case 4:
+            if(menu_transfer.pattern==TRANSFER_PERF) {
+                snprintf(&editDisplayBuffer[0][0],17,"P%03u>PAT %02u-%02u",menu_transfer.sourceSlot,
+                    menu_transfer.targetSlot,menu_transfer.targetSlot+LXR1_PATTERNS-1);
+                snprintf(&editDisplayBuffer[1][0],17,"KIT>%02u OK?",menu_transfer.targetKit);
+            } else if(menu_transfer.pattern==2) {
+                snprintf(&editDisplayBuffer[0][0],17,"PAT %02u>%02u",menu_transfer.sourceSlot,menu_transfer.targetSlot);
+                snprintf(&editDisplayBuffer[1][0],17,"KIT %02u>%02u OK?",menu_transfer.sourceKit,menu_transfer.targetKit);
+            } else {
+                snprintf(&editDisplayBuffer[0][0],17,"%s P%02u?",menu_transfer.exportMode?"SAVE":"LOAD",menu_transfer.project);
+                snprintf(&editDisplayBuffer[1][0],17,"%s %02u>%02u OK?",kind,menu_transfer.sourceSlot,menu_transfer.targetSlot);
+            }
+            break;
+        case 6:
+            if(menu_transfer.pattern==TRANSFER_PERF)
+                snprintf(&editDisplayBuffer[0][0],17,"Replace %02u-%02u?",menu_transfer.targetSlot,
+                    menu_transfer.targetSlot+LXR1_PATTERNS-1);
+            else
+                snprintf(&editDisplayBuffer[0][0],17,"Replace %s %02u?",kind,menu_transfer.targetSlot);
+            strcpy(&editDisplayBuffer[1][0],"click = YES");
+            break;
+        default:
+            snprintf(&editDisplayBuffer[0][0],17,"%s %s",action,kind);
+            strcpy(&editDisplayBuffer[1][0],menu_transfer.result==FR_OK?"Copy OK":
+                menu_transfer.result==FR_EXIST?"Target occupied":
+                menu_transfer.result==FR_LOCKED?"Stop sequencer":
+                menu_transfer.noFreeKit?"No free KIT":
+                menu_transfer.result==FR_DENIED?"Slot ambiguous":
+                (menu_transfer.result==FR_NO_FILE || menu_transfer.result==FR_NO_PATH)?"Source missing":"Copy failed");
+            break;
+        }
+	}
+	else if(copyClear_showClearMenu == 1)
 	{
 		strcpy(&editDisplayBuffer[0][0], "clear [");
 		switch(copyClear_clearTarget)
@@ -1625,6 +1866,12 @@ static void menu_repaintLoadSavePage()
 	}
 }
 //-----------------------------------------------------------------
+// PERF subpages reached only by their SHIFT + Step shortcut.
+static uint8_t menu_isPerfShortcutSubPage(uint8_t subPage)
+{
+	return (uint8_t)((subPage>=PERF_DELAY_SUBPAGE && subPage<=PERF_GROOVE_SUBPAGE) || subPage==PERF_SEND_SUBPAGE);
+}
+//-----------------------------------------------------------------
 static uint8_t has2ndPage(uint8_t menuPage)
 {
 	const uint8_t textType = pgm_read_byte(&menuPages[menu_activePage][menuPage].top1 + 4);
@@ -1789,8 +2036,13 @@ void menu_repaintGeneric()
 		{
 			//**AUTOM this is an index into modTargets now
 			//Top row (which destination (1 or 2) and which voice it's targeting)
-			memcpy(&editDisplayBuffer[0][0],PSTR("AutDst"),6);
-			numtostru(&editDisplayBuffer[0][7],(uint8_t)( parNr - PAR_P1_DEST + 1));
+			if(parNr>=PAR_RPS_DST1 && parNr<=PAR_RPS_DST6) {
+				memcpy(&editDisplayBuffer[0][0],PSTR("RndDst"),6);
+				numtostru(&editDisplayBuffer[0][7],(uint8_t)(parNr-PAR_RPS_DST1+1));
+			} else {
+				memcpy(&editDisplayBuffer[0][0],PSTR("AutDst"),6);
+				numtostru(&editDisplayBuffer[0][7],(uint8_t)( parNr - PAR_P1_DEST + 1));
+			}
 
 			// bottom row is the category and long name for the parameter being targeted
 			if( pgm_read_word(&modTargets[curParmVal].param)==PAR_NONE ) {
@@ -1816,6 +2068,8 @@ void menu_repaintGeneric()
 			//Top row right -> long name
 			strcpy(&editDisplayBuffer[0][8],
 				(const char PROGMEM *)(&longNames[pgm_read_byte(&valueNames[parName].longName)]));
+			if(parNr>=PAR_RPS_TRG1 && parNr<=PAR_RPS_TRG6)
+				memcpy(&editDisplayBuffer[0][8],"Trigger ",8);
 
 			//Bottom row -> parameter value (set below)
 			switch(parameter_dtypes[parNr] & 0xFF)
@@ -1950,6 +2204,10 @@ void menu_repaintGeneric()
 			&shortNames[pgm_read_byte(&valueNames[pgm_read_byte(&ap->top3+is2ndPage)].shortName)],3);
 		memcpy(&editDisplayBuffer[0][12],
 			&shortNames[pgm_read_byte(&valueNames[pgm_read_byte(&ap->top4+is2ndPage)].shortName)],3);
+		if(menu_activePage>=LFO_EXTRA1_PAGE && menu_activePage<=LFO_EXTRA6_PAGE && !is2ndPage) {
+			memcpy(&editDisplayBuffer[0][0],"trg",3);
+			memcpy(&editDisplayBuffer[0][8],"rds",3);
+		}
 
 		// capitalize selected item
 		upr_three(&editDisplayBuffer[0][(activeParameter%4)*4]);
@@ -1981,7 +2239,8 @@ void menu_repaintGeneric()
 					break;
 				case DTYPE_AUTOM_TARGET: //switch(parameters[parNr].dtype&0x0F)
 					//**AUTOM - determine the name to display for non-edit mode
-					menu_displayModTargetShort(curParmVal,valueAsText,1 /*include voice number */);
+					menu_displayModTargetShort(curParmVal,valueAsText,
+						!(parNr>=PAR_RPS_DST1 && parNr<=PAR_RPS_DST6));
 					break;
 				case DTYPE_PM63: //switch(parameters[parNr].dtype&0x0F)
 					// -63 to 64
@@ -2095,7 +2354,8 @@ void menu_repaint()
 		menu_repaintLoadSavePage();
 
 	}
-	else if((menu_activePage >= PATTERN_LOAD_PAGE  && menu_activePage <= SONG_MODE_PAGE) || (copyClear_showClearMenu == 1))
+	else if((menu_activePage >= PATTERN_LOAD_PAGE  && menu_activePage <= SONG_MODE_PAGE) ||
+            menu_activePage==TRANSFER_PAGE || (copyClear_showClearMenu == 1))
 	{
 		menu_repaintSimplePage();
 	}
@@ -2834,6 +3094,8 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 		return lfoWaveNames[0][0];
 	case MENU_LFO_POL:
 		return lfoPolarityNames[0][0];
+	case MENU_TRIG_CONDITION:
+		return TRIG_COND_COUNT;
 	case MENU_RETRIGGER:
 		return retriggerNames[0][0];
 	case MENU_FOLLOW:
@@ -2858,6 +3120,7 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 	case MENU_MIDI_FILTERING:
 		return midiFilterNames[0][0];
 	case MENU_GLOBAL_SCALE:return globalScaleNames[0][0];
+	case MENU_SCALE_TRANSFORM:return scaleTransformNames[0][0];
 	case MENU_FX_SEND_MODE:return fxSendModeNames[0][0];
 	case MENU_FX_OUTPUT_MODE:return fxOutputModeNames[0][0];
 	case MENU_PPQ_OUT:
@@ -2902,6 +3165,26 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmVal, char *buf)
 {
 	const void *p=0;
+	if(menuId==MENU_TRIG_CONDITION) {
+		if(curParmVal==TRIG_COND_ALWAYS)memcpy(buf,"---",3);
+		else if(curParmVal==TRIG_COND_FIRST)memcpy(buf,"1st",3);
+		else if(curParmVal==TRIG_COND_NOT_FIRST)memcpy(buf,"n1s",3);
+		else if(curParmVal==TRIG_COND_FILL)memcpy(buf,"fil",3);
+		else if(curParmVal==TRIG_COND_NOT_FILL)memcpy(buf,"nfl",3);
+		else if(curParmVal==TRIG_COND_PRE)memcpy(buf,"pre",3);
+		else if(curParmVal==TRIG_COND_NOT_PRE)memcpy(buf,"npr",3);
+		else if(curParmVal==TRIG_COND_NEI)memcpy(buf,"nei",3);
+		else if(curParmVal==TRIG_COND_NOT_NEI)memcpy(buf,"nne",3);
+		else if(curParmVal==TRIG_COND_LAST)memcpy(buf,"lst",3);
+		else if(curParmVal==TRIG_COND_NOT_LAST)memcpy(buf,"nls",3);
+		else if(curParmVal<TRIG_COND_COUNT) {
+			uint8_t ordinal=(uint8_t)(curParmVal-TRIG_COND_RATIO_BASE);
+			uint8_t b=1;
+			while(ordinal>=b){ordinal-=b;b++;}
+			buf[0]=(char)('1'+ordinal);buf[1]=':';buf[2]=(char)('0'+b);
+		} else memcpy(buf,"---",3);
+		return;
+	}
 	switch(menuId)
 	{
 	case MENU_TRANS:
@@ -2972,6 +3255,7 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 		p=ppqInNames[curParmVal+1];
 		break;
 	case MENU_GLOBAL_SCALE:p=globalScaleNames[curParmVal+1];break;
+	case MENU_SCALE_TRANSFORM:p=scaleTransformNames[curParmVal+1+(perf_scaleIsTernary()?4:0)];break;
 	case MENU_FX_SEND_MODE:p=fxSendModeNames[curParmVal+1];break;
 	case MENU_FX_OUTPUT_MODE:p=fxOutputModeNames[curParmVal+1];break;
 	case MENU_PPQ_OUT:
@@ -3039,7 +3323,6 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
         }
         if(clicked) {
             seq_setPatternScale(menu_scalePattern,activeParameters[PAR_PATTERN_SCALE]);
-            performance_set(PAR_GLOBAL_SCALE,0); // confirmed per-pattern playback
             preset_touchTimer(PRESET_PAT_TIMER);
         }
         screensaver_touch();menu_repaintAll();return;
@@ -3078,6 +3361,7 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 	if(menu_activePage == LOAD_PAGE || menu_activePage == SAVE_PAGE) {
 		menu_handleLoadSaveMenu(inc, btnClicked);
 	}
+	else if(menu_activePage==TRANSFER_PAGE)menu_handleTransfer(inc,btnClicked);
 	else if(menu_activePage == SONG_MODE_PAGE)
 	{
 		menu_handleSongMenu(inc, btnClicked);
@@ -3109,6 +3393,15 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 			}
 		}
 
+	}
+	else if(inc!=0 && !editModeActive && !copyClear_isClearModeActive() &&
+	        menu_activePage!=PATTERN_SAVE_PAGE && buttonHandler_getMode()==SELECT_MODE_PATTERN) {
+		// pattern selection: the encoder picks bank 1 of 4, like PAGE UP/DOWN
+		const int8_t bank=(int8_t)(menu_activePatternBank+(inc>0?1:-1));
+		if(bank>=0 && bank<=3) {
+			menu_activePatternBank=(uint8_t)bank;
+			led_initPatternSelectLeds();
+		}
 	}
 	else if(inc!=0) {
 		//============================= handle encoder change ==============================
@@ -3251,10 +3544,14 @@ static void menu_encoderChangeParameter(int8_t inc)
 		break;
 
 	case DTYPE_AUTOM_TARGET: {//parameter_dtypes[paramNr] & 0x0F
-		const uint8_t nmt=getNumModTargets();
-		//**AUTOM - limit to valid range for encoder
-		if(*paramValue >= nmt)
-			*paramValue = (uint8_t)(nmt-1);
+		if(paramNr>=PAR_RPS_DST1 && paramNr<=PAR_RPS_DST6) {
+			uint8_t voice=activeParameters[PAR_RPS_VOI1+paramNr-PAR_RPS_DST1];
+			if(voice<1 || voice>6)voice=1;
+			*paramValue=modTargetClampVoice((uint8_t)(voice-1),*paramValue,inc);
+		} else {
+			const uint8_t nmt=getNumModTargets();
+			if(*paramValue >= nmt)*paramValue=(uint8_t)(nmt-1);
+		}
 		break;
 	}
 
@@ -3355,12 +3652,16 @@ checkvalid:
 		if(activeParameter == 4) { // move to 2nd section of sub-page
 
 		} else if(activeParameter == 8) { // moved past end of 2nd sub-page
-			if(menu_activePage==PERF_PAGE && activePage>=PERF_DELAY_SUBPAGE && activePage<=PERF_GROOVE_SUBPAGE)return;
+            if(menu_activePage<=VOICE7_PAGE && activePage==6) {
+                menu_openLfoExtra(0);
+                return;
+            }
+			if(menu_activePage==PERF_PAGE && menu_isPerfShortcutSubPage((uint8_t)activePage))return;
 			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==PERF_PAGE)){ // in global menu, we can move to next sub-page
 
 				activeParameter=0; // set to par 0 of next sub page
 				activePage = (menu_activePage==PERF_PAGE) ?
-					(activePage==0 ? 1 : activePage==1 ? 5 : activePage==5 ? 6 : 0) : activePage+1;
+					(activePage==0 ? 1 : activePage==1 ? 5 : 0) : activePage+1;
 				if(activePage >=NUM_SUB_PAGES)
 					activePage=0; // wrap around to 1st (would only happen if we fill all 8. unlikely)
 			} else
@@ -3370,12 +3671,17 @@ checkvalid:
 		if(activeParameter == 3) { // move to first section of sub-page
 
 		} else if(activeParameter==-1) { // if we went past 0
-			if(menu_activePage==PERF_PAGE && activePage>=PERF_DELAY_SUBPAGE && activePage<=PERF_GROOVE_SUBPAGE)return;
+            if(menu_activePage>=LFO_EXTRA1_PAGE && menu_activePage<=LFO_EXTRA6_PAGE) {
+                menu_switchPage(menu_getActiveVoice());
+                menuIndex=(uint8_t)((6<<PAGE_SHIFT)|7);
+                return;
+            }
+			if(menu_activePage==PERF_PAGE && menu_isPerfShortcutSubPage((uint8_t)activePage))return;
 			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==PERF_PAGE)) { // in global menu, we can move to previous sub-page
 
 				activeParameter=7; // put us on the last param of the previous sub-page
 				activePage = (menu_activePage==PERF_PAGE) ?
-					(activePage==0 ? 6 : activePage==6 ? 5 : activePage==5 ? 1 : 0) : activePage-1;
+					(activePage==0 ? 5 : activePage==5 ? 1 : 0) : activePage-1;
 				if(activePage < 0)
 					activePage=NUM_SUB_PAGES-1; //wrap around to last page (would only happen if we fill all 8. unlikely)
 			} else
@@ -3475,11 +3781,11 @@ void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle)
 			// toggle to next if possible
 			if(has2ndPage(activePage))
 				activeParameter=4;
-			else if(menu_activePage==PERF_PAGE && activePage>=PERF_DELAY_SUBPAGE && activePage<=PERF_GROOVE_SUBPAGE)
+			else if(menu_activePage==PERF_PAGE && menu_isPerfShortcutSubPage((uint8_t)activePage))
 				activeParameter=0;
 			else if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==PERF_PAGE)){
 				if(menu_activePage==PERF_PAGE)
-					activePage=(activePage==0 ? 1 : activePage==1 ? 5 : activePage==5 ? 6 : 0);
+					activePage=(activePage==0 ? 1 : activePage==1 ? 5 : 0);
 				else if(activePage<NUM_SUB_PAGES-1 &&
 				   pgm_read_byte(&menuPages[menu_activePage][activePage+1].top1)!=TEXT_EMPTY)
 					activePage++;
@@ -3487,7 +3793,7 @@ void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle)
 				activeParameter=0;
 			}
 		} else { // we are on 2nd screen
-			if(menu_activePage==PERF_PAGE && activePage>=PERF_DELAY_SUBPAGE && activePage<=PERF_GROOVE_SUBPAGE) {
+			if(menu_activePage==PERF_PAGE && menu_isPerfShortcutSubPage((uint8_t)activePage)) {
 				activeParameter=0;
 				menuIndex=(uint8_t)(activePage<<PAGE_SHIFT);
 				return;
@@ -3496,7 +3802,7 @@ void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle)
 			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==PERF_PAGE)){
 				// in global mode, we move to next page if possible (or wrap to first)
 				if(menu_activePage==PERF_PAGE)
-					activePage=(activePage==0 ? 1 : activePage==1 ? 5 : activePage==5 ? 6 : 0);
+					activePage=(activePage==0 ? 1 : activePage==1 ? 5 : 0);
 				else if(activePage < NUM_SUB_PAGES-1 &&
 				   pgm_read_byte(&menuPages[menu_activePage][activePage+1].top1) != TEXT_EMPTY) {
 					activePage++;
@@ -3622,7 +3928,7 @@ void menu_switchPage(uint8_t pageNr)
 	case PERF_PAGE:
 	{
 		uint8_t toggle = (menu_activePage == PERF_PAGE);
-		if(toggle && menu_getSubPage()>=PERF_DELAY_SUBPAGE && menu_getSubPage()<=PERF_GROOVE_SUBPAGE)
+		if(toggle && menu_isPerfShortcutSubPage(menu_getSubPage()))
 			toggle=0;
 
 		// **GMENU TODO do we need to clear any leds?
@@ -3745,11 +4051,37 @@ void menu_openLfoExtra(uint8_t secondScreen)
 	menuIndex=secondScreen ? 4 : 0;
 	menu_repaintAll();
 }
+/* Resolve the four LFO screens here, before generic two-screen wrapping.
+ * The selected voice is independent of the current screen's page number. */
+uint8_t menu_cycleVoiceLfo(uint8_t buttonNr)
+{
+    if(menu_activePage>=LFO_EXTRA1_PAGE && menu_activePage<=LFO_EXTRA6_PAGE) {
+        if(buttonNr==6 && (menuIndex&MASK_PARAMETER)<4) {
+            menu_openLfoExtra(1);
+        } else {
+            menu_switchPage(menu_getActiveVoice());
+            menu_switchSubPage(buttonNr,0);
+        }
+        return 1;
+    }
+    if(buttonNr!=6 || menu_activePage>VOICE7_PAGE)return 0;
+    if(menu_getSubPage()!=6) {
+        menu_switchSubPage(6,0);
+    } else if((menuIndex&MASK_PARAMETER)<4) {
+        menuIndex=(uint8_t)((6<<PAGE_SHIFT)|4);
+    } else {
+        menu_openLfoExtra(0);
+    }
+    return 1;
+}
 void menu_openPerformanceLayer(uint8_t subPage)
 {
 	if(subPage>=NUM_SUB_PAGES) return;
+	const uint8_t secondHalf = (menu_activePage==PERF_PAGE &&
+		menu_getSubPage()==subPage && (menuIndex&MASK_PARAMETER)<4 &&
+		pgm_read_byte(&menuPages[PERF_PAGE][subPage].top1+4)!=TEXT_EMPTY);
 	menu_switchPage(PERF_PAGE);
-	menuIndex=(uint8_t)(subPage<<PAGE_SHIFT);
+	menuIndex=(uint8_t)((subPage<<PAGE_SHIFT)|(secondHalf?4:0));
 	editModeActive=0;
 	buttonHandler_refreshVoiceDisplay();
 	menu_repaintAll();
@@ -3759,7 +4091,7 @@ void menu_sendAllGlobals()
 	uint16_t i;
 	for(i=PAR_BEGINNING_OF_GLOBALS;(i<NUM_PARAMS);i++)
 	{
-		if(i!=PAR_PATTERN_SCALE && i!=PAR_STEP_FLAM_PROB)
+		if(i!=PAR_PATTERN_SCALE && i!=PAR_STEP_FLAM_PROB && i!=PAR_STEP_CONDITION && i!=PAR_PERF_FILL)
 			menu_parseGlobalParam(i,activeParameters[i]);
 	}
 };
@@ -3768,6 +4100,31 @@ void menu_sendAllGlobals()
 // This includes values for the currently active step in the sequencer
 void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 {
+	if(paramNr>=PAR_RPS_TRG1 && paramNr<=PAR_RPS_POL6) {
+        uint8_t voice=0;
+        if(paramNr>=PAR_RPS_TRG1 && paramNr<=PAR_RPS_TRG6)voice=(uint8_t)(paramNr-PAR_RPS_TRG1);
+        else if(paramNr>=PAR_RPS_VOI1 && paramNr<=PAR_RPS_VOI6)voice=(uint8_t)(paramNr-PAR_RPS_VOI1);
+        else if(paramNr>=PAR_RPS_DST1 && paramNr<=PAR_RPS_DST6)voice=(uint8_t)(paramNr-PAR_RPS_DST1);
+        else if(paramNr>=PAR_RPS_AMT1 && paramNr<=PAR_RPS_AMT6)voice=(uint8_t)(paramNr-PAR_RPS_AMT1);
+        else if(paramNr>=PAR_RPS_OFS1 && paramNr<=PAR_RPS_OFS6)voice=(uint8_t)(paramNr-PAR_RPS_OFS1);
+        else if(paramNr>=PAR_RPS_SLW1 && paramNr<=PAR_RPS_SLW6)voice=(uint8_t)(paramNr-PAR_RPS_SLW1);
+        else voice=(uint8_t)(paramNr-PAR_RPS_POL1);
+        if(paramNr>=PAR_RPS_VOI1 && paramNr<=PAR_RPS_VOI6) {
+            uint8_t gap=getModTargetGapIndex(activeParameters[PAR_RPS_DST1+voice]);
+            if(value<1)value=1; else if(value>6)value=6;
+            activeParameters[paramNr]=value;
+            activeParameters[PAR_RPS_DST1+voice]=getModTargetIdxFromGapIdx(value-1,gap);
+        }
+        if(paramNr>=PAR_RPS_DST1 && paramNr<=PAR_RPS_DST6) {
+            uint8_t selectedVoice=activeParameters[PAR_RPS_VOI1+voice];
+            if(selectedVoice<1 || selectedVoice>6)selectedVoice=voice+1;
+            activeParameters[PAR_RPS_VOI1+voice]=selectedVoice;
+            if(value>=getNumModTargets())value=0;
+            activeParameters[paramNr]=value ? modTargetClampVoice((uint8_t)(selectedVoice-1),value,0) : 0;
+        }
+        lfo_applyRandomStepSettings(voice);
+        return;
+    }
 	if(paramNr>=PAR_LFO_SLEW1 && paramNr<=PAR_LFO_SLEW6) {
 		lfo_setStepSlew((uint8_t)(paramNr-PAR_LFO_SLEW1),value);
 		return;
@@ -4069,6 +4426,15 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 		break;
 	case PAR_STEP_FLAM_PROB:
 		frontPanel_sendData(SEQ_CC,SEQ_FLAM_PROB,value);
+		break;
+	case PAR_STEP_CONDITION:
+		frontPanel_sendData(SEQ_CC,SEQ_TRIG_CONDITION,value);
+		break;
+	case PAR_PERF_FILL:
+		activeParameters[PAR_PERF_FILL]=value?1:0;
+		break;
+	case PAR_SCALE_TRANSFORM:
+		performance_set(PAR_SCALE_TRANSFORM,value);
 		break;
 
 	case PAR_STEP_SHIFT:

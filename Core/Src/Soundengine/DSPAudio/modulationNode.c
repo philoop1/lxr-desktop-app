@@ -87,6 +87,7 @@ void modNode_originalValueChanged(uint16_t idx)
 	modNode_setOriginalValueChanged(&snareVoice.lfo.modTarget,idx);
 	modNode_setOriginalValueChanged(&cymbalVoice.lfo.modTarget,idx);
 	modNode_setOriginalValueChanged(&hatVoice.lfo.modTarget,idx);
+	lfo_randomStepOriginalValueChanged(idx);
 }
 //-----------------------------------------------------------------------
 IN_ITCM_RAM void modNode_resetTargets()
@@ -103,6 +104,7 @@ IN_ITCM_RAM void modNode_resetTargets()
 	paramArray_setParameter(snareVoice.lfo.modTarget.destination,snareVoice.lfo.modTarget.originalValue);
 	paramArray_setParameter(cymbalVoice.lfo.modTarget.destination,cymbalVoice.lfo.modTarget.originalValue);
 	paramArray_setParameter(hatVoice.lfo.modTarget.destination,hatVoice.lfo.modTarget.originalValue);
+	lfo_resetRandomStepTargets();
 
 
 }
@@ -121,12 +123,16 @@ IN_ITCM_RAM void modNode_reassignVeloMod()
 // The target's actual value needs to be preserved because it will be modulated.
 void modNode_setDestination(ModulationNode* vm, uint16_t dest)
 {
-	//TODO check if this interrupts other modulations too much
-	//is needed to really get the original value
-	modNode_resetTargets();
-
-	//restore old value to original TODO isn't this already being done above for all nodes?
-	//paramArray_setParameter(vm->destination,vm->originalValue);
+	if(dest>=END_OF_SOUND_PARAMETERS)dest=0;
+#if defined(__arm__) || defined(__thumb__)
+	const uint32_t irqState=__get_PRIMASK();
+	__disable_irq();
+#endif
+	/* Restore only this node's former destination. Resetting all twelve nodes
+	 * here can re-enter MIDI parameter handling while the UI changes dst. */
+	if(vm->destination < END_OF_SOUND_PARAMETERS &&
+	   parameterArray[vm->destination].ptr)
+		paramArray_setParameter(vm->destination,vm->originalValue);
 
 	//update dest param
 	vm->destination = dest;
@@ -135,7 +141,7 @@ void modNode_setDestination(ModulationNode* vm, uint16_t dest)
 
 	// **PATROT we want to avoid reading from invalid memory
 	if(!p->ptr)
-		return;
+		goto destination_done;
 
 	//get new original parameter value
 	switch(p->type)
@@ -160,12 +166,19 @@ void modNode_setDestination(ModulationNode* vm, uint16_t dest)
 		default:
 			break;
 	}
+destination_done:
+	(void)0;
+#if defined(__arm__) || defined(__thumb__)
+	__set_PRIMASK(irqState);
+#endif
 }
 //-----------------------------------------------------------------------
 // This is called to actually modulate the value for a modulation node
 void modNode_updateValue(ModulationNode* vm, float val)
 {
-	Parameter const *p = &parameterArray[vm->destination];
+	const uint16_t destination=vm->destination;
+	if(destination>=END_OF_SOUND_PARAMETERS)return;
+	Parameter const *p = &parameterArray[destination];
 
 	vm->lastVal = val;
 
@@ -176,15 +189,15 @@ void modNode_updateValue(ModulationNode* vm, float val)
 #if 1
 
 	MidiMsg msg;
-	float originalValue = activeParameters[vm->destination]/127.f;
-	if(vm->destination==PAR_SNARE_LAYER_MODE)
-		originalValue=activeParameters[vm->destination]/2.f;
-	else if(vm->destination==PAR_SNARE_LAYER_WAVE)
-		originalValue=(float)activeParameters[vm->destination]/menu_getWaveformMax();
+	float originalValue = activeParameters[destination]/127.f;
+	if(destination==PAR_SNARE_LAYER_MODE)
+		originalValue=activeParameters[destination]/2.f;
+	else if(destination==PAR_SNARE_LAYER_WAVE)
+		originalValue=(float)activeParameters[destination]/menu_getWaveformMax();
 	//val is [0:1] make [-1:1] for bipolar modulation around original value
 	float newValue = originalValue + vm->amount * (val*2.f-1.f);
 	newValue = newValue < 0.f ? 0 : newValue > 1.f ? 1.f : newValue;
-	if(vm->destination < 128)
+	if(destination < 128)
 	{
 		/* comes from cortex midi handler
 		 * stupid offset!
@@ -196,7 +209,7 @@ void modNode_updateValue(ModulationNode* vm, float val)
 		 *
 		 */
 		msg.status = MIDI_CC;
-		msg.data1 = vm->destination;
+		msg.data1 = destination;
 
 		msg.data1 += 1;
 		msg.data1 &= 0x7f;
@@ -207,7 +220,7 @@ void modNode_updateValue(ModulationNode* vm, float val)
 	else
 	{
 		msg.status = CC_2;
-		msg.data1 = vm->destination-128; //stupid offset only in CC not CC2
+		msg.data1 = destination-128; //stupid offset only in CC not CC2
 
 		msg.data1 &= 0x7f;
 		midiParser_ccHandler(msg,0, 1, newValue);

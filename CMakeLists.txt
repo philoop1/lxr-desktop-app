@@ -27,7 +27,9 @@ project(LXR_V2_STM32F765
 
 # Keep the upstream base version while giving experimental fork images a
 # distinct update filename. Only one LXR*.img should be copied to an SD card.
-set(LXR_UPDATE_IMAGE_NAME "LXR_V2_V${PROJECT_VERSION}_Mutador0.2")
+set(LXR_MUTADOR_VERSION "0.2.24")
+set(LXR_UPDATE_IMAGE_NAME "LXR_V2_V${PROJECT_VERSION}_Mutador${LXR_MUTADOR_VERSION}")
+add_compile_definitions(LXR_MUTADOR_VERSION="${LXR_MUTADOR_VERSION}")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Debug or Release)" FORCE)

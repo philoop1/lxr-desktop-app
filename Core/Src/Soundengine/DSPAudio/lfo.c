@@ -13,6 +13,8 @@
 
 //-------------------------------------------------------------
 #include "Soundengine/DSPAudio/lfo.h"
+#include "menu/CcNr2Text.h"
+#include "Parameters.h"
 #include "Soundengine/DSPAudio/random.h"
 #include <math.h>
 
@@ -191,6 +193,7 @@ void lfo_dispatchNextValue(Lfo* lfo)
 		float value=source;
 		if(lfo->stepPolarity==0) value=source*0.5f;
 		else if(lfo->stepPolarity==1) value=0.5f+source*0.5f;
+		else value=0.25f+source*0.5f; /* bipolar: half range, about -64..+63 at full amount */
 		modNode_updateValue(&lfo->modTarget,value);
 	} else modNode_updateValue(&lfo->modTarget,source);
 }
@@ -368,6 +371,7 @@ void lfo_retrigger(uint8_t voice)
 		lfo_retriggerVoice(&hatVoice.lfo);
 	}
 }
+static Lfo randomStepLfos[6];
 static Lfo *lfo_byVoice(uint8_t voice)
 {
 	if(voice<3)return &voiceArray[voice].lfo;
@@ -390,14 +394,72 @@ void lfo_stepTrigger(uint8_t sourceVoice)
 {
 	if(sourceVoice==6)sourceVoice=5; /* both hi-hat tracks use voice 6 */
 	for(uint8_t voice=0;voice<6;voice++) {
-		Lfo *lfo=lfo_byVoice(voice);
-		if(lfo->waveform!=LFO_RANDOM_STEP || lfo->retrigger!=sourceVoice+1u)continue;
-		float value=lfo_random01();
-		if(lfo->phaseOffset) value+=(lfo->phaseOffset/(float)UINT32_MAX)*2.f-1.f;
-		if(value<0.f)value=0.f;
-		if(value>1.f)value=1.f;
-		lfo->rndTarget=value;
-		if(!lfo->stepSlew)lfo->stepValue=value;
+		Lfo *nodes[2]={&randomStepLfos[voice],lfo_byVoice(voice)};
+		for(uint8_t n=0;n<2;n++) {
+			Lfo *lfo=nodes[n];
+			if(lfo->waveform!=LFO_RANDOM_STEP || lfo->retrigger!=sourceVoice+1u)continue;
+			float value=lfo_random01();
+			if(lfo->phaseOffset) value+=(lfo->phaseOffset/(float)UINT32_MAX)*2.f-1.f;
+			if(value<0.f)value=0.f;
+			if(value>1.f)value=1.f;
+			lfo->rndTarget=value;
+			if(!lfo->stepSlew)lfo->stepValue=value;
+		}
 	}
 }
 //-------------------------------------------------------------
+
+void lfo_initRandomSteps(void)
+{
+    for(uint8_t voice=0;voice<6;voice++) {
+        lfo_init(&randomStepLfos[voice]);
+        lfo_setWaveform(&randomStepLfos[voice],LFO_RANDOM_STEP);
+        randomStepLfos[voice].retrigger=voice+1u;
+    }
+}
+void lfo_applyRandomStepSettings(uint8_t voice)
+{
+    if(voice>=6)return;
+    Lfo *lfo=&randomStepLfos[voice];
+    uint8_t target=activeParameters[PAR_RPS_DST1+voice];
+    if(target>=getNumModTargets())target=0;
+    lfo->retrigger=activeParameters[PAR_RPS_TRG1+voice];
+    lfo->modTarget.amount=activeParameters[PAR_RPS_AMT1+voice]/127.f;
+    lfo_setPhaseOffset(lfo,activeParameters[PAR_RPS_OFS1+voice]);
+    lfo->stepSlew=activeParameters[PAR_RPS_SLW1+voice];
+    lfo->stepPolarity=activeParameters[PAR_RPS_POL1+voice]>2?2:activeParameters[PAR_RPS_POL1+voice];
+    if(lfo->modTarget.destination!=modTargets[target].param)
+        modNode_setDestination(&lfo->modTarget,modTargets[target].param);
+}
+void lfo_dispatchRandomSteps(void)
+{
+    for(uint8_t voice=0;voice<6;voice++)
+        lfo_dispatchNextValue(&randomStepLfos[voice]);
+}
+
+void lfo_resetRandomStepTargets(void)
+{
+    for(uint8_t voice=0;voice<6;voice++) {
+        ModulationNode *node=&randomStepLfos[voice].modTarget;
+        if(node->destination<END_OF_SOUND_PARAMETERS)
+            paramArray_setParameter(node->destination,node->originalValue);
+    }
+}
+
+void lfo_randomStepOriginalValueChanged(uint16_t idx)
+{
+    if(idx>=END_OF_SOUND_PARAMETERS || !parameterArray[idx].ptr)return;
+    for(uint8_t voice=0;voice<6;voice++) {
+        ModulationNode *node=&randomStepLfos[voice].modTarget;
+        if(node->destination!=idx)continue;
+        const Parameter *p=&parameterArray[idx];
+        switch(p->type) {
+            case TYPE_UINT8: node->originalValue.itg=*((uint8_t*)p->ptr); break;
+            case TYPE_SPECIAL_P:
+            case TYPE_SPECIAL_FILTER_F:
+            case TYPE_FLT: node->originalValue.flt=*((float*)p->ptr); break;
+            case TYPE_UINT32: node->originalValue.itg=*((uint32_t*)p->ptr); break;
+            default: break;
+        }
+    }
+}

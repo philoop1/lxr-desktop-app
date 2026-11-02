@@ -68,6 +68,27 @@ FRESULT loadTmpFolderFiles();
 
 FRESULT preset_savePatternSD(uint8_t presetNr);
 FRESULT preset_loadPatternSD(uint8_t presetNr);
+/* Copy a saved LXR2 kit (0) or pattern (1) between project folders.
+ * Existing targets require overwrite=1; the active project is never changed. */
+FRESULT preset_copyProjectItem(uint8_t sourceProject, uint8_t sourceSlot,
+        uint8_t targetProject, uint8_t targetSlot, uint8_t pattern, uint8_t overwrite,
+        uint8_t kitOverride);
+FRESULT preset_getProjectItemName(uint8_t project, uint8_t slot, uint8_t pattern, char name[9]);
+FRESULT preset_getProjectPatternKit(uint8_t project,uint8_t slot,uint8_t *kitSlot);
+FRESULT preset_findFreeProjectKit(uint8_t project,uint8_t *kitSlot);
+FRESULT preset_copyProjectPatternWithKit(uint8_t sourceProject,uint8_t sourcePattern,
+        uint8_t targetProject,uint8_t targetPattern,uint8_t overwrite,uint8_t *targetKit);
+/* After an import: load the copied file from the project folder into RAM and
+ * drop any older /tmp copy of that slot, so it survives Save Project and reboot. */
+FRESULT preset_loadTransferredItem(uint8_t project,uint8_t slot,uint8_t pattern);
+FRESULT preset_transferRefreshActivePattern(void);
+#define LXR1_PERFORMANCES 61
+#define LXR1_PATTERNS 8
+/* Import a converted LXR1 performance: its kit goes to the lowest free slot and
+ * its eight patterns to an eight-slot block starting at firstPattern. */
+FRESULT preset_getPerformanceName(uint8_t performance,char name[9]);
+FRESULT preset_importPerformance(uint8_t performance,uint8_t targetProject,uint8_t firstPattern,
+        uint8_t overwrite,uint8_t *targetKit);
 
 /** save the parameters of all 6 voices + LFO settings to a file on the SD card 
 if isMorph==1 the sound will be loaded into the morph buffer

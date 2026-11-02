@@ -54,7 +54,9 @@ uint8_t performance_set(uint16_t parameter,uint8_t value)
     case PAR_MASTER_FILTER_ENABLE:
         value=(uint8_t)!!value;mixer_setMasterFilterEnabled(value);break;
     case PAR_GLOBAL_SCALE:
-        value=value>8?0:value;perf_scaleSet(value,seq_isRunning());break;
+        value=value>5?PERF_SPEED_NEUTRAL:value;perf_speedSet(value,seq_isRunning());break;
+    case PAR_SCALE_TRANSFORM:
+        value=value>3?0:value;perf_transformSet(value,seq_isRunning());break;
     case PAR_FX_SEND_MODE:
         value=value>3?0:value;mixer_setFxSendMode(value);break;
     case PAR_FX_OUTPUT_MODE:

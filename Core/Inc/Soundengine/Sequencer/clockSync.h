@@ -40,7 +40,7 @@ void sync_tick();
 void sync_tickAtCycles(uint32_t cycles);
 void sync_midiResetPosition();
 void sync_midiStartStop(uint8_t isStart);
-uint8_t sync_getClockCnt();
+uint16_t sync_getClockCnt();
 void sync_setClockOffset(uint8_t tenths,uint8_t hundredths);
 uint8_t sync_shouldLeadStep(void);
 void sync_markLeadStep(void);

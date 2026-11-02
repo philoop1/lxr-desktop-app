@@ -72,6 +72,10 @@ volatile struct {
 
 static uint8_t buttonHandler_perfScaleArmed;
 static uint32_t buttonHandler_perfScaleDeadline;
+#define LOAD_LONG_PRESS_TICKS (BUTTON_TIMEOUT*2) // 1 s, leaves time for LOAD + Step chords
+static uint8_t buttonHandler_loadLongArmed;
+static uint32_t buttonHandler_loadLongDeadline;
+static void buttonHandler_enterPatternShortcut(void);
 static uint8_t buttonHandler_mutedVoices = 0;
 volatile static int8_t buttonHandler_armedAutomationStep = NO_STEP_SELECTED;
 
@@ -331,6 +335,10 @@ void buttonHandler_tick() {
         menu_openPatternScale();
         led_setMode2(SELECT_MODE_VOICE);
         menu_repaintAll();
+    }
+    if(buttonHandler_loadLongArmed && (int32_t)(systick_ticks-buttonHandler_loadLongDeadline)>=0) {
+        buttonHandler_loadLongArmed=0;
+        buttonHandler_enterPatternShortcut();
     }
 	if ((systick_ticks > buttonHandler_buttonTimer)) {
 		if (buttonHandler_buttonTimerStepNr >= 0) //!=NO_STEP_SELECTED)
@@ -639,18 +647,11 @@ static void buttonHandler_handleSelectButton(uint8_t buttonNr) {
 			menu_switchPage(menu_getActiveVoice());
 		case SELECT_MODE_VOICE:
 
-			//change sub page -> osc, filter, mod etc...
-			if(menu_getActivePage()>=LFO_EXTRA1_PAGE && menu_getActivePage()<=LFO_EXTRA6_PAGE) {
-				if(buttonNr==6 && (getMenuIndx()&MASK_PARAMETER)<4)
-					menu_openLfoExtra(1);
-				else {
-					menu_switchPage(menu_getActiveVoice());
-					menu_switchSubPage(buttonNr,0);
-				}
-			} else if(buttonNr==6 && menu_getActivePage()==menu_getActiveVoice() &&
-				menu_getSubPage()==6 && (getMenuIndx()&MASK_PARAMETER)>=4)
-				menu_openLfoExtra(0);
-			else menu_switchSubPage(buttonNr, 1);
+			// Extra LFO screens belong exclusively to voice editing.
+			if(buttonHandler_stateMemory.selectButtonMode==SELECT_MODE_VOICE &&
+			   menu_cycleVoiceLfo(buttonNr)) {
+				// The helper selected the complete screen, including its parameter half.
+			} else menu_switchSubPage(buttonNr, 1);
 			//go to 1st parameter on sub page
 			menu_resetActiveParameter();
 			led_setActiveSelectButton(buttonNr);
@@ -897,8 +898,17 @@ static void buttonHandler_enterPatternShortcut(void)
     led_initPatternSelectLeds();
 }
 
+#define PROJECT_DOUBLE_PRESS_TICKS (600u*4u) // 600 ms; systick_ticks runs at 4 kHz
+static uint32_t buttonHandler_lastProjectLoadPress;
+static uint32_t buttonHandler_lastProjectSavePress;
 static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 {
+    if(menu_isTransferActive()) {
+        if(seqButtonPressed==SEQ_KIT)menu_transferSelectType(0);
+        else if(seqButtonPressed==SEQ_PATTERN)menu_transferSelectType(1);
+        else if(seqButtonPressed==SEQ_PROJECT)menu_transferSelectProject();
+        return;
+    }
     if(seqButtonPressed==SEQ_DRUM1 && buttonHandler_getShift()) {
         buttonHandler_enterPatternShortcut();
         return;
@@ -949,7 +959,9 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 		case SEQ_SNARE: // SHIFT + Step 4: four-point Groove
 			buttonHandler_openPerformanceLayer(PERF_GROOVE_SUBPAGE);
 			break;
-		case SEQ_CLP:
+		case SEQ_CLP: // SHIFT + Step 5: external sends
+			buttonHandler_openPerformanceLayer(PERF_SEND_SUBPAGE);
+			break;
 		case SEQ_CL_HH:
 		case SEQ_OP_HH:
 			//single instrument buttons
@@ -1067,8 +1079,12 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			case SEQ_SNARE:
 			case SEQ_CLP:
 			case SEQ_CL_HH:
-			case SEQ_OP_HH:
 				//single instrument buttons
+				break;
+			case SEQ_OP_HH: // LOAD + Step 7
+				buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_LOAD;
+				led_setMode2(SELECT_MODE_LOAD);
+				menu_openTransfer(0);
 				break;
 
 			case SEQ_KIT: //kit
@@ -1117,6 +1133,13 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				menu_switchPage(LOAD_PAGE);
 				break;
 			case SEQ_PROJECT: //Performance
+				if(menu_isProjectLoadSavePage(0) &&
+				   (uint32_t)(systick_ticks-buttonHandler_lastProjectLoadPress)<PROJECT_DOUBLE_PRESS_TICKS) {
+					menu_openTransfer(0);
+					buttonHandler_lastProjectLoadPress=0;
+					break;
+				}
+				buttonHandler_lastProjectLoadPress=systick_ticks;
 
 				menu_setLoadSaveCategory(SAVE_TYPE_PROJECT);
 				//update the status LED
@@ -1152,8 +1175,12 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			case SEQ_SNARE:
 			case SEQ_CLP:
 			case SEQ_CL_HH:
-			case SEQ_OP_HH:
 				//single instrument buttons
+				break;
+			case SEQ_OP_HH: // SAVE + Step 7
+				buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_SAVE;
+				led_setMode2(SELECT_MODE_SAVE);
+				menu_openTransfer(1);
 				break;
 
 			case SEQ_KIT: //kit
@@ -1207,6 +1234,13 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				menu_switchPage(SAVE_PAGE);
 				break;
 			case SEQ_PROJECT: //Performance
+				if(menu_isProjectLoadSavePage(1) &&
+				   (uint32_t)(systick_ticks-buttonHandler_lastProjectSavePress)<PROJECT_DOUBLE_PRESS_TICKS) {
+					menu_openTransfer(1);
+					buttonHandler_lastProjectSavePress=0;
+					break;
+				}
+				buttonHandler_lastProjectSavePress=systick_ticks;
 				menu_setLoadSaveCategory(SAVE_TYPE_PROJECT);
 				//update the status LED
 				led_setMode2(3);
@@ -1723,6 +1757,7 @@ static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 //--------------------------------------------------------
 void buttonHandler_buttonPressed(uint8_t buttonNr) {
 	if(buttonNr!=BUT_MODE2)buttonHandler_perfScaleArmed=0;
+	buttonHandler_loadLongArmed=0;
 
 	screensaver_touch();
 
@@ -1946,8 +1981,14 @@ void buttonHandler_buttonPressed(uint8_t buttonNr) {
         buttonHandler_perfScaleDeadline=systick_ticks+BUTTON_TIMEOUT;
         buttonHandler_handleModeButtons(SELECT_MODE_PERF);
         break;
-    case BUT_MODE1:
     case BUT_MODE3:
+        if(!menu_isTransferActive()) {
+            buttonHandler_loadLongArmed=1;
+            buttonHandler_loadLongDeadline=systick_ticks+LOAD_LONG_PRESS_TICKS;
+        }
+        buttonHandler_handleModeButtons((uint8_t)(buttonNr-BUT_MODE1));
+        break;
+    case BUT_MODE1:
     case BUT_MODE4:
         buttonHandler_handleModeButtons((uint8_t)(buttonNr-BUT_MODE1));
         break;
@@ -2259,6 +2300,7 @@ void buttonHandler_buttonReleased(uint8_t buttonNr) {
         break;
 
 	case BUT_MODE3:
+		buttonHandler_loadLongArmed=0;
 		if(buttonHandler_stateMemory.selectButtonMode != SELECT_MODE_LOAD)
 		{
 			led_setValue(0,LED_MODE3);

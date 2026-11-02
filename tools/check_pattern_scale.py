@@ -25,6 +25,7 @@ code=r"""
 #define NUM_BARS 4
 #define USE_SD_CARD 1
 """
+code+=re.search(r'enum TrigCondition\s*\{.*?\};',header,re.S)[0]+"\n"
 code+=read('Core/Inc/Preset/SeqStep.h').replace('#include "main.h"','')
 for name in ['PatternSet','PatternBackupBuffer']:
  m=re.search(r'typedef struct '+name+r'Struct.*?}'+name+r';',header,re.S);assert m,name;code+=m[0]+'\n'
@@ -36,7 +37,7 @@ uint8_t disk[65536];unsigned size,cursor;
 int f_write(FIL *f,const void *src,unsigned count,UINT *done){(void)f;if(cursor+count>sizeof(disk))abort();memcpy(disk+cursor,src,count);cursor+=count;if(cursor>size)size=cursor;*done=count;return 0;}
 int f_read(FIL *f,void *dst,unsigned count,UINT *done){(void)f;*done=size-cursor<count?size-cursor:count;memcpy(dst,disk+cursor,*done);cursor+=*done;return 0;}
 """
-for name in ['preset_writePatternScale','preset_readPatternScale','preset_writeFlamProbability','preset_readFlamProbability','preset_writePatternData','preset_readPatternData']:
+for name in ['preset_writePatternScale','preset_readPatternScale','preset_writeFlamProbability','preset_readFlamProbability','preset_writeTrigConditions','preset_readTrigConditions','preset_writePatternData','preset_readPatternData']:
  code+=function(preset,name)+'\n'
 for name in ['seq_copyPatternToBackupBuffer','seq_copyBackupBufferToPattern','seq_copyPattern']:
  code+=function(seq,name)+'\n'
@@ -48,8 +49,14 @@ a2=release.index('case BUT_MODE2:');b2=release.index('case BUT_MODE3:',a2)
 code+=r"""
 enum {BUT_MODE1=20,BUT_MODE2,BUT_MODE3,BUT_MODE4,BUT_SEQ8,SELECT_MODE_VOICE=0,SELECT_MODE_PERF=1,PATTERN_SETTINGS_PAGE=13,LED_MODE3=3};
 #define BUTTON_TIMEOUT 2000
+#define LOAD_LONG_PRESS_TICKS (BUTTON_TIMEOUT*2)
 uint32_t systick_ticks,buttonHandler_perfScaleDeadline,buttonHandler_buttonTimer;
 uint8_t buttonHandler_perfScaleArmed,seq_activePattern,activeParameters[NUM_PARAMS];
+uint8_t buttonHandler_loadLongArmed,transferActive;
+uint32_t buttonHandler_loadLongDeadline;
+unsigned shortcutCalls;
+uint8_t menu_isTransferActive(void){return transferActive;}
+void buttonHandler_enterPatternShortcut(void){shortcutCalls++;}
 int8_t buttonHandler_buttonTimerStepNr=-1;
 struct {uint8_t selectButtonMode;} buttonHandler_stateMemory;
 unsigned opened,shortPerf,loadCalls,automationCalls;
@@ -64,6 +71,7 @@ void buttonHandler_armTimerActionStep(int8_t step){(void)step;automationCalls++;
 void buttonHandler_handleModeButtons(uint8_t mode){if(mode==1)shortPerf++;if(mode==2)loadCalls++;}
 void pressButton(uint8_t buttonNr){
  if(buttonNr!=BUT_MODE2)buttonHandler_perfScaleArmed=0;
+ buttonHandler_loadLongArmed=0;
  switch(buttonNr){
 """
 code+=press[a:b]+'}}\nvoid releaseButton(uint8_t buttonNr){switch(buttonNr){'+release[a2:b2]+'}}\n'
@@ -76,7 +84,7 @@ code+=r"""
 unsigned saves;
 void preset_touchTimer(unsigned timer){(void)timer;saves++;}
 void screensaver_touch(void){}
-uint8_t performance_set(uint16_t p,uint8_t value){activeParameters[p]=value;perf_scaleSet(value,seq_running);return 1;}
+uint8_t performance_set(uint16_t p,uint8_t value){activeParameters[p]=value;perf_speedSet(value,seq_running);return 1;}
 """
 branch=function(menu,'menu_parseEncoder')
 a=branch.index('uint8_t btnClicked=0;')
@@ -88,7 +96,7 @@ void check(int ok,const char *msg){checks++;if(!ok){puts(msg);exit(1);}}
 int main(void){
  const uint8_t divisions[]={2,4,6,8,12,16,24,32};const uint16_t clocks[]={3072,1536,1024,768,384,384,256,192};
  for(unsigned mode=0;mode<8;mode++){
-  perf_scaleSet(mode+1,0);
+  perf_scaleSetPattern(perf_scaleDivision(mode),0);
   check(perf_scaleMode()==divisions[mode],"scale selection");
   unsigned count=perf_scaleCount(64);
   check(count==((mode==4)?48:64),"only 12 skips page tails");
@@ -100,32 +108,39 @@ int main(void){
    check(perf_scaleToOrdinal(source,64)==i,"source mapping round trip");
   }
  }
- perf_scaleSetPattern(32,0);perf_scaleSet(0,0);check(perf_scaleMode()==32,"pat follows stored division");
- perf_scaleSet(6,0);perf_scaleSetPattern(12,1);perf_scaleCommit();check(perf_scaleMode()==16,"global override holds");
- perf_scaleSet(0,0);check(perf_scaleMode()==12,"return to pat restores pattern division");
- perf_scaleSet(6,0);perf_scaleSet(5,1);
- check(perf_scaleCommitOnBar(3)==0&&perf_scaleMode()==16,"live scale waits for quarter phase");
- check(perf_scaleCommitOnBar(0)==1&&perf_scaleMode()==12,"quarter phase commits pending scale");
- check(perf_scaleLegacyOverride(1)==6&&perf_scaleLegacyOverride(2)==5&&perf_scaleLegacyOverride(4)==5,"legacy scale migration");
+ perf_scaleSetPattern(32,0);perf_speedSet(PERF_SPEED_NEUTRAL,0);check(perf_scaleMode()==32,"stored division applies");
+ perf_speedSet(PERF_SPEED_NEUTRAL-1,0);check(perf_scaleMode()==32&&perf_scaleTicks()==24,"spd keeps the stored division");
+ perf_speedSet(PERF_SPEED_NEUTRAL,0);perf_scaleSetPattern(16,0);perf_scaleSetPattern(12,1);
+ check(perf_scaleCommitOnBar(3)==0&&perf_scaleMode()==16,"live change waits for the bar");
+ check(perf_scaleCommitOnBar(0)==1&&perf_scaleMode()==12,"bar commits the pending change");
  for(unsigned mode=0;mode<8;mode++){
   memset(&seq_patternSet,0,sizeof(seq_patternSet));
   seq_patternSet.scale[3]=divisions[mode];seq_patternSet.kitNr[3]=17;
   seq_patternSet.flamProbability[3][2][5]=37;
   for(unsigned t=0;t<7;t++){seq_patternSet.length[3][t]=64;seq_patternSet.seq_mainSteps[3][3][t]=0xabcd;}
   size=cursor=0;preset_writePatternData(3);unsigned modernSize=size;
-  check(size>458&&memcmp(disk+size-458,"SCL2",4)==0&&memcmp(disk+size-452,"FLP1",4)==0,"tagged pattern trailers");
+  check(size>911&&memcmp(disk+size-911,"SCL2",4)==0&&memcmp(disk+size-905,"FLP1",4)==0&&memcmp(disk+size-453,"CND2",4)==0,"tagged pattern trailers");
   cursor=0;check(preset_readPatternData(4,3),"modern pattern load succeeds");
   check(seq_patternSet.scale[4]==divisions[mode]&&seq_patternSet.kitNr[4]==17&&seq_patternSet.seq_mainSteps[3][4][0]==0xabcd,"scale and legacy pattern data roundtrip");
   check(seq_patternSet.flamProbability[4][2][5]==37,"flam probability roundtrip");
-  size=modernSize-458;cursor=0;seq_patternSet.scale[4]=32;
+  size=modernSize-911;cursor=0;seq_patternSet.scale[4]=32;
   check(preset_readPatternData(4,3)&&seq_patternSet.scale[4]==16&&seq_patternSet.flamProbability[4][2][5]==100,"legacy pattern defaults safely");
-  size=modernSize;disk[size-453]^=1;cursor=0;
+  size=modernSize;disk[size-906]^=1;cursor=0;
   check(preset_readPatternData(4,3)&&seq_patternSet.scale[4]==16,"bad trailer checksum defaults safely");
-  disk[size-453]^=1;
+  disk[size-906]^=1;
   seq_copyPattern(3,5);check(seq_patternSet.scale[5]==divisions[mode]&&seq_patternSet.flamProbability[5][2][5]==37,"copy retains scale and flam probability");
   seq_copyPatternToBackupBuffer(3);seq_patternSet.scale[3]=0;seq_patternSet.flamProbability[3][2][5]=0;seq_copyBackupBufferToPattern(3);
   check(seq_patternSet.scale[3]==divisions[mode]&&seq_patternSet.flamProbability[3][2][5]==37,"backup retains scale and flam probability");
  }
+ seq_activePattern=3;seq_patternSet.scale[3]=16;memset(seq_patternSet.length[3],16,NUM_TRACKS);seq_patternSet.length[3][2]=7;seq_patternSet.length[3][4]=0;
+ seq_copyPatternToBackupBuffer(3);seq_setPatternScale(3,7);
+ check(seq_patternSet.length[3][0]==32&&seq_patternSet.length[3][4]==32&&seq_patternSet.length[3][2]==7,"rate 32 lengthens default tracks only");
+ seq_copyBackupBufferToPattern(3);check(seq_patternSet.length[3][0]==32,"length survives leaving the pattern");
+ seq_setPatternScale(3,6);check(seq_patternSet.length[3][0]==24&&seq_patternSet.length[3][2]==7,"rate 24 follows");
+ seq_setPatternScale(3,5);check(seq_patternSet.length[3][0]==16&&seq_patternSet.length[3][2]==7,"returning to 16 restores the default");
+ seq_patternSet.length[3][1]=20;seq_setPatternScale(3,7);check(seq_patternSet.length[3][1]==20,"hand-set length stays");
+ seq_setPatternScale(3,5);memset(seq_patternSet.length[3],16,NUM_TRACKS);
+ seq_activePattern=3;seq_patternSet.scale[3]=16;seq_copyPatternToBackupBuffer(3);seq_setPatternScale(3,4);seq_copyBackupBufferToPattern(3);check(seq_patternSet.scale[3]==12,"pattern rate survives leaving the pattern");
  seq_activePattern=3;seq_patternSet.scale[3]=12;
  systick_ticks=100;pressButton(BUT_MODE2);systick_ticks=2099;buttonHandler_tick();check(!opened,"short PERF does not open Scale");
  releaseButton(BUT_MODE2);systick_ticks=2200;buttonHandler_tick();check(!opened&&shortPerf==1,"release cancels hold");
@@ -134,7 +149,12 @@ int main(void){
  buttonHandler_tick();check(opened==1&&!automationCalls,"hold fires once without step-automation action");
  releaseButton(BUT_MODE2);pressButton(BUT_MODE3);systick_ticks+=BUTTON_TIMEOUT;buttonHandler_tick();check(opened==1&&loadCalls==1,"LOAD retains its behavior");
  pressButton(BUT_MODE2);pressButton(BUT_MODE3);systick_ticks+=BUTTON_TIMEOUT;buttonHandler_tick();check(opened==1,"another button cancels PERF hold");
- perf_scaleSetPattern(16,0);perf_scaleSet(0,0);seq_running=1;
+ check(!shortcutCalls,"short LOAD hold keeps LOAD + Step chords");
+ pressButton(BUT_MODE3);systick_ticks+=LOAD_LONG_PRESS_TICKS;buttonHandler_tick();check(shortcutCalls==1,"long LOAD opens pattern selection");
+ buttonHandler_tick();check(shortcutCalls==1,"long LOAD fires once");
+ pressButton(BUT_MODE3);pressButton(BUT_SEQ8);systick_ticks+=LOAD_LONG_PRESS_TICKS;buttonHandler_tick();check(shortcutCalls==1,"another button cancels long LOAD");
+ transferActive=1;pressButton(BUT_MODE3);systick_ticks+=LOAD_LONG_PRESS_TICKS;buttonHandler_tick();check(shortcutCalls==1,"transfer dialog ignores long LOAD");transferActive=0;
+ perf_scaleSetPattern(16,0);perf_speedSet(PERF_SPEED_NEUTRAL,0);seq_running=1;
  seq_activePattern=3;seq_patternSet.scale[3]=12;menu_openPatternScale();
  menu_parseEncoder(3,0);
  check(activeParameters[PAR_PATTERN_SCALE]==7&&seq_patternSet.scale[3]==12&&perf_scaleMode()==16,"encoder previews without applying or storing");

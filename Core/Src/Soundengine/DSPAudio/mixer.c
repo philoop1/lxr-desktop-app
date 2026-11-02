@@ -853,6 +853,7 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
 	lfo_dispatchNextValue(&snareVoice.lfo);
 	lfo_dispatchNextValue(&cymbalVoice.lfo);
 	lfo_dispatchNextValue(&hatVoice.lfo);
+	lfo_dispatchRandomSteps();
 
 	//update filter frequencies
 	SVF_recalcFreq(&voiceArray[0].filter);

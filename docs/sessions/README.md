@@ -43,3 +43,7 @@ For each new session, copy [TEMPLATE.md](TEMPLATE.md), use the next number,
 and record the source commit or branch, changed files, build result, hardware
 test, open questions, and next step. Keep observed results separate from ideas
 or expectations.
+
+- [032: LFO navigation and Step Flam layout](032-lfo-navigation-step-flam-layout.md)
+- [033: Project transfer and 0.2.13 build](033-project-transfer-0.2.13.md)
+- [034: FX sends shortcut and 0.2.24](034-fx-sends-shortcut-0.2.24.md)

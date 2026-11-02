@@ -404,6 +404,10 @@ void frontPanel_parseData(uint8_t data)
 							activeParameters[PAR_STEP_FLAM_PROB] = frontParser_midiMsg.data2;
 							menu_repaintAll();
 							break;
+						case SEQ_TRIG_CONDITION:
+							activeParameters[PAR_STEP_CONDITION] = frontParser_midiMsg.data2;
+							menu_repaintAll();
+							break;
 
 						case SEQ_SHIFT:
 						activeParameters[PAR_STEP_SHIFT] = frontParser_midiMsg.data2;

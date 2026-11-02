@@ -1712,9 +1712,27 @@ void midiParser_setDelayParameter(uint16_t param,uint8_t value)
 	if(param==PAR_PERF_DELAY_INPUT_MASK)buttonHandler_refreshVoiceDisplay();
 	menu_repaint();
 }
+uint8_t midiParser_isValidChannel(uint8_t chan);
+/* Numbers with a legacy meaning: like Morph CC2 they need a Pch of their own. */
+static uint8_t midiParser_needsOwnPch(uint8_t cc)
+{
+	return (cc>=54 && cc<=59) || (cc>=67 && cc<=69) || (cc>=92 && cc<=97) || (cc>=102 && cc<=119);
+}
+static uint8_t midiParser_scaleCc(uint8_t value,uint8_t maximum)
+{
+	return (uint8_t)(((uint16_t)value*maximum+63u)/127u);
+}
+static uint8_t midiParser_menuCc(uint16_t parameter,uint8_t value)
+{
+	activeParameters[parameter]=value;
+	menu_parseGlobalParam(parameter,value);
+	menu_repaintAll();
+	return 1;
+}
 static uint8_t midiParser_extendedPerformanceCc(uint8_t cc,uint8_t value)
 {
 	uint16_t parameter=PAR_NONE;
+	if(midiParser_needsOwnPch(cc) && midiParser_isValidChannel(midi_ControlChannel))return 0;
 	switch(cc) {
     case 9:
         performance_set(PAR_PERF_RANDOM_VELO,(uint8_t)(((uint16_t)value*100u+63u)/127u));
@@ -1726,8 +1744,11 @@ static uint8_t midiParser_extendedPerformanceCc(uint8_t cc,uint8_t value)
 	case 37:performance_set(PAR_MASTER_FILTER,value==64?63:value);menu_repaintAll();return 1;
 	case 38:performance_set(PAR_MASTER_FILTER_RESO,value);menu_repaintAll();return 1;
 	case 39:performance_set(PAR_MASTER_FILTER_DRIVE,value);menu_repaintAll();return 1;
-	case 79:case 80:case 81:case 82:case 83:case 84:case 85:case 86:case 87:
+	case 79:case 80:case 81:case 82:case 83:case 84:
 		if(!value||value>=64) {performance_set(PAR_GLOBAL_SCALE,(uint8_t)(cc-79));menu_repaintAll();}
+		return 1;
+	case 88:case 89:case 90:case 91:
+		if(!value||value>=64) {performance_set(PAR_SCALE_TRANSFORM,(uint8_t)(cc-88));menu_repaintAll();}
 		return 1;
 	case 40: seq_setShuffle(value/127.f);menu_repaintAll();return 1;
 	case 41:
@@ -1743,6 +1764,15 @@ static uint8_t midiParser_extendedPerformanceCc(uint8_t cc,uint8_t value)
 	case 16: parameter=PAR_PERF_DELAY_MODE;value=(uint8_t)(value>=64);break;
 	case 126: parameter=PAR_PERF_DELAY_TARGET;value=(uint8_t)(((uint16_t)value*10u+63u)/127u);break;
 	case 44: midiParser_setAccentParameter(PAR_PERF_VELO_LEVEL,value==64?63:value);return 1;
+	case 54: midiParser_setStepPerformance(PAR_PERF_SCARCITY,midiParser_scaleCc(value,100));return 1;
+	case 55: performance_set(PAR_PERF_AVL,midiParser_scaleCc(value,200));menu_repaintAll();return 1;
+	case 56: return midiParser_menuCc(PAR_PERF_FILL,(uint8_t)(value>=64));
+	case 57: performance_set(PAR_MASTER_FILTER_ENABLE,(uint8_t)(value>=64));menu_repaintAll();return 1;
+	case 58: midiParser_setPitchBendRange(value);menu_repaintAll();return 1;
+	case 59: performance_set(PAR_FX_SEND_MODE,midiParser_scaleCc(value,3));menu_repaintAll();return 1;
+	case 67: performance_set(PAR_FX_OUTPUT_MODE,(uint8_t)(value>=64));menu_repaintAll();return 1;
+	case 68: performance_set(PAR_CLOCK_OFFSET,midiParser_scaleCc(value,80));menu_repaintAll();return 1;
+	case 69: performance_set(PAR_CLOCK_OFFSET_FINE,midiParser_scaleCc(value,9));menu_repaintAll();return 1;
 	default:
 		if(cc>=46 && cc<=52) {
 			midiParser_setAccentParameter((uint16_t)(PAR_PERF_VELO_DECAY+cc-46),value==64?63:value);return 1;
@@ -1752,6 +1782,19 @@ static uint8_t midiParser_extendedPerformanceCc(uint8_t cc,uint8_t value)
 				activeParameters[PAR_PERF_DELAY_INPUT_MASK]^(uint8_t)(1u<<(cc-60)));
 			return 1;
 		}
+		if(cc>=92 && cc<=97) {
+			MidiMsg msg={0};
+			msg.status=MIDI_CC2;
+			msg.data1=(uint8_t)(CC2_PWM_1+cc-92);
+			msg.data2=value;
+			activeParameters[PAR_PWM_1+cc-92]=value;
+			midiParser_ccHandler(msg,1,0,0.f);
+			menu_repaintAll();
+			return 1;
+		}
+		if(cc>=102 && cc<=107)return midiParser_menuCc((uint16_t)(PAR_LFO_SLEW1+cc-102),value);
+		if(cc>=108 && cc<=113)return midiParser_menuCc((uint16_t)(PAR_LFO_POL1+cc-108),midiParser_scaleCc(value,2));
+		if(cc>=114 && cc<=119)return midiParser_menuCc((uint16_t)(PAR_RPS_AMT1+cc-114),value);
 		return 0;
 	}
 	midiParser_setDelayParameter(parameter,value);return 1;

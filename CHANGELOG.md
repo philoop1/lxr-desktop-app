@@ -6,6 +6,63 @@ are recorded here. The upstream project keeps its own Git history.
 
 ## Unreleased
 
+### Mutador 0.2.24 (hardware test pending)
+
+- FX sends `s1`-`s6` and `sm` moved from the PERF pages to SHIFT + Step 5. Pressing it again switches between the two screens.
+- The startup screen shows the real version again. It had stayed at 0.2.10.
+- Four host checks that had been failing unnoticed run again; none found a firmware defect.
+
+### Mutador 0.2.23 (hardware test pending)
+
+- The Pch CCs from 0.2.22 now work only when Pch has a channel of its own. If Pch shares a channel with `ch` or a Voice, those numbers keep their existing meaning.
+
+### Mutador 0.2.22 (hardware test pending)
+
+- New Pch CCs: 54 Scarcity, 55 All Velocity, 56 Fill, 57 master filter enable, 58 pitch bend range, 59 FX send mode, 67 FX output mode, 68/69 clock offset, 92-97 PWM, 102-107 LFO slew, 108-113 LFO polarity, 114-119 random step LFO depth.
+- The manual's Pch `spd` and `sct` section and the numeric CC table are up to date again.
+
+### Mutador 0.2.21 (hardware test pending)
+
+- Confirming rate 24 or 32 sets tracks on the default length to that rate, and returning to 16 or below restores 16. Hand-set lengths stay.
+- PLAY on incoming MIDI Clock without MIDI START starts at once. The bar wait now applies only after MIDI START.
+
+### Mutador 0.2.20 (hardware test pending)
+
+- PERF `scl` is now `spd`: /8 /4 /2 1 *2 *4 relative to the stored pattern rate, so `pat` is gone and a ternary pattern stays ternary at any speed. It starts at 1 and changes at the bar. Speed tops out at 64 steps a bar, 48 on ternary rates.
+- MIDI clock output no longer depends on the step length. Pch CC 79-84 select `spd`; 85-87 return to voice parameters.
+
+### Mutador 0.2.19 (hardware test pending)
+
+- A confirmed pattern rate now survives leaving or reselecting the pattern. The beat LED follows three-step groups on ternary rates.
+
+### Mutador 0.2.18 (hardware test pending)
+
+- sct is a live off/a/b/c control on PERF page 2 that follows the active rate: 4/3a/3b/3c on quaternary rates and 3/4a/4b/4c on ternary rates. It changes the step time as Mutador did, so a bar keeps its length, and each pair is an exact inverse. Old 12a is now 3c and old 12c is 3a.
+- Changes apply on the next quarter or group edge without restarting. sct no longer writes to patterns and starts off.
+- pbr moved to the third globals page. Pch CC 88-91 select sct off/a/b/c.
+
+### Mutador 0.2.17 (hardware test pending)
+
+- In pattern selection the encoder picks bank 1 to 4. Holding LOAD for one second opens the same view as SHIFT + Step 1.
+
+### Mutador 0.2.16 (hardware test pending)
+
+- Transfer imports now load from the project folder into the running project, so they survive Save Project and reboot. Older /tmp copies of a slot are dropped, and Replace and free-Kit checks count /tmp.
+
+### Mutador 0.2.15 (hardware test pending)
+
+- LOAD transfer adds LXR1 after PROJ63: imports a converted performance's eight patterns into an eight-slot block with its kit in the lowest free Kit slot. One Replace confirmation covers the block.
+
+### Mutador 0.2.14 (hardware test pending)
+
+- LOAD or SAVE + PROJECT pressed twice now works within 600 ms. The window was only about 150 ms in 0.2.13 because the system tick runs at 4 kHz.
+
+### Mutador 0.2.13 (hardware test pending)
+
+- Project transfer shows Kit and Pattern names, opens with LOAD or SAVE + PROJECT pressed twice, and adds P+K: a Pattern plus its linked Kit, placed in the lowest free Kit slot with the Pattern's kit link updated.
+- Importing into the active pattern slot now keeps the new pattern after a pattern change. A failed P+K no longer leaves a false `No free KIT` on later errors.
+- ARM build and host checks passed. The dialog has no host test; on-device copy tests are pending.
+
 ### Mutador 0.2 (hardware test pending)
 
 - Added the rps LFO waveform: a played Step from the selected trigger voice changes the held random value once, independently of the target voice. A third and fourth LFO view expose trigger, destination, amount, offset, slew and Helicase-style neg/pos/bi polarity.
@@ -308,3 +365,70 @@ and is not included in that description.
 
 The Pch/CPU work is an initial, experimental slice. Hardware validation is
 still pending; see session 007.
+
+
+## Mutador 0.2.1
+
+- Explicit four-screen LFO navigation in Voice mode; extra screens remain excluded from PERF.
+- Move fpr to Step screen 2 directly before flam.
+- Hardware Flam report remains under investigation; host dispatch passes fpr=0/100 note-count checks.
+
+
+## Mutador 0.2.2
+
+- Random per Step shows trg (trigger voice), target voice, destination and amount. Wave selection remains on the normal LFO page.
+- Encoder navigation now reaches all extra LFO parameters and returns to the normal LFO page.
+
+
+## Mutador 0.2.3
+
+- Stabilize the modulation destination read during live Random-per-Step edits. Restore the original LFO page 2 `rtg` label. Device freeze retest pending.
+
+
+## Mutador 0.2.4
+
+- Apply half-range bipolar Random per Step modulation. Keep LFO destination changes atomic with respect to audio interrupts. Hardware verification pending.
+
+
+## Mutador 0.2.5
+
+- Changing an LFO destination restores only that LFO's former target instead of resetting every modulation destination from inside MIDI message handling. Hardware freeze retest pending.
+
+## Mutador 0.2.6
+
+- Random per Step uses six separate modulators with independent trigger, target voice, destination, amount, offset, slew and polarity. The normal LFO stays independent and its older wav=rps mode still works.
+- Kit and project kit storage include the new settings. Older kits receive safe defaults.
+
+
+## Mutador 0.2.7
+
+- Random per Step labels show trg and rds. Its destination shows only the parameter name and encoder selection stays within the voice chosen by voi. The click/transient pitch remains an available target.
+
+
+## Mutador 0.2.8
+
+- Random per Step destination no longer changes its selected voice. RDS remains within the voice chosen by VOI and retains an off position.
+
+
+## Mutador 0.2.9
+
+- Add per-Step trig conditions after probability: first/not-first track loop, Fill/not-Fill, and all A:B cycles through 8:8. Conditions gate shifted and flammed hits alongside the existing probability.
+- Add a temporary Fill toggle to the Groove page. Conditions save in a versioned CND1 pattern extension; older patterns default to always. Step, track, pattern and edit-buffer copies include conditions.
+
+
+## Mutador 0.2.10
+
+- Add PRE/NEI/LST and inverse conditions. Resolve and retain condition outcomes at due events so lookahead does not alter history; Flam repeats reuse the outcome.
+- Restore independent sct Pattern/16/12a/12b/12c with per-pattern storage and next-boundary switching. CND2 reads older CND1 patterns.
+
+
+## Mutador 0.2.11
+
+- Fix SHIFT + Step 4 so its second press opens the Groove page's second half with fil and sct; a third press returns to the first half.
+- Add offline LXR1 Mutador conversion of eight one-bar LXR2 patterns plus a kit from .prf/.all (or separate .snd). Preserve supported Step automation and translate kit modulation target indices. Conversion limits are recorded per source file.
+
+## Mutador 0.2.12
+
+- Add LOAD + Step 7 import and SAVE + Step 7 export for a saved KIT or PATTERN between LXR2 projects. PROJECT returns to source/destination project selection.
+- Require explicit encoder confirmation before every copy. A filled destination requires a second Replace confirmation. Copy through a temporary file, keep the old destination as a backup during replacement, and restore it if the new file cannot be renamed into place.
+- Transfers require a stopped sequencer; imported slots are refreshed in RAM. Raw LXR1 files are still handled by the offline converter.

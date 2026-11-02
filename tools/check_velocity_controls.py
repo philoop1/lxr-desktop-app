@@ -27,6 +27,11 @@ code+=r"""
 #define USE_PATTERN_EDIT_BUFFER 0
 uint8_t activeParameters[NUM_PARAMS],midi_MidiChannels[8],seq_activePattern;
 uint8_t seq_triggerSourceStep[7]={255,255,255,255,255,255,255},seq_stepIndex[7];
+uint32_t seq_triggerEventId,seq_lastLfoEventId[7];
+void lfo_stepTrigger(uint8_t voice){(void)voice;}
+uint8_t menu_isTransferActive(void){return 0;}
+void menu_transferSelectType(uint8_t type){(void)type;}
+void menu_transferSelectProject(void){}
 struct {uint8_t seq_subStepPattern[1][7][64];}seq_patternSet;
 unsigned automations,triggered,modulated,output,active_voices,front;
 uint8_t soundVelocity,modVelocity,outVelocity;
@@ -49,6 +54,9 @@ code+=r"""
 #define SELECT_MODE_PATTERN 8
 #define SELECT_MODE_PERF 1
 #define SEQ_DRUM1 0
+#define SEQ_KIT 7
+#define SEQ_PROJECT 10
+#define SEQ_PATTERN 15
 uint8_t shift,copyClear_Mode,currentPage,layer,modeLED;
 int8_t buttonHandler_buttonTimerStepNr;
 struct {uint8_t selectButtonMode;}buttonHandler_stateMemory;

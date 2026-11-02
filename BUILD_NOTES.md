@@ -21,18 +21,14 @@ cmake --preset release
 cmake --build --preset release
 ```
 
-The current archived build is Mutador 0.1.26. It retains the default step
-velocity 100 from 0.1.24 and applies proportional AVL gain after rvl in both
-directions (+50=x1.5, +100=x2, clipped at 127). Release build and the 196491
-native velocity/shortcut checks passed. The card is hash-verified at 0.1.25.
-The one-time card velocity migration has a complete original/staged backup
-and passed 1262958 assertions through the production C pattern loader.
-Physical-device sound/controller validation remains open.
+The current archived build is Mutador 0.2.24; see the last entry of this
+file for its hash and test state. Physical-device validation of the 0.2
+series remains open.
 
 The update image is written under `build/release/` as
-`LXR_V2_V1.7_Mutador0.1.26.img`. The base version comes from
+`LXR_V2_V1.7_Mutador0.2.24.img`. The base version comes from
 `project(VERSION ...)` in `CMakeLists.txt`; the fork suffix is set separately
-there. For a debug build, use the `debug` preset in both commands.
+there as `LXR_MUTADOR_VERSION`, which also sets the startup line. For a debug build, use the `debug` preset in both commands.
 
 ### Exact Windows commands on this machine
 
@@ -154,28 +150,28 @@ The prior 0.1.16 card image was hash checked and backed up under
 root update matched the archive hash before 0.1.16 was removed. No project,
 sample or configuration file was changed.
 
-## 2026-10-31 — Mutador 0.1.20 Snare destinations
+## 2026-10-31 ï¿½ Mutador 0.1.20 Snare destinations
 
-Appended destinations 229–235 for the seven Snare controls, preserving all
+Appended destinations 229ï¿½235 for the seven Snare controls, preserving all
 legacy target indices. Added parameter pointers and extended encoder/pot
 selection and LFO voice-gap mapping. Wave and mode modulation use bounded
 rounded selections. Release build passed. Native destination audit passed
 49 assertions; voice/kit audit passed 2449. Hardware checks remain pending.
-Mutador voice CC 112–118 mapping was identified but is not imported here.
+Mutador voice CC 112ï¿½118 mapping was identified but is not imported here.
 
-## 2026-10-31 — Mutador 0.1.21 Snare voice CC
+## 2026-10-31 ï¿½ Mutador 0.1.21 Snare voice CC
 
-Imported Snare voice CC 112–118 with Mutador channel priority: dedicated
+Imported Snare voice CC 112ï¿½118 with Mutador channel priority: dedicated
 Snare voice channel only, excluding gch/Pch. Update sound, active parameter,
 modulation base and automation target consistently; clamp Wave and Mode.
 Release build passed. MIDI audit passed 357659 assertions, including all
 128 input values for each alias on USB and DIN, channel overlaps and RX
 filter checks. Hardware MIDI testing remains pending.
 
-## 2026-10-31 — Mutador 0.1.22 Stray/Glide and Voice CC
+## 2026-10-31 ï¿½ Mutador 0.1.22 Stray/Glide and Voice CC
 
 Imported smooth-random LFO trajectory/bias/retrigger code, adapting the
-0–2 reference output to desktop 0–1 modulation. Kept existing waveform IDs;
+0ï¿½2 reference output to desktop 0ï¿½1 modulation. Kept existing waveform IDs;
 new menu entries are str/gld (8/9). Integrated waveform/offset setters in
 the MIDI parameter path. Frequency zero and held random follow Mutador.
 Imported the source Voice-CC translator except Membrane 111, with dedicated
@@ -184,7 +180,7 @@ menu selections. Raw target CC 25/81 use sound-parameter IDs, not menu indices.
 Native tests: 450061 deterministic LFO/reference assertions; 509499 MIDI
 source-table and dispatch assertions. Device listening and timing remain open.
 
-## 2026-10-31 — 0.1.22 per-pattern Scale and next-bar confirmation
+## 2026-10-31 ï¿½ 0.1.22 per-pattern Scale and next-bar confirmation
 
 Replaced 12a/b/c with eight musical divisions, 2/4/6/8/12/16/24/32.
 /12 visits only the first twelve slots of each sixteen-slot page. The other
@@ -202,7 +198,7 @@ Pattern copy and edit backup include the scale. MUTA.CFG v3 has the same
 and 12a/b/c settings. Native Pattern Scale audit: 1098 assertions;
 performance/timing: 56947; edit/scale/hat/storage: 148249. ARM build passed.
 
-## 2026-10-31 — 0.1.22 SD-card write and documentation update
+## 2026-10-31 ï¿½ 0.1.22 SD-card write and documentation update
 
 Copied firmware-archive/LXR_V2_V1.7_Mutador0.1.22.img to F: and verified
 SHA-256 088D3C994528BB06B71549802068C5A0FFB77E49E72774517F92974B4180705F
@@ -216,7 +212,7 @@ index/device/sequencer/save chapters, Changelog (including the 0.1.18/19 UI
 history), sessions and archive record. No firmware source changed in this
 card/documentation task; the previously built and tested image was used.
 
-## 2026-10-31 — 0.1.23 Random/overall Velocity and any-mode shortcut
+## 2026-10-31 ï¿½ 0.1.23 Random/overall Velocity and any-mode shortcut
 
 SHIFT+Step 1 now has priority over mode-dependent COPY/CLEAR and opens the
 first PERF display with pattern selection from every mode. Pending automation
@@ -232,7 +228,7 @@ the intervening UI-only Pattern Scale parameter. Legacy v1/v2/v3 settings
 load neutral. MIDI Pch CC9 scales rvl to 0-100. Release build and native tests
 passed (196491 / 509607 / 56947 / 148256 assertions). Device validation is open.
 
-## 2026-10-31 — 0.1.23 SD-card write
+## 2026-10-31 ï¿½ 0.1.23 SD-card write
 
 Copied LXR_V2_V1.7_Mutador0.1.23.img to F: and verified SHA-256
 585F0CEDEC5C628A733E3434BA6EFA781EAE144BE80B14842913877D3F8CF616
@@ -241,7 +237,7 @@ backed up under build/card-image-backups/20261031-mutador-0.1.23/.
 Removed only the former root image after verifying the new copy. Device
 installation and hardware testing remain pending.
 
-## 2026-10-31 — 0.1.24 defaults and one-time card velocity migration
+## 2026-10-31 ï¿½ 0.1.24 defaults and one-time card velocity migration
 
 Changed seq_resetNote to SEQ_DEFAULT_VELOCITY=100. Identified active PROJxx
 and TMP layouts: 1153 v3/TMP patterns and 192 PatV02 files, total 1345.
@@ -259,7 +255,7 @@ verified 1281 changed files. The application can resume using the same plan
 without double scaling. Build 0.1.24 passed and was copied/hash-verified on
 F: before the proportional-gain follow-up below.
 
-## 2026-10-31 — 0.1.25 proportional positive AVL
+## 2026-10-31 ï¿½ 0.1.25 proportional positive AVL
 
 On request, changed positive AVL from filling the remaining distance to 127
 to the same multiplicative rule as attenuation: round(velocity*gain/100),
@@ -340,3 +336,78 @@ that old root image. Device installation and lki=aut retest pending.
 Mutador 0.2 candidate (2026-10-31): ARM GCC 14.3 release build passed with Random Step LFO, Flam Probability, LFX1 kit and FLP1 pattern extensions. Host checks: Pattern Scale/FLP1 1106, grouped Step editing 148257, performance/Flam 56951 assertions; LFO source routing passed. Memory ITCM 14400/16384, DTCM 107672/131072, RAM 305388/393216, FLASH 271688/1015808. Device testing pending.
 
 Mutador 0.2 final image: 323084 bytes, SHA256 F58CF6793F27726F51FD504494E62571B41694213F0D7F837745DEE4A8A4D0AF. Copied and hash-verified as F:/LXR_V2_V1.7_Mutador0.2.img. The old card image 0.1.28 was hash-verified and backed up to build/card-image-backups/20261031-mutador-0.2/ before removal from the card. The card now has only the 0.2 LXR update image. Final build: ITCM 14400/16384, DTCM 107672/131072, RAM 305388/393216, FLASH 271672/1015808. Hardware installation and sound/save-load verification remain pending.
+
+
+Mutador 0.2.1: explicit Voice-only four-screen LFO navigation; fpr moved before flam on Step screen 2. Release build passed; 57214 host assertions including actual Flam hit counts and all-voice LFO navigation passed. FLASH 271680 bytes; IMG 323092 bytes; SHA256 43016B34C3BDAB6316535F059889B628CA4A31FA2B0C2D820E895CFED05AB9AF. SD F: copied and SHA256 verified; previous update image backed up before removal. Hardware LFO/Flam retest pending. See session 032.
+
+
+Mutador 0.2.2: ARM GCC 14.3 release build passed. IMG 323284 bytes, SHA256 095A1A96B6BCF0A8DF5E01317DD4E033DE46789C0CA174571D3B86E020530978. 57214 host performance assertions passed before the menu layout adjustment; hardware display check pending.
+
+
+Mutador 0.2.3: ARM GCC 14.3 release build passed. Image 323348 bytes, SHA256 021569213D849D80AFE1A4A21BD621F5C4C600192C1417D27516CA232B50AD79. LFO STEP and 57214 performance host assertions passed. Hardware live-edit freeze retest pending.
+
+
+Mutador 0.2.4: ARM GCC 14.3 release build passed. IMG 323420 bytes, SHA256 71641EF6B46EE127889E207C669D447BBBE355B0E271B7BF50E08A1581C7F2F8. Destination host contract 73 assertions and LFO STEP passed. Device destination-change and LFO audio retest pending.
+
+
+Mutador 0.2.5: ARM GCC 14.3 release build passed. IMG 323460 bytes, SHA256 2E21DEC9570ED5A2BA10B0D916FC14EFBD97B2DCB499E09C4034C582E863DFA5. Target-switch host check passed, 76 destination checks and 57216 performance checks passed. Physical dst-change freeze retest pending.
+
+Mutador 0.2.6: ARM GCC 14.3 release build passed. IMG 325620 bytes, SHA256 FC0850C6E8B7A5F08B38CC13D1D2D982C23B9B5C930D084B04804544D300FE8F. LFO step and kit checks, modulation target switch and performance checks passed. Hardware test of simultaneous LFO and Random per Step pending.
+
+
+Mutador 0.2.7: ARM GCC 14.3 release build passed. IMG 326012 bytes, SHA256 DE49DF14FB7E7307E06C85208AB0DAA0F0D8AFA8C8BD580098B2204916FA0DB9. Target-switch host check passed. Hardware UI verification pending.
+
+
+Mutador 0.2.8: ARM GCC 14.3 release build passed. IMG 326036 bytes, SHA256 4DA1BD027AC65AFD05B8BA85476119594011B0FC4D9DAA7DFB56634642A31D32. LFO step, kit storage and mod target checks passed. Hardware RDS/VOI test pending.
+
+
+Mutador 0.2.9: ARM GCC 14.3 release build passed. IMG 326660 bytes, SHA256 4D5C4E0691B50F14BE2CE10AD7B9205A13CF8D768D4A2981D12C3DC285D346AD. Trig condition, CND1 storage, performance, edit/scale/hat/storage native checks passed. Hardware test pending.
+
+
+Mutador 0.2.10: ARM GCC 14.3 release passed. IMG 331220 bytes SHA256 D5795706CB70BD5667B17F228E86D4349ABC8E5C891E42989EC78370B8C44A1E. Native condition/SCT, CND1/CND2 storage, 1106 pattern-scale and 57227 performance assertions passed. Hardware validation pending.
+
+
+Mutador 0.2.11: ARM GCC 14.3 release passed. Actual IMG 331300 bytes, SHA256 0421C3E632DF2806ADA1C3D4BF4C62F25B7EAC3D718BEE69A287ED64306B6A6D. ITCM 14368/16384, DTCM 107672/131072, RAM 338148/393216, FLASH 279920/1015808. Offline LXR1 timing/kit/automation tests passed; real Mutador v12 performance converted to eight 4574-byte patterns and one 328-byte kit. Copied to SD F: and hash verified; archived 0.2.10 image hash checked before removal. SCT menu hardware check pending.
+
+Mutador 0.2.12: ARM GCC 14.3 release passed with no compiler warnings. Transfer dialog and transactional project kit/pattern copy compiled. Actual IMG 334820 bytes, SHA256 61CBBCA7D922443F38DECEDBF58CD239FACA3C77F14FD75EFDCE84A548AB5341. ITCM 14368/16384, DTCM 107672/131072, RAM 338156/393216, FLASH 283440/1015808. On-device FAT copy and overwrite confirmation test pending.
+SD F: 0.2.12 copied and SHA256 verified; previous 0.2.11 image matched the local archive before removal. Physical copy/replace test remains open.
+
+2026-11-01 LXR1 SD library: staged all 61 Pxxx.PRF performances from I:/Github/mutador/SDcard, copied 44 matching original SND files, reconstructed 17 missing SND files from embedded PRF kits, and generated eight one-bar PAT files plus one LXR2 kit per performance. F:/LXR1 now contains 61 folders and 734 files (5,437,555 bytes); every file SHA256 matched staging after copy. Individual NOTES.TXT files mark conversion approximations. The existing F: projects and 0.2.12 update image were not changed. Firmware 0.2.12 does not browse F:/LXR1 yet.
+
+2026-11-01 sound access: F:/LXR1/SOUNDS/LXR1 holds 61 LXR1 SND files (44 copied originals, 17 reconstructed from PRF); F:/LXR1/SOUNDS/LXR2 holds 61 converted LXR2 kits. F:/PROJ63 is a kit-only library with 61 files in slots 00..60 for 0.2.12 project-transfer UI. All 122 central sound copies and all 61 PROJ63 kit copies were SHA256-verified against the per-performance originals. Existing PROJ00..PROJ20 directories were not touched.
+
+Mutador 0.2.13: ARM GCC 14.3 release passed with no compiler warnings. Adds slot names, double PROJECT shortcut and P+K transfer; fixes the stale pattern backup after importing into the active slot and the stale No free KIT message. IMG 336996 bytes, SHA256 5E50B7C2AA635E899DE37CF28EF7A79FFE5CC56371AFBC900889FA485D30EE9A. ITCM 14368/16384, DTCM 107672/131072, RAM 338188/393216, FLASH 285616/1015808. Host checks passed: performance 57227, pattern scale 1106, edit/scale/hat/storage 148257, trig storage/conditions, mod target, LFO step, LXR1 import. The transfer dialog has no host test. Archived and hash verified. SD F: 0.2.13 copied and SHA256 verified; the 0.2.12 card image matched its archive and was backed up under build/card-image-backups/20261101-mutador-0.2.13/. Its removal from the card was blocked by a tool safety check, so F: holds both images until 0.2.12 is deleted by hand. Device installation and on-device copy test pending. See session 033.
+
+Mutador 0.2.14: user reports the PROJECT double press does nothing. Cause: its 600 tick window assumed milliseconds, but systick_ticks runs at 4 kHz (TIM14: 108 MHz / 13501 / 2), so the window was 150 ms. Now 2400 ticks = 600 ms. ARM GCC 14.3 release passed with no compiler warnings. IMG 336996 bytes, SHA256 905761062A2FAA68C36C11617084D8D57EB84589533798FD4C09658B393373A3. ITCM 14368/16384, DTCM 107672/131072, RAM 338188/393216, FLASH 285616/1015808. Host checks passed: performance 57227, pattern scale 1106, edit/scale/hat/storage 148257; none covers this window. Archived and hash verified. SD F: 0.2.14 copied and SHA256 verified. The user removed 0.2.12 by hand; 0.2.13 matched its archive, is backed up under build/card-image-backups/20261101-mutador-0.2.14/ and must be deleted by hand before updating, because a tool safety check blocks removal from F:. Device retest pending.
+
+Mutador 0.2.15: LOAD transfer gains LXR1 after PROJ63: choose a performance and an eight-slot pattern block, kit goes to the lowest free slot, one Replace confirmation covers all eight. Sources must be /LXR1/Pxxx/LXR2/00-LXR1.SND and 00..07-LXR1n.PAT. A failure after the first pattern leaves the patterns already copied, with their kit. ARM GCC 14.3 release passed with no compiler warnings. IMG 338300 bytes, SHA256 FB924EE519640BA145CD7C8DDF465ACF2041C3D361E2339EEF1C54A326E1CAC4. FLASH 286920/1015808, RAM 338188/393216. Host checks passed: performance 57227, pattern scale 1106, edit/scale/hat/storage 148257; none covers transfer or performance import. Archived, hash verified; not on SD, card absent.
+
+2026-11-01 PROJ63 finding: its kits came from PRF embedded kits, not the SND files. 44 of 61 SND files hold a different kit from their PRF; the other 17 were reconstructed from it. tools/prepare_snd_kit_library.py converted all 61 SND files to build/lxr1-snd-kits-20261101. PROJ63 was left unchanged; see the card entry below. Performance import keeps using the PRF kit, which belongs to its patterns.
+
+2026-11-01 card: F: 0.2.15 copied and SHA256 verified. The former 0.2.14 image matched its archive and was renamed to LXR_V2_V1.7_Mutador0.2.14.imm, so it is no longer an update image. New F:/PROJ62 holds the 61 SND-derived LXR2 kits as NN-Pxxx.SND, each SHA256 verified against build/lxr1-snd-kits-20261101. PROJ63 stays the PRF kit library. All 183 sampled paths under /LXR1/Pxxx/LXR2 exist. PROJ64 is not usable: projects end at 63. Device installation and test pending.
+
+2026-11-01 card projects: tools/prepare_lxr1_projects.py grouped the 61 performances into PROJ21..PROJ28, eight per project: block b holds patterns b*8..b*8+7 linked to kit b. Every project has 64 kits and 64 patterns because project load keeps old RAM for missing slots; kits 8..63 are named Unused, and PROJ28 repeats P060 in its last three blocks. No songs or GLO.CFG were written, so song slots and globals stay as they were in RAM. All 1032 files matched staging by SHA256. Added PRJ.NFO to PROJ62 (SND KITS) and PROJ63 (PERFKITS); project load fails without it. Existing projects unchanged. Not loaded on the device yet.
+
+Firmware defect, fixed in 0.2.16: the transfer writes to /projNN but the firmware works in /tmp. The RAM reload after an import reads /tmp, so the import does not reach the running project, and Save Project empties /projNN and writes RAM back, losing the import. No *IMPRT* file was found on the card. Source fix: reload from the project folder, return to /tmp, drop stale slot files, refresh the edit backup and tmp.pat when the active slot changes, count /tmp in Replace and free-kit checks, create a missing project folder. 0.2.15 still has the defect.
+
+Mutador 0.2.16: ARM GCC 14.3 release passed with no compiler warnings. IMG 339164 bytes, SHA256 CB9EFED3A4C72944FF2F11E2CE0CC7B3C25F78A6BEFAA9F26A27C26EFB9528C1. ITCM 14368/16384, DTCM 107672/131072, RAM 338188/393216, FLASH 287784/1015808. Host checks passed: performance 57227, pattern scale 1106, edit/scale/hat/storage 148257; none covers transfer or /tmp handling. Archived; SD F: copied and SHA256 verified, former 0.2.15 image matched its archive and was renamed to .imm. Device installation and transfer tests pending.
+
+2026-11-01 LXR1 converter defect: user reported PROJ21..28 show only voice 1 and sometimes voice 2. The converter wrote main-step words by bar then track, while firmware reads and writes track then bar, so tracks 1-4 became the four bars of voice 1 and tracks 5-7 went to voice 2. Fixed in tools/import_lxr1_patterns.py; check_lxr1_import.py now checks every track. Regenerated build/lxr1-library-20261101b and build/lxr1-projects-20261101b: 381 of 488 patterns changed, only the 56 main-step bytes differ; the other 107 have at most voice 1 hits or none, and 102 are empty. All PAT files converted before this fix are wrong, including those on F: under /LXR1 and PROJ21..28. Card PROJ21..28 and /LXR1 matched the old staging exactly, so nothing the user saved was replaced; corrected PAT files were written and read back byte-identical. Device listening test pending.
+
+Mutador 0.2.17: in pattern selection the encoder picks bank 1..4 outside edit mode, except on the pattern save page. Holding LOAD for 1 s alone opens the SHIFT + Step 1 pattern shortcut; any other button or release cancels it, and the transfer dialog ignores it. ARM GCC 14.3 release passed with no compiler warnings. IMG 339348 bytes, SHA256 4B9C9FA1EA5F55B517E2EA223F74F1EE1945BCFF0B1352CCA4B50BE0748AEEC1. FLASH 287968/1015808, RAM 338196/393216. Host checks: performance 57227, pattern scale 1111 including five long LOAD cases, edit/scale/hat/storage 148257. No host test covers the encoder bank branch. SD F: copied and SHA256 verified; 0.2.16 matched its archive and was renamed to .imm. PROJ62 kit names now follow the PRF names; sound bytes unchanged. User reports pattern chaining works on 0.2.16. Device test of 0.2.17 pending.
+
+2026-11-01 card: renamed PROJ62 and PROJ63 kit files to the firmware scheme NN-NAME.SND, using the first five sanitized characters of each kit name, so names are visible in a file browser. Content hashes unchanged; 61 unique slots in each.
+
+Mutador 0.2.18: live sct rebuilt. Mutador and LXR2BC change the step time in 12a/b/c, which the local port had lost. sct is now off/a/b/c, chosen by the active rate: rates 2/4/8/16/32 are quaternary and show 4/3a/3b/3c (drop index 3/1/2, step time 4/3); rates 6/12/24 are ternary and show 3/4a/4b/4c (step time 3/4, all tracks pause one gap slot at index 3/1/2). Each pair is an exact inverse; old 12a is now 3c and old 12c is 3a. sct no longer writes the pattern; the stored transform byte stays in files and is ignored; sct is not persisted and starts off. Changes commit on the next group edge without restart: every quarter at rates 12 and up, half note at 6/8, bar at 2/4. seq_prescaleCounter is 16 bit because rate 2 with 3x needs 256 ticks. sct moved to PERF page 2 in the old pbr slot; pbr moved to the third globals page. Pch CC 88..91 select off/a/b/c and no longer reach voice parameters on that channel. ARM GCC 14.3 release passed with no compiler warnings. IMG 338028 bytes, SHA256 703EC9754E072CC558E8125AFB11DBB9F01997168F3DE1BF0A56ABDD147B1CE6. FLASH 286648/1015808, RAM 338196/393216. Host checks: new check_sct 595 against the production scale code, performance 57227, MIDI 509679, pattern scale 1111, edit/scale/hat/storage 148257, trig conditions/storage, mod target, LFO step, LXR1 import. The sequencer paths for gap slots and live switching, Flam/Groove in a gap and MIDI clock sync have no host test. SD F: copied and SHA256 verified; 0.2.17 matched its archive and was renamed to .imm. Device listening test pending.
+
+Mutador 0.2.19: user reports a pattern set to rate 12 plays no triplets. seq_setPatternScale changed the pattern but not patternBackupBuffer, so leaving or reselecting the pattern restored the old rate. The backup is now updated. The beat LED now follows three-step groups on ternary rates. check_pattern_scale gained a regression case that fails without the fix and passes with it, 1112 assertions. ARM GCC 14.3 release passed with no compiler warnings. IMG 338092 bytes, SHA256 80A18D336FD1B53F623A31FCDF37BB16BF18DC391303D2C7388E74077EB99F5B. FLASH 286656/1015808, RAM 338196/393216. Host checks passed: sct 595, performance 57227, MIDI 509679, edit/scale/hat/storage 148257, trig conditions. Whether this is what the user heard is not confirmed; device retest pending.
+
+Mutador 0.2.20: PERF scl becomes spd, /8 /4 /2 1 *2 *4 relative to the stored pattern rate; pat and absolute overrides are gone. spd is live only, always starts at 1 and still commits at the bar with a restart. Step time is computed in ticks with a floor of six: 64 steps a bar, 48 on ternary rates, so *4 on rate 32 stops at 64 and on rate 24 at 48. Ternary detection and the 13-16 slot rule use the stored rate. Internal MIDI clock and clock-out counting moved from the step counter to the bar frame, because a six-tick step does not divide the clock. External MIDI sync alternates one and two clocks for six-tick steps. Pch CC 79-84 select spd; 85-87 return to voice parameters. The confirmed pattern rate no longer touches spd. The user was unsure about live sct switching on the quarter: 64 random switch sequences over 8 bars through the real seq_tick and seq_applyPendingTransform found no position error; removing the group alignment or the clock alternation makes the new checks fail. That harness stubs seq_nextStep, so gap slots through the full step path remain untested. ARM GCC 14.3 release passed with no compiler warnings. IMG 338308 bytes, SHA256 2C17F4482B3228387CA468F5C510F88531C685AC031BF81529B72370C70F094B. ITCM 14424/16384, DTCM 107672/131072, RAM 338196/393216, FLASH 286872/1015808. Host checks: sct 620, performance 61324, pattern scale 1110, edit/scale/hat/storage 148257, MIDI 509625, trig conditions/storage, mod target, LFO step, LXR1 import. SD F: copied and SHA256 verified; 0.2.19 matched its archive and was renamed to .imm. Device test pending.
+
+Mutador 0.2.21: confirming pattern rate 24 or 32 sets tracks on the default length to that rate, and returning to 16 or below restores 16; hand-set lengths stay. PLAY with MIDI clock but no MIDI START now starts at once and makes the next clock the downbeat. Only MIDI START places the bar, and over 1 s without clock forgets it. The clock-offset lead does not apply to this immediate start. ARM GCC 14.3 release passed with no compiler warnings. IMG 338812 bytes, SHA256 9FE652FDDC384965DE6D534EF091A4823D5DFB32C18E814A5F348265B28BD9C1. FLASH 287376/1015808, RAM 338204/393216. Host checks: sct 620, performance 61327, pattern scale 1115, edit/scale/hat/storage 148257, MIDI 509625, trig conditions. Archived, not copied to SD: F: holds 0.2.20. Device test pending.
+
+Mutador 0.2.22: new Pch CCs. 54 pSc, 55 avl, 56 Fill, 57 master filter enable, 58 pitch bend range, 59 FX send mode, 67 FX output mode, 68/69 clock offset and fine, 92-97 PWM, 102-107 LFO slew, 108-113 LFO polarity, 114-119 random step LFO depth. CC 1, 3, 4, 17-19, 29, 45, 53 and 71-78 stay free for the Mutador numbers; 98-101 and 120-127 are avoided as NRPN/RPN and channel mode numbers. The other random step LFO settings stay menu-only. Not changed: CC 25/81 still address IDs 0-127, so 112 of 235 destinations stay menu-only, and an LFO on Vel Dst still writes activeParameters while modulating. Manual and docs/P01_CC_MAP.csv corrected. ARM GCC 14.3 release passed with no compiler warnings. IMG 339628 bytes, SHA256 B958AE11784F9628F7AA9FC40067D2F90AA1363B89D038A104A5CD92176D42F3. Host checks: MIDI 510252, sct 620, performance 61327, pattern scale 1115, edit/scale/hat/storage 148257, snare destinations 76, LFO step. Archived, not copied to SD: F: holds 0.2.20. Device test pending.
+
+Mutador 0.2.23: the Pch CCs added in 0.2.22 need a Pch of their own, as Morph CC2 does. If Pch equals gch or a Voice channel, those numbers keep their legacy meaning; 0.2.22 would have replaced them. Removing the guard makes the CC route check fail. LFO 2 report: no voice-specific defect in the code. CC 123 (LFO 2 depth on the global map) cannot be sent from Live's MIDI Ctrl list, and Voice 2 on channel 2 overlaps the default Pch; the user's channel settings were not read. ARM GCC 14.3 release passed with no compiler warnings. IMG 339748 bytes, SHA256 F83C5EC848C37C2A9514418D4B8D292A544A3BB2C25256E45BBEF4D23E33C71D. FLASH 288312. Host checks: MIDI 509724, sct 620, performance 61327, pattern scale 1115, edit/scale/hat/storage 148257, snare destinations 76, LFO step. SD F: copied and SHA256 verified; 0.2.20 matched its archive and was renamed to .imm. Device test pending.
+
+Mutador 0.2.24: FX sends moved to SHIFT + Step 5 and left the regular PERF cycle. LXR_MUTADOR_VERSION now sets the image name and the startup line, which had stayed at 0.2.10. check_copy_import, check_velocity_controls, check_voice_import and check_lfo_import had been failing unnoticed on stale harnesses and were repaired; no firmware defect found. ARM GCC 14.3 release passed with no compiler warnings. IMG 339708 bytes, SHA256 FE0D3C60554B80188A5303FDB4EE7927154EC7D62B126EA9892C4608CFA9C019. ITCM 14424/16384, DTCM 107672/131072, RAM 338204/393216, FLASH 288272/1015808. Host checks: performance 61326, MIDI 509724, sct 620, pattern scale 1115, edit/scale/hat/storage 148257, LFO import 450062, velocity 196491, voice 2449, copy 29, and the remaining checks passed. SD F: 0.2.24 copied and SHA256 verified; 0.2.23 matched its archive and was renamed to .imm. New check_sct_step_path: 1451594 assertions through the real seq_nextStep, gap guard mutation fails. PROJ21..28 got GLO.CFG from the root file with bpm MID; backup under build/card-midi-backups/20261102-184434-131412. Device test pending. See session 034.

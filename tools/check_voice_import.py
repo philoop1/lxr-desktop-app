@@ -41,6 +41,15 @@ enum {FR_OK=0,FA_READ=1,FA_WRITE=2};
 int SDFile;
 uint8_t mainParameters[NUM_KIT_SLOTS][END_OF_SOUND_PARAMETERS],activeParameters[NUM_PARAMS];
 uint8_t *morphParameters=mainParameters[1];
+static uint8_t mainLfoExtras[NUM_KIT_SLOTS][12],mainRpsExtras[NUM_KIT_SLOTS][42];
+static void preset_defaultLfoExtras(uint8_t*d){(void)d;}
+static void preset_defaultRpsExtras(uint8_t*d){(void)d;}
+static void preset_applyLfoExtras(const uint8_t*d){(void)d;}
+static void preset_applyRpsExtras(const uint8_t*d){(void)d;}
+static void preset_writeLfoExtras(const uint8_t*d){(void)d;}
+static void preset_writeRpsExtras(const uint8_t*d){(void)d;}
+static void preset_readLfoExtras(uint8_t*d){(void)d;}
+static void preset_readRpsExtras(uint8_t*d){(void)d;}
 static uint8_t disk[512];static unsigned cursor,size,checks;
 static void check(int ok,const char*name){checks++;if(!ok){fprintf(stderr,"FAIL %s\n",name);exit(1);}}
 FRESULT f_read(FIL*f,void*dst,unsigned n,UINT*bytes){(void)f;*bytes=n<size-cursor?n:size-cursor;memcpy(dst,disk+cursor,*bytes);cursor+=*bytes;return FR_OK;}

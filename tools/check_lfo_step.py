@@ -26,6 +26,7 @@ code = r'''
 typedef struct {uint8_t waveform,retrigger,stepSlew,stepPolarity;uint32_t phaseOffset;float stepValue,rndTarget;} Lfo;
 typedef struct {Lfo lfo;} Voice;
 Voice voiceArray[3],snareVoice,cymbalVoice,hatVoice;
+static Lfo randomStepLfos[6];
 uint32_t GetRngValue(void){return 0x40000000u;}
 static void check(int condition,const char *message){if(!condition){fprintf(stderr,"FAIL %s\n",message);exit(1);}}
 '''
@@ -34,13 +35,22 @@ for name in ("lfo_random01", "lfo_byVoice", "lfo_setStepSlew", "lfo_setStepPolar
 code += r'''
 int main(void){
   voiceArray[0].lfo=(Lfo){LFO_RANDOM_STEP,1,0,2,0,0.5f,0.5f};
+  voiceArray[1].lfo=(Lfo){LFO_RANDOM_STEP,2,0,2,0,0.5f,0.5f};
+  voiceArray[2].lfo=(Lfo){LFO_RANDOM_STEP,3,0,2,0,0.5f,0.5f};
   snareVoice.lfo=(Lfo){LFO_RANDOM_STEP,1,80,2,0,0.5f,0.5f};
   cymbalVoice.lfo=(Lfo){LFO_RANDOM_STEP,5,0,2,0,0.5f,0.5f};
   hatVoice.lfo=(Lfo){LFO_RANDOM_STEP,6,0,2,0,0.5f,0.5f};
+  for(int v=0;v<6;v++)randomStepLfos[v]=(Lfo){LFO_RANDOM_STEP,(uint8_t)(v+1),0,2,0,0.5f,0.5f};
   lfo_stepTrigger(0);
   check(voiceArray[0].lfo.stepValue<0.26f && voiceArray[0].lfo.stepValue>0.24f,"source voice 1 snaps");
   check(snareVoice.lfo.rndTarget<0.26f && snareVoice.lfo.stepValue==0.5f,"slew retains prior output");
   check(cymbalVoice.lfo.stepValue==0.5f && hatVoice.lfo.stepValue==0.5f,"other sources unchanged");
+  check(voiceArray[1].lfo.stepValue==0.5f && voiceArray[2].lfo.stepValue==0.5f,"voice 1 does not trigger voices 2 or 3");
+  check(randomStepLfos[0].stepValue<0.26f && randomStepLfos[1].stepValue==0.5f,"separate random nodes follow source voice");
+  lfo_stepTrigger(1);check(voiceArray[1].lfo.stepValue<0.26f && voiceArray[2].lfo.stepValue==0.5f,"voice 2 has its own source");
+  check(randomStepLfos[1].stepValue<0.26f && randomStepLfos[2].stepValue==0.5f,"voice 2 random node is independent");
+  lfo_stepTrigger(2);check(voiceArray[2].lfo.stepValue<0.26f,"voice 3 has its own source");
+  check(randomStepLfos[2].stepValue<0.26f,"voice 3 random node receives its step");
   lfo_stepTrigger(6);
   check(hatVoice.lfo.stepValue<0.26f && hatVoice.lfo.stepValue>0.24f,"open hat shares source voice 6");
   lfo_setStepSlew(4,200);lfo_setStepPolarity(4,9);

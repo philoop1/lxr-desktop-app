@@ -73,5 +73,10 @@ void lfo_retrigger(uint8_t voiceNr);
 void lfo_stepTrigger(uint8_t sourceVoice);
 void lfo_setStepSlew(uint8_t voice,uint8_t value);
 void lfo_setStepPolarity(uint8_t voice,uint8_t value);
+void lfo_initRandomSteps(void);
+void lfo_applyRandomStepSettings(uint8_t voice);
+void lfo_dispatchRandomSteps(void);
+void lfo_resetRandomStepTargets(void);
+void lfo_randomStepOriginalValueChanged(uint16_t idx);
 
 #endif /* LFO_H_ */

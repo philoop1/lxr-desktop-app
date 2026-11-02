@@ -99,7 +99,7 @@ extern uint8_t trigger_prescalerClockInput;
 #if VOICE_TRIGGER_OUTS
 void trigger_triggerVoice(uint8_t voice, triggerMode mode);
 #endif
-void trigger_clockTick(uint8_t onOff, uint8_t cnt);//the sequencer calls this function whenever a step is played to generate corresponding trigger out clocks
+void trigger_clockTick(uint8_t onOff, uint16_t cnt);//the sequencer calls this function whenever a step is played to generate corresponding trigger out clocks
 void trigger_setGrooveClock(uint8_t enabled);
 void trigger_clockGrooveTick(uint8_t on2,uint8_t on4);
 void trigger_reset(uint8_t value);
