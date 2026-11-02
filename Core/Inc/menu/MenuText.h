@@ -384,10 +384,12 @@ const char midiRoutingNames[][6] =
 //-----------------------------------------------------------------
 const char mixFmNames[][6] =
 {
-		{3},	// number of entries
+		{5},	// number of entries
 		{"FM"},
 		{"Mix"},
 		{"rng"},
+		{"exp"},
+		{"pd"},
 
 };
 const char patternScaleNames[][4]={{8},{"2"},{"4"},{"6"},{"8"},{"12"},{"16"},{"24"},{"32"}};

@@ -130,3 +130,17 @@ Mutador 0.2.22: `LXR_V2_V1.7_Mutador0.2.22.img`, 339628 bytes, SHA256 `B958AE117
 Mutador 0.2.23: `LXR_V2_V1.7_Mutador0.2.23.img`, 339748 bytes, SHA256 `F83C5EC848C37C2A9514418D4B8D292A544A3BB2C25256E45BBEF4D23E33C71D`. The 0.2.22 Pch CCs need a Pch of their own. Copied to SD F: and hash verified; hardware test pending.
 
 Mutador 0.2.24: `LXR_V2_V1.7_Mutador0.2.24.img`, 339708 bytes, SHA256 `FE0D3C60554B80188A5303FDB4EE7927154EC7D62B126EA9892C4608CFA9C019`. FX sends on SHIFT + Step 5; correct startup version. Copied to SD F: and hash verified; hardware test pending.
+
+Mutador 0.2.25: `LXR_V2_V1.7_Mutador0.2.25.img`, 341100 bytes, SHA256 `3B11345DFC9072D017B80EF4656BB1021C68F6B930CF3C67ED547EB51E1F5543`. Drum modes `exp` and `pd`. Copied to SD F: and hash verified; hardware test pending.
+
+Mutador 0.2.26: `LXR_V2_V1.7_Mutador0.2.26.img`, 341236 bytes, SHA256 `04C403114F49E8D2367C226FDEB10BD08574825D1641AF29523B00B3A70EBBB2`. Pch CC70-75. Copied to SD F: and hash verified; hardware test pending.
+
+Mutador 0.2.27: `LXR_V2_V1.7_Mutador0.2.27.img`, 345764 bytes, SHA256 `51C9AD20A5CA6ED2ECF83EB6D1166BD1B608FAFE42E5100A685A9CA12ED1B0AB`. Reverb, FX Dry/Wet destination, `shu` moved. Copied to SD F: and hash verified; hardware test pending.
+
+Mutador 0.2.28: `LXR_V2_V1.7_Mutador0.2.28.img`, 345764 bytes, SHA256 `57B16CCFAC941BACDC173BCCA93BAB53F4DB13F08005A43B917FB243E4764CFC`. Menu navigation fix. Copied to SD F: and hash verified; hardware test pending.
+
+Mutador 0.2.29: `LXR_V2_V1.7_Mutador0.2.29.img`, 345636 bytes, SHA256 `D13245BBFBFF057062EC933046A5851BDCB9D1614160C20333E9DE7EA03B90A0`. Half-rate reverb for CPU; hardware test pending.
+Copied to SD F: and hash verified.
+
+Mutador 0.2.30: `LXR_V2_V1.7_Mutador0.2.30.img`, 341164 bytes, SHA256 `736BABA5F0C40C8B48797581F71BAE4D73126BFAD6994DAD76CE27FE38086AB9`. Reverb removed; hardware test pending.
+Copied to SD F: and hash verified.

@@ -265,7 +265,7 @@ to USB and DIN. Membrane CC 111 is not imported.
 | 12 / 13 / 14 | Sample rate / Drive / Coarse pitch |
 | 16 / 17 / 18 / 19 | Filter cutoff / Resonance / Drive / Type |
 | 20 / 21 | Snare Noise/Osc Mix / Noise frequency |
-| 22 | Drum voices 1–3 FM/Mix/Ring mode |
+| 22 | Drum voices 1–3 FM/Mix/Ring/Expo/PD mode, values 0-4 |
 | 23 / 24 / 25 | Velocity-to-volume enable / Velocity amount / Destination |
 | 26 / 27 / 28 | Transient level / Wave / Frequency |
 | 46 | Fine pitch (63/64 center) |
@@ -308,6 +308,8 @@ shortcuts are separate from the voice-channel aliases using the same numbers.
 | 59 | FX send mode | scaled 0-3 |
 | 67 | FX output mode | 64-127 second mode; resets the sends |
 | 68 / 69 | Clock offset / fine | scaled 0-80 / 0-9 |
+| 70-72 | Drum 1-3 mode (FM, Mix, rng, exp, pd) | scaled 0-4 |
+| 73-75 | Drum 1-3 FM amount, `exp` depth, `pd` DCW | 0-127 |
 | 92-97 | Voice PWM 1-6 | 0-127 |
 | 102-107 | LFO slew 1-6 | 0-127 |
 | 108-113 | LFO polarity 1-6 | scaled 0-2 |

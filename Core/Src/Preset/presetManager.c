@@ -1702,7 +1702,7 @@ static uint8_t interpolate(uint8_t a, uint8_t b, uint8_t x)
 }
 
 //----------------------------------------------------
-IN_ITCM_RAM void preset_sendDrumsetParametersImmediate()
+void preset_sendDrumsetParametersImmediate()
 {
 		//special case mod targets
 		for(uint8_t i=0;i<6;i++)

@@ -204,8 +204,8 @@ int main(void) {
             int wantExtra=rx && channel==midi_ControlChannel &&
                 (cc==5||cc==6||cc==7||cc==8||cc==9||cc==28||(cc>=10&&cc<=16)||cc==126||
                  (cc>=20&&cc<=26)||(cc>=30&&cc<=44)||((cc>=79&&cc<=84)||(cc>=88&&cc<=91))||(cc>=46&&cc<=52)||(cc>=60&&cc<=66)||
-                 (overlap<0&&((cc>=54&&cc<=59)||(cc>=67&&cc<=69)||(cc>=92&&cc<=97)||(cc>=102&&cc<=119))));
-            int wantPwm=rx && overlap<0 && channel==midi_ControlChannel && cc>=92 && cc<=97;
+                 (overlap<0&&((cc>=54&&cc<=59)||(cc>=67&&cc<=75)||(cc>=92&&cc<=97)||(cc>=102&&cc<=119))));
+            int wantPwm=rx && overlap<0 && channel==midi_ControlChannel && ((cc>=92&&cc<=97)||(cc>=70&&cc<=75));
             MidiMsg mapped=message(source,channel,MIDI_CC,cc,127);
             int wantVoice=rx && channel<7 && channel!=midi_ControlChannel && midiParser_mapVoiceCc((uint8_t)channel,(uint8_t)cc,&mapped);
             int wantSnare=wantVoice && channel==3 && cc>=112 && cc<=118;
@@ -454,6 +454,18 @@ int main(void) {
       reset_parameters(); activeParameters[PAR_CLOCK_OFFSET]=50;
       midiParser_parseMidiMessage(message(0,15,MIDI_CC,69,127));
       check(activeParameters[PAR_CLOCK_OFFSET_FINE]==9,"Pch fine clock offset",69,127,0);
+      for(unsigned v=0;v<3;v++) {
+        static const uint16_t amounts[3]={PAR_FMAMNT1,PAR_FMAMNT2,PAR_FMAMNT3};
+        for(unsigned value=0;value<128;value++) {
+          reset_parameters(); reset_spies();
+          midiParser_parseMidiMessage(message(0,15,MIDI_CC,70+v,value));
+          check(activeParameters[PAR_MIX_MOD_1+v]==(value*4u+63u)/127u&&handled==1,"Pch Drum mode spans five modes",v,value,0);
+          midiParser_parseMidiMessage(message(0,15,MIDI_CC,73+v,value));
+          check(activeParameters[amounts[v]]==value&&handled==2,"Pch Drum FM amount",v,value,0);
+        }
+        reset_parameters();midiParser_parseMidiMessage(message(0,15,MIDI_CC,70+v,127));
+        check(activeParameters[PAR_MIX_MOD_1+v]==4,"Pch Drum mode top is pd",v,127,0);
+      }
       for(unsigned v=0;v<6;v++) {
         reset_parameters(); reset_spies(); parsedParameter=0;
         midiParser_parseMidiMessage(message(0,15,MIDI_CC,92+v,100));
@@ -481,7 +493,7 @@ int main(void) {
           (cc>=79&&cc<=84)?"spd":(cc>=88&&cc<=91)?"sct":
           cc==54?"Scarcity":cc==55?"All velocity":cc==56?"Fill":cc==57?"Master filter enable":
           cc==58?"Pitch bend range":cc==59?"FX send mode":cc==67?"FX output mode":
-          cc==68?"Clock offset":cc==69?"Clock offset fine":(cc>=92&&cc<=97)?"Voice PWM":
+          cc==68?"Clock offset":cc==69?"Clock offset fine":(cc>=70&&cc<=72)?"Drum mode":(cc>=73&&cc<=75)?"Drum FM amount":(cc>=92&&cc<=97)?"Voice PWM":
           (cc>=102&&cc<=107)?"LFO slew":(cc>=108&&cc<=113)?"LFO polarity":
           (cc>=114&&cc<=119)?"Random step LFO depth":
           cc==40?"Shuffle master":cc==41?"Groove SH2":cc==42?"Groove SH3":cc==43?"Groove SH4":cc==44?"Accent master":cc==46?"Accent decay":cc==47?"Accent sample rate":

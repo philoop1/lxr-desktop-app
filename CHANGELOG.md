@@ -6,6 +6,36 @@ are recorded here. The upstream project keeps its own Git history.
 
 ## Unreleased
 
+### Mutador 0.2.30 (hardware test pending)
+
+- Reverb removed again: FX type `rev` is gone and the reverb sources are back to their upstream state. A kit saved with `rev` plays with FX off.
+- Control-rate functions stay out of ITCM, which leaves ITCM at 84.91%.
+
+### Mutador 0.2.29 (hardware test pending)
+
+- Reverb tank runs at half the sample rate to save CPU. Delay times stay the same; the reverb sounds darker, with nothing above about 11 kHz.
+- More reverb helpers run from ITCM, and the early taps no longer divide per sample.
+
+### Mutador 0.2.28 (hardware test pending)
+
+- Fixed from 0.2.27: the encoder stopped at the empty last slot of the Global page and the main PERF page, so the pages behind them could not be reached.
+
+### Mutador 0.2.27 (hardware test pending)
+
+- Reverb is back as FX type `rev`, using the upstream code that was switched off. It shares its buffer with Delay; the buffer is cleared when switching to or from Reverb. With `rev` active, Snare, Cymbal and Hi-Hat use the cheaper filter, as upstream intended.
+- FX Dry/Wet is a new destination for LFO, velocity and step automation on every voice. It is appended, so stored targets keep their meaning.
+- `shu` left the Global page and the main PERF page, and the other controls moved up. It stays on the SHIFT + Step Groove page.
+- More of the fast ITCM memory now goes to audio: the Reverb render and its helpers moved in, and control-rate functions moved out.
+
+### Mutador 0.2.26 (hardware test pending)
+
+- New Pch CCs: 70-72 Drum 1-3 mode, spread over 0-127 across FM, Mix, rng, exp and pd; 73-75 Drum 1-3 FM amount. They need a Pch channel of its own, like the other 0.2.23 controls.
+
+### Mutador 0.2.25 (hardware test pending)
+
+- Drum 1-3 gain two oscillator modes after `rng`: `exp` (exponential FM, the modulator bends pitch by up to 4 octaves) and `pd` (Casio style phase distortion, the FM amount works as DCW and the modulator is unused). FM amount and pitch EG set both.
+- LFO, velocity and other modulators on the Drum mode now step through all five modes. MIDI values above 4 select `pd`; they used to select `rng`.
+
 ### Mutador 0.2.24 (hardware test pending)
 
 - FX sends `s1`-`s6` and `sm` moved from the PERF pages to SHIFT + Step 5. Pressing it again switches between the two screens.

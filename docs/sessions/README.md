@@ -47,3 +47,4 @@ or expectations.
 - [032: LFO navigation and Step Flam layout](032-lfo-navigation-step-flam-layout.md)
 - [033: Project transfer and 0.2.13 build](033-project-transfer-0.2.13.md)
 - [034: FX sends shortcut and 0.2.24](034-fx-sends-shortcut-0.2.24.md)
+- [035: Expo FM and phase distortion in 0.2.25](035-expo-fm-phase-distortion-0.2.25.md)

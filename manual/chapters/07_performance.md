@@ -1,6 +1,6 @@
 # Performance controls
 
-The main PERF page shows BPM, roll, Morph, master sample rate, shuffle,
+The main PERF page shows BPM, roll, Morph, master sample rate,
 global pitch (`gpt`), global decay (`gdc`) and speed (`spd`).
 `spd` offers /8, /4, /2, 1, *2 and *4 relative to the stored pattern rate. It starts at 1 and tops out at 64 steps a bar, or 48 on ternary rates. Pch CC 79-84 select it.
 A pattern stores its own rate: 2/4/6/8/12/16/24/32 steps per 4/4 bar.

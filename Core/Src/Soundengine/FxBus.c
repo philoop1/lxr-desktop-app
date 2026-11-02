@@ -140,7 +140,7 @@ void FxBus_prepareFxChange()
 //	Ringmod_resetPhase(&fxBus.ringmod);
 }
 
-IN_ITCM_RAM void FxBus_updateParameter()
+void FxBus_updateParameter()
 {
 	switch(fxBus.fxType)
 	{
@@ -189,7 +189,7 @@ IN_ITCM_RAM void FxBus_updateParameter()
 	}
 }
 
-IN_ITCM_RAM void FxBus_setParameter(uint8_t idx, float value)
+void FxBus_setParameter(uint8_t idx, float value)
 {
 	fxBus.parameter[idx] = value;
 

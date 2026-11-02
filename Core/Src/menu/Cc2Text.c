@@ -347,6 +347,13 @@ const ModTarg modTargets[] ={
 {TEXT_MIX,PAR_SNARE_LAYER_AMOUNT},
 {TEXT_FREQ_LFO,PAR_SNARE_LAYER_FREQ},
 {TEXT_SNARE_LAYER_MODE,PAR_SNARE_LAYER_MODE},      //235
+// One per voice, in voice order: the index gives the voice like the rest of the list.
+{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},                  //236
+{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},
+{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},
+{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},
+{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},
+{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},                  //241
 
 };
 
@@ -374,6 +381,7 @@ const uint8_t modTargetGapMap[] = {
 };
 
 #define NUM_TOT_TARGETS sizeof(modTargetGapMap)
+#define MOD_TARGET_DRY_WET 236
 
 //**AUTOM paramToModTarget definition
 // see menu.h for more info
@@ -385,6 +393,7 @@ uint8_t paramToModTarget[END_OF_SOUND_PARAMETERS] ={};
 // remains the same logical value (where possible) for the new voice.
 uint8_t getModTargetGapIndex(uint8_t modTargetIdx)
 {
+	if(modTargetIdx>=MOD_TARGET_DRY_WET)return (uint8_t)(NUM_TOT_TARGETS+7);
 	if(modTargetIdx>=229 && modTargetIdx<=235)return (uint8_t)(NUM_TOT_TARGETS+modTargetIdx-229);
 	// determine which voice is being targeted (1 based)
 	uint8_t voice=voiceFromModTargValue(modTargetIdx);
@@ -422,6 +431,8 @@ uint8_t getModTargetGapIndex(uint8_t modTargetIdx)
 */
 uint8_t getModTargetIdxFromGapIdx(uint8_t v, uint8_t gapidx)
 {
+	if(gapidx==NUM_TOT_TARGETS+7)
+		return (uint8_t)(MOD_TARGET_DRY_WET+v);
 	if(gapidx>=NUM_TOT_TARGETS && gapidx<NUM_TOT_TARGETS+7)
 		return v==3 ? (uint8_t)(229+gapidx-NUM_TOT_TARGETS) : 0;
 	uint8_t i, val, bitoffset, ctr=0;
@@ -470,6 +481,7 @@ void paramToModTargetInit()
 // returns 1 based index or 0 for invalid
 uint8_t voiceFromModTargValue(uint8_t val)
 {
+	if(val>=MOD_TARGET_DRY_WET)return val<getNumModTargets() ? (uint8_t)(val-MOD_TARGET_DRY_WET+1) : 0;
 	if(val>=229 && val<=235)return 4;
 	if(pgm_read_byte(&modTargetVoiceOffsets[3].start) <= val) {
 		// lower half
@@ -509,22 +521,27 @@ uint8_t modTargetClampVoice(uint8_t voice,uint8_t target,int8_t direction)
 	if(voice>=6)return 0;
 	uint8_t start=modTargetVoiceOffsets[voice].start;
 	uint8_t end=modTargetVoiceOffsets[voice].end;
+	const uint8_t dryWet=(uint8_t)(MOD_TARGET_DRY_WET+voice);
+	if(target>=dryWet)return dryWet;
 	if(voice==3) {
-		if(target>=229)return target>235 ? 235 : target;
+		if(target>=229 && target<=235)return target;
+		if(target>235)return direction>0 ? dryWet : 235;
 		if(target>end)return direction>0 ? 229 : end;
 	}
 	if(target<start)return direction<0 ? 0 : start;
-	return target>end ? end : target;
+	if(target>end)return direction>0 ? dryWet : end;
+	return target;
 }
 
 uint8_t modTargetFromFraction(uint8_t voice,float fraction)
 {
 	if(voice>=6)return 0;
 	uint8_t start=modTargetVoiceOffsets[voice].start;
-	uint8_t count=(uint8_t)(modTargetVoiceOffsets[voice].end-start+1+(voice==3 ? 7 : 0));
+	uint8_t count=(uint8_t)(modTargetVoiceOffsets[voice].end-start+1+(voice==3 ? 7 : 0)+1);
 	unsigned ordinal=(unsigned)(fraction*(count+1));
 	if(ordinal>count)ordinal=count;
 	if(!ordinal)return 0;
+	if(ordinal==count)return (uint8_t)(MOD_TARGET_DRY_WET+voice);
 	if(voice==3 && ordinal>37)return (uint8_t)(229+ordinal-38);
 	return (uint8_t)(start+ordinal-1);
 }

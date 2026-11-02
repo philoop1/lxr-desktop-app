@@ -695,7 +695,7 @@ static uint8_t seq_determineNextPattern(uint8_t autoIncrement)
 
 #include "Soundengine/MIDI/Uart.h"
 
-IN_ITCM_RAM void seq_setPendingPatternActive()
+void seq_setPendingPatternActive()
 {
   if(seq_patternSwitchActive) return;
   seq_patternSwitchActive=1;

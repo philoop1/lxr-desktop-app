@@ -247,12 +247,21 @@ IN_ITCM_RAM void calcDrumVoiceSyncBlock(const uint8_t voiceNr, int16_t* buf, con
 	calcOnePoleBlockFixedInput(&voiceArray[voiceNr].ampFilter, voiceArray[voiceNr].ampFilterInput,voiceArray[voiceNr].volEgValueBlock, size);
 #endif
 
-	//calc next mod osc sampleBlock - int16_t processing
-	calcNextOscSampleBlock(&voiceArray[voiceNr].modOsc,modBuf,size,
-		voiceArray[voiceNr].mixOscs == 2 ? 1.f : voiceArray[voiceNr].fmModAmount,
-		voiceArray[voiceNr].pwm);
+	//calc next mod osc sampleBlock - int16_t processing, phase distortion has no modulator
+	if(voiceArray[voiceNr].mixOscs != 4)
+		calcNextOscSampleBlock(&voiceArray[voiceNr].modOsc,modBuf,size,
+			voiceArray[voiceNr].mixOscs >= 2 ? 1.f : voiceArray[voiceNr].fmModAmount,
+			voiceArray[voiceNr].pwm);
 
-	if(voiceArray[voiceNr].mixOscs == 1)
+	if(voiceArray[voiceNr].mixOscs == 4)
+	{
+		calcPhaseDistBlock(&voiceArray[voiceNr].osc,buf,size);
+	}
+	else if(voiceArray[voiceNr].mixOscs == 3)
+	{
+		calcExpoFmBlock(&voiceArray[voiceNr].osc,modBuf,buf,size,voiceArray[voiceNr].pwm);
+	}
+	else if(voiceArray[voiceNr].mixOscs == 1)
 	{
 		//calc main osc buffer - int16_t processing
 		calcNextOscSampleBlock(&voiceArray[voiceNr].osc,buf,size, (1.f-voiceArray[voiceNr].fmModAmount), voiceArray[voiceNr].pwm);

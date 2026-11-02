@@ -32,6 +32,18 @@ these values and an `SNE1` marker in the reserved kit area; Morph blends them.
 Drum Voices 1–3 now offer `rng` after FM and Mix. This is Ring modulation,
 with the existing modulation amount controlling the dry/ring blend.
 
+From 0.2.25 the same selector adds two modes for Drum Voices 1–3. Both follow
+the FM amount and the pitch EG, as FM does, so the sound changes as the EG
+falls.
+
+- `exp` is exponential FM. The modulator bends the pitch by up to 4 octaves,
+  like a pitch input on an analog oscillator, and the note rises with depth.
+  Sine stays cleanest; Saw, Rec and PWM alias at high depths.
+- `pd` is Casio style phase distortion. The FM amount acts as DCW, from a
+  plain sine at 0 to close to a saw at full amount. It always uses a sine, so
+  Waveform has no effect unless a user sample is selected, which then plays
+  plain. The modulator is unused.
+
 In 0.1.16 the same Snare page adds `slw` (second oscillator waveform),
 `sla` (layer amount), `slf` (frequency ratio) and `slm` (Mix/FM/Ring).
 From 0.1.19 the Snare layout follows Mutador: OSC first shows Coarse,
@@ -48,11 +60,14 @@ also destinations for LFO, velocity and step automation. Select target voice
 targets in its target selector; existing target numbers remain unchanged.
 For example, select layer Mix as LFO destination and raise the LFO amount.
 Wave and Wave Mixer (`wmd`) modulation selects discrete valid values;
-`wmd` traverses mix, FM and rng. At zero modulation depth the base selection
+`wmd` traverses mix, FM and rng; the Drum Voice mode traverses all five. At zero modulation depth the base selection
 is retained. Step automation uses the corresponding raw parameter values.
 With `sla=0` the second oscillator is silent. The layer is saved with the
 kit and interpolated by Morph. Old `SNE1` kits keep their noise envelope
 and start with the layer off; new kits use the `SNE2` extension marker.
+
+FX Dry/Wet is a destination for LFO, velocity and
+step automation on every voice; it comes last in each voice's list.
 
 [Previous: Device and firmware](01_device_and_firmware.md) ·
 [Next: Sequencer and patterns](03_sequencer_and_patterns.md)

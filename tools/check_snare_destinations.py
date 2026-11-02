@@ -71,7 +71,7 @@ code+=r"""
 static unsigned checks;
 void check(int ok,const char *msg){checks++;if(!ok){puts(msg);exit(1);}}
 int main(void){
- check(getNumModTargets()==236,"target count");
+ check(getNumModTargets()==242,"target count");
  check(modTargetVoiceOffsets[3].start==116&&modTargetVoiceOffsets[3].end==152,"legacy snare indices");
  check(modTargets[153].param==PAR_COARSE5&&modTargets[191].param==PAR_COARSE6,"legacy cymbal and hat indices");
  for(unsigned i=229;i<=235;i++){
@@ -82,8 +82,17 @@ int main(void){
  }
  check(modTargetClampVoice(3,153,1)==229,"encoder crosses extension gap forward");
  check(modTargetClampVoice(3,228,-1)==152,"encoder crosses extension gap backward");
- check(modTargetClampVoice(3,236,1)==235,"extension end clamp");
- check(modTargetFromFraction(3,0)==0&&modTargetFromFraction(3,1)==235,"pot reaches extension");
+ check(modTargetClampVoice(3,239,1)==239,"extension end clamp");
+ check(modTargetClampVoice(3,236,1)==239&&modTargetClampVoice(3,238,-1)==235,"encoder reaches dry/wet");
+ for(unsigned v=0;v<6;v++){
+  const unsigned wet=236+v,end=modTargetVoiceOffsets[v].end;
+  check(modTargets[wet].param==PAR_FX_DRY_WET&&voiceFromModTargValue(wet)==v+1,"dry/wet per voice");
+  check(modTargetFromFraction(v,1)==wet,"pot reaches dry/wet");
+  check(modTargetClampVoice(v,250,1)==wet,"dry/wet end clamp");
+  if(v!=3)check(modTargetClampVoice(v,end+1,1)==wet&&modTargetClampVoice(v,wet-1,-1)==end,"encoder steps between list and dry/wet");
+  for(unsigned o=0;o<6;o++)check(getModTargetIdxFromGapIdx(o,getModTargetGapIndex(wet))==236+o,"dry/wet survives a voice change");
+ }
+ check(modTargetFromFraction(3,0)==0&&modTargetFromFraction(3,1)==239&&modTargetFromFraction(3,0.96f)==235,"pot reaches extension");
  for(unsigned i=229;i<=235;i++){
   unsigned id=modTargets[i].param;
   parameterArray[id].ptr=&activeParameters[id];

@@ -1243,7 +1243,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 			case CC2_MIX_MOD_1:
 			case CC2_MIX_MOD_2:
 			case CC2_MIX_MOD_3:
-				voiceArray[msg.data1-CC2_MIX_MOD_1].mixOscs = value.itg > 2 ? 2 : value.itg;
+				voiceArray[msg.data1-CC2_MIX_MOD_1].mixOscs = isFloatModulator ? (uint8_t)(v*4.f+0.5f) : value.itg > 4 ? 4 : value.itg;
 				break;
 
 			case PAR_SNARE_NOISE_ATTACK-128:
@@ -1516,6 +1516,8 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 
 			case CC2_FX_TYPE:
 #if 1
+				// Kits saved while reverb existed can hold its type
+				if(value.itg > FX_DELAY) value.itg = FX_OFF;
 #if USE_REVERB
 				if((value.itg == FX_REVERB) && (fxBus.fxType != value.itg)) FxBus_prepareFxChange();
 #else
@@ -1535,7 +1537,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				fxBus.audioRouting = value.itg;
 				break;
 			case CC2_FX_AMOUNT:
-				fxBus.dryWet = value.itg/100.f;
+				fxBus.dryWet = (isFloatModulator && value.itg>100) ? 1.f : value.itg/100.f;
 				break;
 
 			case CC2_FX_DIST_TYPE:
@@ -1716,7 +1718,7 @@ uint8_t midiParser_isValidChannel(uint8_t chan);
 /* Numbers with a legacy meaning: like Morph CC2 they need a Pch of their own. */
 static uint8_t midiParser_needsOwnPch(uint8_t cc)
 {
-	return (cc>=54 && cc<=59) || (cc>=67 && cc<=69) || (cc>=92 && cc<=97) || (cc>=102 && cc<=119);
+	return (cc>=54 && cc<=59) || (cc>=67 && cc<=75) || (cc>=92 && cc<=97) || (cc>=102 && cc<=119);
 }
 static uint8_t midiParser_scaleCc(uint8_t value,uint8_t maximum)
 {
@@ -1780,6 +1782,28 @@ static uint8_t midiParser_extendedPerformanceCc(uint8_t cc,uint8_t value)
 		if(cc>=60 && cc<=66) {
 			if(value>=64)midiParser_setDelayParameter(PAR_PERF_DELAY_INPUT_MASK,
 				activeParameters[PAR_PERF_DELAY_INPUT_MASK]^(uint8_t)(1u<<(cc-60)));
+			return 1;
+		}
+		if(cc>=70 && cc<=72) {
+			MidiMsg msg={0};
+			msg.status=MIDI_CC2;
+			msg.data1=(uint8_t)(CC2_MIX_MOD_1+cc-70);
+			msg.data2=midiParser_scaleCc(value,4);
+			activeParameters[PAR_MIX_MOD_1+cc-70]=msg.data2;
+			midiParser_ccHandler(msg,1,0,0.f);
+			menu_repaintAll();
+			return 1;
+		}
+		if(cc>=73 && cc<=75) {
+			static const uint8_t fmAmounts[3]={FMAMNT1,FMAMNT2,FMAMNT3};
+			static const uint8_t fmParameters[3]={PAR_FMAMNT1,PAR_FMAMNT2,PAR_FMAMNT3};
+			MidiMsg msg={0};
+			msg.status=MIDI_CC;
+			msg.data1=fmAmounts[cc-73];
+			msg.data2=value;
+			activeParameters[fmParameters[cc-73]]=value;
+			midiParser_ccHandler(msg,1,0,0.f);
+			menu_repaintAll();
 			return 1;
 		}
 		if(cc>=92 && cc<=97) {

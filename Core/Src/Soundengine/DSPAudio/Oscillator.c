@@ -247,6 +247,116 @@ int16_t calcFm(OscInfo* osc, OscInfo* modOsc, const int16_t table[][1024])
 	return oscOut;
 }
 //-----------------------------------------------------------
+// 2^octaves for |octaves|<=EXPO_FM_OCTAVES; exact at whole octaves, so no modulation keeps the tuning
+static inline float osc_expoRatio(const float octaves)
+{
+	const int32_t whole = (int32_t)(octaves + EXPO_FM_OCTAVES + 1) - (EXPO_FM_OCTAVES + 1);
+	const float frac = octaves - whole;
+	union { float f; uint32_t i; } ratio = { 1.f + frac*(0.69582f + frac*(0.22543f + frac*0.07875f)) };
+	ratio.i += (uint32_t)whole << 23;
+	return ratio.f;
+}
+//-----------------------------------------------------------
+static inline int16_t osc_readTable(const int16_t table[][1024], const uint8_t offset, const uint32_t index)
+{
+	const uint32_t itg = index>>22;
+	const int32_t a = table[offset][itg];
+	const int32_t b = table[offset][(itg+1)&1023];
+	return (int16_t)(a + (int32_t)(((int64_t)(b - a) * (index&0x3FFFFF))>>22));
+}
+//-----------------------------------------------------------
+static inline int16_t osc_readSine(const uint32_t index)
+{
+	const uint32_t itg = index>>20;
+	const int32_t a = sine_table[itg];
+	const int32_t b = sine_table[itg+1];
+	return (int16_t)(a + (int32_t)(((int64_t)(b - a) * (index&0xFFFFF))>>20));
+}
+//-----------------------------------------------------------
+// Exponential FM: the modulator acts in octaves on the rate of the osc, like a V/Oct input.
+IN_ITCM_RAM void calcExpoFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size, const float pwm)
+{
+	if(osc->waveform==NOISE)
+	{
+		calcNoiseBlock(osc,buf,size,1.f);
+		return;
+	}
+	if(osc->waveform>PWM)
+	{
+		calcUserSampleOscBlock(osc,buf,size,1.f);
+		return;
+	}
+	const float depth = osc->fmMod*EXPO_FM_OCTAVES/32768.f;
+	const float baseInc = osc->phaseInc;
+	uint8_t i;
+	for(i=0;i<size;i++)
+	{
+		const uint32_t oscPhase = osc->phase;
+		int16_t oscOut;
+		switch(osc->waveform)
+		{
+		case SINE:
+			oscOut = osc_readSine(oscPhase);
+			break;
+		case TRI:
+			oscOut = osc_readTable(triTable,osc->tableOffset,oscPhase);
+			break;
+		case SAW:
+			oscOut = osc_readTable(sawTable,osc->tableOffset,oscPhase);
+			break;
+		case REC:
+			oscOut = osc_readTable(recTable,osc->tableOffset,oscPhase);
+			break;
+		default:
+		{
+			const uint32_t oscPhase2 = oscPhase + pwm * (UINT32_MAX/2);
+			oscOut = __QSUB16(osc_readTable(sawTable,osc->tableOffset,oscPhase),
+				osc_readTable(sawTable,osc->tableOffset,oscPhase2));
+			break;
+		}
+		}
+		float inc = baseInc*osc_expoRatio(modBuffer[i]*depth);
+		if(inc>OSC_MAX_PHASE_INC) inc = OSC_MAX_PHASE_INC;
+		osc->phase = oscPhase + (uint32_t)inc;
+		osc->output = oscOut;
+		buf[i] = oscOut;
+	}
+}
+//-----------------------------------------------------------
+// Casio style phase distortion: amount warps the read speed of one sine cycle, from pure sine to saw.
+IN_ITCM_RAM void calcPhaseDistBlock(OscInfo* osc, int16_t* buf, uint8_t size)
+{
+	// user samples run on their own phase scale and have no sine to warp
+	if(osc->waveform>PWM)
+	{
+		calcUserSampleOscBlock(osc,buf,size,1.f);
+		return;
+	}
+	float amount = osc->fmMod;
+	if(amount<0.f) amount = 0.f;
+	else if(amount>1.f) amount = 1.f;
+	// keep the steep part at least two samples long
+	float minKnee = osc->phaseInc*(2.f/4294967296.f);
+	if(minKnee<PD_MIN_KNEE) minKnee = PD_MIN_KNEE;
+	else if(minKnee>0.5f) minKnee = 0.5f;
+	const float knee = 0.5f - amount*(0.5f-minKnee);
+	const float riseSlope = 0.5f/knee;
+	const float fallSlope = 0.5f/(1.f-knee);
+	uint8_t i;
+	for(i=0;i<size;i++)
+	{
+		const uint32_t oscPhase = osc->phase;
+		// a quarter cycle back, so no warp reads the plain sine from phase 0
+		const float phase = (oscPhase+0xC0000000u)*(1.f/4294967296.f);
+		float warped = phase<knee ? phase*riseSlope : 0.5f+(phase-knee)*fallSlope;
+		if(warped>1.f) warped = 1.f;
+		const int16_t oscOut = osc_readSine((uint32_t)(warped*4294967040.f)+0x40000000u);
+		osc->phase = oscPhase + osc->phaseInc;
+		osc->output = oscOut;
+		buf[i] = oscOut;
+	}
+}
+//-----------------------------------------------------------
 IN_ITCM_RAM void calcNextOscSampleFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain, const float pwm)
 {
 	switch(osc->waveform)

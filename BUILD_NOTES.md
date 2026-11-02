@@ -21,12 +21,12 @@ cmake --preset release
 cmake --build --preset release
 ```
 
-The current archived build is Mutador 0.2.24; see the last entry of this
+The current archived build is Mutador 0.2.30; see the last entry of this
 file for its hash and test state. Physical-device validation of the 0.2
 series remains open.
 
 The update image is written under `build/release/` as
-`LXR_V2_V1.7_Mutador0.2.24.img`. The base version comes from
+`LXR_V2_V1.7_Mutador0.2.30.img`. The base version comes from
 `project(VERSION ...)` in `CMakeLists.txt`; the fork suffix is set separately
 there as `LXR_MUTADOR_VERSION`, which also sets the startup line. For a debug build, use the `debug` preset in both commands.
 
@@ -411,3 +411,18 @@ Mutador 0.2.22: new Pch CCs. 54 pSc, 55 avl, 56 Fill, 57 master filter enable, 5
 Mutador 0.2.23: the Pch CCs added in 0.2.22 need a Pch of their own, as Morph CC2 does. If Pch equals gch or a Voice channel, those numbers keep their legacy meaning; 0.2.22 would have replaced them. Removing the guard makes the CC route check fail. LFO 2 report: no voice-specific defect in the code. CC 123 (LFO 2 depth on the global map) cannot be sent from Live's MIDI Ctrl list, and Voice 2 on channel 2 overlaps the default Pch; the user's channel settings were not read. ARM GCC 14.3 release passed with no compiler warnings. IMG 339748 bytes, SHA256 F83C5EC848C37C2A9514418D4B8D292A544A3BB2C25256E45BBEF4D23E33C71D. FLASH 288312. Host checks: MIDI 509724, sct 620, performance 61327, pattern scale 1115, edit/scale/hat/storage 148257, snare destinations 76, LFO step. SD F: copied and SHA256 verified; 0.2.20 matched its archive and was renamed to .imm. Device test pending.
 
 Mutador 0.2.24: FX sends moved to SHIFT + Step 5 and left the regular PERF cycle. LXR_MUTADOR_VERSION now sets the image name and the startup line, which had stayed at 0.2.10. check_copy_import, check_velocity_controls, check_voice_import and check_lfo_import had been failing unnoticed on stale harnesses and were repaired; no firmware defect found. ARM GCC 14.3 release passed with no compiler warnings. IMG 339708 bytes, SHA256 FE0D3C60554B80188A5303FDB4EE7927154EC7D62B126EA9892C4608CFA9C019. ITCM 14424/16384, DTCM 107672/131072, RAM 338204/393216, FLASH 288272/1015808. Host checks: performance 61326, MIDI 509724, sct 620, pattern scale 1115, edit/scale/hat/storage 148257, LFO import 450062, velocity 196491, voice 2449, copy 29, and the remaining checks passed. SD F: 0.2.24 copied and SHA256 verified; 0.2.23 matched its archive and was renamed to .imm. New check_sct_step_path: 1451594 assertions through the real seq_nextStep, gap guard mutation fails. PROJ21..28 got GLO.CFG from the root file with bpm MID; backup under build/card-midi-backups/20261102-184434-131412. Device test pending. See session 034.
+
+Mutador 0.2.25: Drum modes `exp` and `pd`. ARM GCC 14.3 release passed with no warnings, ITCM 96.63%. All 25 host checks run passed, including check_osc_modes with 163643 assertions. Image 341100 bytes, SHA256 `3B11345DFC9072D017B80EF4656BB1021C68F6B930CF3C67ED547EB51E1F5543`. Sound and CPU on the device remain open. See session 035.
+
+Mutador 0.2.26: Pch CC70-75 for Drum mode and FM amount. ARM GCC 14.3 release passed with no warnings, ITCM 96.63%. All 25 host checks run passed. Image 341236 bytes, SHA256 `04C403114F49E8D2367C226FDEB10BD08574825D1641AF29523B00B3A70EBBB2`. Copied to SD F: and hash verified. See session 035.
+
+Mutador 0.2.27: Reverb as `rev`, FX Dry/Wet destination, `shu` off Global and main PERF, ITCM reordered. ARM GCC 14.3 release passed with no warnings, ITCM 92.53%. All 25 host checks run passed. Image 345764 bytes, SHA256 `51C9AD20A5CA6ED2ECF83EB6D1166BD1B608FAFE42E5100A685A9CA12ED1B0AB`. Copied to SD F: and hash verified. See session 035.
+
+Mutador 0.2.28: encoder reaches the pages behind Global and main PERF again. ARM GCC 14.3 release passed with no warnings. Image 345764 bytes, SHA256 `57B16CCFAC941BACDC173BCCA93BAB53F4DB13F08005A43B917FB243E4764CFC`. Copied to SD F: and hash verified. Sequencer start report still open. See session 035.
+
+Mutador 0.2.29: half-rate reverb tank and more reverb code in ITCM. ARM GCC 14.3 release passed with no warnings. ITCM 93.46%, DTCM 82.55%. Image 345636 bytes, SHA256 `D13245BBFBFF057062EC933046A5851BDCB9D1614160C20333E9DE7EA03B90A0`. See session 035.
+Mutador 0.2.29 copied to SD F: and hash verified.
+Mutador 0.2.29 device report: CPU 74 with the reverb, down from 96 on 0.2.28.
+
+Mutador 0.2.30: reverb removed, control-rate ITCM moves kept. ARM GCC 14.3 release passed with no warnings. ITCM 84.91%, DTCM 82.15%. Image 341164 bytes, SHA256 `736BABA5F0C40C8B48797581F71BAE4D73126BFAD6994DAD76CE27FE38086AB9`. See session 035.
+Mutador 0.2.30: Copied to SD F: and hash verified.

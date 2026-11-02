@@ -37,6 +37,10 @@ enum OscWaveforms
 
 #define phaseShift 1000
 
+#define EXPO_FM_OCTAVES		4
+#define OSC_MAX_PHASE_INC	2147483648.f	// half the sample rate
+#define PD_MIN_KNEE			0.02f
+
 //-----------------------------------------------------------
 
 typedef struct OscStruct
@@ -103,6 +107,10 @@ void calcNextOscSampleBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,cons
 void osc_setFreq(OscInfo* osc);
 //-----------------------------------------------------------
 void calcNextOscSampleFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain, const float pwm);
+//-----------------------------------------------------------
+void calcExpoFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size, const float pwm);
+//-----------------------------------------------------------
+void calcPhaseDistBlock(OscInfo* osc, int16_t* buf, uint8_t size);
  //-----------------------------------------------------------
 // calculate an fm oscillator
 //int16_t calcNextOscSampleFm(OscInfo* osc, OscInfo* modOsc);

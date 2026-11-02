@@ -90,7 +90,7 @@ void modNode_originalValueChanged(uint16_t idx)
 	lfo_randomStepOriginalValueChanged(idx);
 }
 //-----------------------------------------------------------------------
-IN_ITCM_RAM void modNode_resetTargets()
+void modNode_resetTargets()
 {
 	uint8_t i;
 	for(i=0;i<6;i++)
@@ -109,7 +109,7 @@ IN_ITCM_RAM void modNode_resetTargets()
 
 }
 //-----------------------------------------------------------------------
-IN_ITCM_RAM void modNode_reassignVeloMod()
+void modNode_reassignVeloMod()
 {
 	uint8_t i;
 	for(i=0;i<6;i++)
@@ -192,6 +192,8 @@ void modNode_updateValue(ModulationNode* vm, float val)
 	float originalValue = activeParameters[destination]/127.f;
 	if(destination==PAR_SNARE_LAYER_MODE)
 		originalValue=activeParameters[destination]/2.f;
+	else if(destination>=PAR_MIX_MOD_1 && destination<=PAR_MIX_MOD_3)
+		originalValue=activeParameters[destination]/4.f;
 	else if(destination==PAR_SNARE_LAYER_WAVE)
 		originalValue=(float)activeParameters[destination]/menu_getWaveformMax();
 	//val is [0:1] make [-1:1] for bipolar modulation around original value
