@@ -39,6 +39,16 @@ static uint8_t sync_startLeadArmed;
 static uint32_t sync_nextStartCycles;
 static uint8_t sync_clockOffsetTenths=50;
 static uint8_t sync_clockOffsetHundredths=0;
+/* Tempo for the tape delay: whole beats of 24 clocks, smoothed, so single
+ * late or early clocks do not bend the echo (after Philoop Neptune). */
+static uint32_t sync_beatStartCycles;
+static uint8_t sync_beatClocks;
+static uint8_t sync_beatRunning;
+static uint8_t sync_beatOutliers;
+static float sync_beatCycles;
+#define SYNC_BEAT_SMOOTHING 0.08f
+#define SYNC_BEAT_RETAKE 0.04f // two beats this far off take the new tempo at once
+#define SYNC_BEAT_TIMEOUT_TICKS 2000u // 500 ms
 
 uint16_t sync_clockCnt = 0;
 static uint8_t sync_stepFlip;
@@ -58,10 +68,40 @@ uint16_t sync_calcBpm(float timePerPulse)
 	float bpm = (60 * 1000) / quarterDuration;
 
 	if(bpm>65535.f) return 65535;
-	return bpm>0?(uint16_t)bpm:1;
+	return bpm>=1.f?(uint16_t)(bpm+0.5f):1;
 }
 //---------------------------------------------------------
 //called by midi clock
+static void sync_trackBeat(uint32_t nowCycles)
+{
+    if(!sync_beatRunning) {
+        sync_beatRunning=1;
+        sync_beatClocks=0;
+        sync_beatStartCycles=nowCycles;
+        return;
+    }
+    if(++sync_beatClocks<24u) return;
+    const float beat=(float)(nowCycles-sync_beatStartCycles);
+    const float core=(float)SystemCoreClock;
+    sync_beatClocks=0;
+    sync_beatStartCycles=nowCycles;
+    if(beat<0.125f*core || beat>4.f*core) return;
+    if(sync_beatCycles<=0.f) {
+        sync_beatCycles=beat;
+    } else if(beat-sync_beatCycles>sync_beatCycles*SYNC_BEAT_RETAKE ||
+            sync_beatCycles-beat>sync_beatCycles*SYNC_BEAT_RETAKE) {
+        if(++sync_beatOutliers>=2u) {sync_beatCycles=beat;sync_beatOutliers=0;}
+    } else {
+        sync_beatOutliers=0;
+        sync_beatCycles+=(beat-sync_beatCycles)*SYNC_BEAT_SMOOTHING;
+    }
+}
+float sync_getBeatBpm(void)
+{
+    if(sync_beatCycles>0.f && systick_ticks-sync_lastClockTick<=SYNC_BEAT_TIMEOUT_TICKS)
+        return 60.f*(float)SystemCoreClock/sync_beatCycles;
+    return (float)seq_getBpm();
+}
 void sync_tick()
 {
     sync_tickAtCycles(DWT->CYCCNT);
@@ -71,6 +111,8 @@ void sync_tickAtCycles(uint32_t nowCycles)
     const uint32_t now=systick_ticks;
     const uint32_t cycleInterval=nowCycles-sync_lastClockCycles;
     if(now-sync_lastClockTick>SYNC_CLOCK_LOST_TICKS)sync_barPhaseFromStart=0;
+    if(now-sync_lastClockTick>SYNC_BEAT_TIMEOUT_TICKS)sync_beatRunning=0;
+    sync_trackBeat(nowCycles);
     sync_lastClockTick=now;
     if(sync_armed && cycleInterval) {
         sync_cycleWindow[sync_cycleWritePos++]=cycleInterval;

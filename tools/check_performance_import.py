@@ -120,6 +120,10 @@ uint8_t sync_cycleSamples,sync_cycleWritePos,sync_leadArmed,sync_leadConsumed;
 #define SYNC_CLOCK_LOST_TICKS 4000u
 uint8_t sync_barClockCnt,sync_barPhaseValid,sync_barPhaseFromStart,sync_startOnNextBar,sync_startLeadArmed;
 uint32_t sync_nextStartCycles;
+uint32_t sync_beatStartCycles;uint8_t sync_beatClocks,sync_beatRunning,sync_beatOutliers;float sync_beatCycles;
+#define SYNC_BEAT_SMOOTHING 0.08f
+#define SYNC_BEAT_RETAKE 0.04f
+#define SYNC_BEAT_TIMEOUT_TICKS 2000u
 uint8_t sync_clockOffsetTenths=50,sync_clockOffsetHundredths;
 struct {uint32_t CYCCNT;} dwtMock;
 #define DWT (&dwtMock)
@@ -212,7 +216,7 @@ functions='\n'.join(function(seq,n) for n in (
     'seq_perfRandom','seq_perfAdvance','seq_conditionAllows','seq_conditionResolve','seq_intIsMainStepActive','seq_getLongestTrack','getShiftValue',
     'flamIdxToPattern','seq_getShiftFlamPattern','seq_triggerVoice','seq_emitDelay','seq_processFlam',
     'seq_processGrooveFine','seq_applyPendingScale','seq_applyPendingTransform','seq_processScaleFrame','seq_processFineFrame','seq_advanceFineFrame','seq_calcDeltaT','seq_MidiSyncQueue','seq_tick','seq_determineNextPattern'))
-functions+='\n'+'\n'.join(function(sync,n) for n in ('sync_calcBpm','sync_tick','sync_tickAtCycles','sync_requestStartOnNextBar','sync_processStartLead','sync_setClockOffset','sync_shouldLeadStep','sync_markLeadStep'))
+functions+='\n'+'\n'.join(function(sync,n) for n in ('sync_calcBpm','sync_trackBeat','sync_getBeatBpm','sync_tick','sync_tickAtCycles','sync_requestStartOnNextBar','sync_processStartLead','sync_setClockOffset','sync_shouldLeadStep','sync_markLeadStep'))
 functions+='\n'+function(btn,'buttonHandler_selectPatternLoop')
 functions+='\n'+function(led,'led_initPatternSelectLeds')
 functions+='\n'+function(preset,'preset_readGlobalData')
@@ -788,6 +792,34 @@ int main(void){
  }
  currentPage=PERF_PAGE;menuIndex=0;
  check(!menu_cycleVoiceLfo(6)&&currentPage==PERF_PAGE,"LFO helper leaves PERF alone");
+ // Tape delay tempo: whole smoothed beats, so jittery clocks hold steady.
+ setup(UINT64_MAX);externalSync=2;sync_setClockOffset(0,0);
+ sync_clockCnt=sync_armed=sync_samples=sync_writePos=0;
+ sync_beatRunning=sync_beatOutliers=0;sync_beatCycles=0.f;
+ {
+  uint32_t cyc=0,tick=0,seed=1;float lo=1e9f,hi=0.f,slowest=0.f;
+  const uint32_t pulse120=4500000u; // 120 BPM: 216 MHz * 0.5 s / 24
+  for(unsigned n=0;n<24u*60u;n++){
+   seed=seed*1664525u+1013904223u;
+   const int32_t jitter=(int32_t)(seed%432001u)-216000; // +-1 ms
+   cyc+=pulse120;tick+=125;dwtMock.CYCCNT=cyc+(uint32_t)jitter;systick_ticks=tick;sync_tick();
+   if(n>=24u*20u){const float b=sync_getBeatBpm();if(b<lo)lo=b;if(b>hi)hi=b;}
+  }
+  check(lo>119.88f&&hi<120.12f,"jittered clock holds the tape tempo within 0.1 %");
+  check(seq_tempo>=119&&seq_tempo<=121,"sequencer tempo rounds to 120");
+  // The clock slows to 100 BPM: two beats off retake the tempo at once.
+  for(unsigned n=0;n<24u*4u;n++){cyc+=5400000u;tick+=150;dwtMock.CYCCNT=cyc;systick_ticks=tick;sync_tick();
+   if(n==24u*3u)slowest=sync_getBeatBpm();}
+  check(slowest>99.f&&slowest<101.f,"tempo change arrives after three beats");
+  // One beat with a lost clock is ignored, not taken.
+  cyc+=5400000u*2u;tick+=300;dwtMock.CYCCNT=cyc;systick_ticks=tick;sync_tick();
+  for(unsigned n=0;n<23u;n++){cyc+=5400000u;tick+=150;dwtMock.CYCCNT=cyc;systick_ticks=tick;sync_tick();}
+  check(sync_getBeatBpm()>99.f&&sync_getBeatBpm()<101.f,"single odd beat is ignored");
+  // No clock for half a second: back to the sequencer tempo.
+  seq_tempo=133;systick_ticks=tick+2001u;
+  check(sync_getBeatBpm()==133.f,"clock timeout falls back to the sequencer tempo");
+ }
+ externalSync=0;
  puts("PERFORMANCE PASS");printf("%u assertions against actual performance/flam/trigger/button/LED/globals code\n",checks);
  return 0;
 }

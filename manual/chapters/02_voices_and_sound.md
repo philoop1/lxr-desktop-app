@@ -41,8 +41,59 @@ falls.
   Sine stays cleanest; Saw, Rec and PWM alias at high depths.
 - `pd` is Casio style phase distortion. The FM amount acts as DCW, from a
   plain sine at 0 to close to a saw at full amount. It always uses a sine, so
-  Waveform has no effect unless a user sample is selected, which then plays
-  plain. The modulator is unused.
+  Waveform has no effect unless a user wavetable is selected, which then
+  plays plain. The modulator is unused.
+
+From 0.2.36 Drum Voices 1-3 can play user wavetables. Their Waveform list
+continues after `PWM` with up to 32 tables (12 before 0.2.41), named by the first three letters
+of the file (two letters and a number where several files share them, for
+example `CE1`, `CE2`).
+
+1. Collect up to 32 sources on the computer. A source is one wavetable:
+   - a Serum WAV (frames of 2048 samples, or the size in its `clm ` chunk),
+   - a Surge WAV (frame size in its `srge` chunk) or a Surge `.wt` file,
+   - a single-cycle WAV (one frame),
+   - a folder of single-cycle WAVs: one wavetable, one frame per file in name
+     order.
+   WAV files may be 8 to 32 bit or float, mono or stereo.
+2. Run `python tools/make_wavetables.py <source> [<source> ...] <SD card>`.
+   `python tools/make_wavetables.py --each <folder> <SD card>` makes every
+   file of the folder its own wavetable instead, so each wave gets its own
+   name in the Waveform list. The tool writes
+   `WAVES/WAVES.BIN` on the card and lists the slots, names and frames.
+3. Boot the LXR with the card. The display shows "Loading waves" with the
+   percent done, then the number of tables. A new or changed file takes up to
+   a minute the first time; later boots only compare it.
+
+From 0.2.37 PWM scans the tables. At 0 the voice plays the selected table;
+turning PWM up blends smoothly through the following tables, and full PWM
+plays the last one. Select the first table and PWM moves through all of
+them; select a later one and PWM covers the rest. An LFO, velocity, Morph or
+automation on PWM moves through the tables while the note plays. On the
+built-in waveforms PWM keeps its old meaning (it only changes `PWM`).
+
+From 0.2.38 a wavetable can have several frames, as Serum wavetables do: a
+WAV file whose length is a multiple of 2048 samples is split into frames of
+2048. Waveform then picks the wavetable and PWM scans only its frames, from
+the first at 0 to the last at full PWM. A single-cycle file is a wavetable
+with one frame. From 0.2.42 PWM on such a single wave scans on through the
+single waves in the slots after it, from the selected one at 0 to the last at
+full PWM (it stops before a wavetable with several frames). So waves built
+with `--each` can be picked by name and still scanned. PWM glides to its
+value over about 15 ms, and the octave levels fade into each other while the
+pitch moves, so pitch envelopes and PWM changes do not click. All wavetables together may hold 284
+frames (56 before 0.2.40), at most 255 per wavetable; the generator thins out
+the largest ones evenly and lists how many frames each one keeps. Files from
+0.2.36 to 0.2.40 must be built again for 0.2.41.
+
+The tables stay in flash when the card has no `WAVES.BIN`. A broken file
+shows "WAVES.BIN error" and keeps the tables already there. A firmware
+update can erase them; the next boot with the card copies them again. A kit
+that uses a table plays silence on that voice while no table is in that slot.
+From 0.2.45 the modulator of Drum Voices 1-3 offers the wavetables too, so
+a wavetable can drive FM, Mix, ring and expo FM; it scans with the same PWM
+as the main oscillator. Snare, Cymbal, Hihat and the snare layer keep the six
+built-in waveforms.
 
 In 0.1.16 the same Snare page adds `slw` (second oscillator waveform),
 `sla` (layer amount), `slf` (frequency ratio) and `slm` (Mix/FM/Ring).
@@ -68,6 +119,20 @@ and start with the layer off; new kits use the `SNE2` extension marker.
 
 FX Dry/Wet is a destination for LFO, velocity and
 step automation on every voice; it comes last in each voice's list.
+
+From 0.2.31 FX Type offers `tpe`, a tape delay that always follows the tempo.
+`typ` picks `nrm` (mono) or `pp` (ping pong: first echo left, next right).
+`rte` picks the note division, shown in the repeat names (`8` is an eighth,
+`8d` a dotted eighth, `6` a quarter triplet). A division that does not fit
+the buffer at the current tempo falls to the next shorter one, and the page
+shows the one that plays: mono holds 0.74 s, ping pong 0.37 s per side.
+`fin` moves the time by up to 20 % either way. Time changes glide over about
+150 ms and bend the pitch like tape. `ton` darkens the repeats, `fbk` sets
+how many come back.
+On MIDI clock the delay follows whole beats and smooths them, so a jittery
+clock does not wobble the echo pitch (from 0.2.33).
+`fbk` shows percent and goes to 125: above 100 the repeats grow into a soft
+tape saturation and keep ringing (from 0.2.34).
 
 [Previous: Device and firmware](01_device_and_firmware.md) ·
 [Next: Sequencer and patterns](03_sequencer_and_patterns.md)

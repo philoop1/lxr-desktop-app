@@ -1,6 +1,15 @@
-"""Exponential FM and phase distortion through the production oscillator blocks.
+"""Exponential FM, phase distortion and the user wavetables through the production oscillator blocks.
 
---mutate removes the expo rate limit and the PD warp; the check must then fail.
+The wavetable part uses a fake bank (a wavetable with 3 frames and single
+waves after it) and the real level layout from WaveBank.h: every mode plays
+the selected wavetable at the level of the pitch, blended into the next
+level, PWM scans its frames without steps and stays inside it, a single wave
+scans on through the single waves after it, the scan glides, and an empty
+slot is silent.
+The PD knee glides within a block, so a falling amount (the pitch EG) does
+not step the shape every block.
+--mutate removes the expo rate limit, the PD warp, the plain-mode wavetable
+call, the level blend and the PD glide; the check must then fail.
 """
 
 import re
@@ -18,13 +27,26 @@ PRELUDE = r"""
 #include <math.h>
 #define IN_ITCM_RAM
 #define SINE_PI 3.14159265358979
+#define PD_SWEEP_LIMIT 200 /* about 3 with the glide, about 2300 with a step per block */
 enum {SINE,TRI,SAW,REC,NOISE,PWM,NUM_OSC_WAVEFORMS};
 """
 STUBS = r"""
 static int16_t sine_table[4097],triTable[11][1024],sawTable[11][1024],recTable[11][1024];
-static unsigned noiseCalls,sampleCalls;
+static unsigned noiseCalls,builtinCalls;
 static void calcNoiseBlock(OscInfo *o,int16_t *b,const uint8_t s,const float g){(void)o;(void)b;(void)s;(void)g;noiseCalls++;}
-static void calcUserSampleOscBlock(OscInfo *o,int16_t *b,const uint8_t s,const float g){(void)o;(void)b;(void)s;(void)g;sampleCalls++;}
+static void calcSineBlock(OscInfo *o,int16_t *b,const uint8_t s,const float g){(void)o;(void)b;(void)s;(void)g;builtinCalls++;}
+static void calcFmSineBlock(OscInfo *o,int16_t *m,int16_t *b,uint8_t s,const float g){(void)o;(void)m;(void)b;(void)s;(void)g;builtinCalls++;}
+static void calcWavetableOscBlock(OscInfo *o,const int16_t t[][1024],int16_t *b,const uint8_t s,const float g){(void)o;(void)t;(void)b;(void)s;(void)g;builtinCalls++;}
+static void calcFmBlock(OscInfo *o,const int16_t t[][1024],int16_t *m,int16_t *b,uint8_t s,const float g){(void)o;(void)t;(void)m;(void)b;(void)s;(void)g;builtinCalls++;}
+static void calcPwmBlock(OscInfo *o,int16_t *b,uint8_t s,const float g,const float p){(void)o;(void)b;(void)s;(void)g;(void)p;builtinCalls++;}
+static void calcPwmFmBlock(OscInfo *o,int16_t *m,int16_t *b,uint8_t s,const float g,const float p){(void)o;(void)m;(void)b;(void)s;(void)g;(void)p;builtinCalls++;}
+/* Fake bank: wavetable 0 has 3 frames, wavetables 1 to 3 one frame each.
+   Frame f, level l, sample i of n: base + l*100 + (i*1024/n - 512)*4,
+   base (f-1)*10000 for the 3 frames, then 7000, 8000, 9000 */
+static int16_t bank[6][WAVEBANK_FRAME_SAMPLES];
+static uint8_t bankCount;
+static uint8_t waveBank_frames(uint8_t t){return t<bankCount?(t==0?3:1):0;}
+static const int16_t* waveBank_frame(uint8_t t,uint8_t f){return f<waveBank_frames(t)?bank[t==0?f:2+t]:0;}
 static int16_t __QSUB16(int32_t a,int32_t b){int32_t r=a-b;return (int16_t)(r>32767?32767:r<-32768?-32768:r);}
 """
 TESTS = r"""
@@ -100,8 +122,108 @@ int main(void)
  /* Sine start, no wave escapes. */
  OscInfo n;memset(&n,0,sizeof(n));n.waveform=NOISE;int16_t pb[8],pm[8];memset(pm,0,sizeof(pm));
  calcExpoFmBlock(&n,pm,pb,8,0);check(noiseCalls==1,"noise stays noise");
- n.waveform=PWM+1;calcExpoFmBlock(&n,pm,pb,8,0);check(sampleCalls==1,"sample wave stays a sample");
- calcPhaseDistBlock(&n,pb,8);check(sampleCalls==2,"phase distortion leaves samples alone");
+ n.waveform=PWM+1;memset(pb,1,sizeof(pb));calcExpoFmBlock(&n,pm,pb,8,0);
+ check(!pb[0]&&!pb[7],"expo FM on an empty wavetable slot is silent");
+ memset(pb,1,sizeof(pb));calcPhaseDistBlock(&n,pb,8);check(!pb[0]&&!pb[7],"phase distortion on an empty slot is silent");
+
+ /* User wavetables with PWM scan. */
+ for(unsigned f=0;f<6;f++)for(unsigned l=0;l<WAVEBANK_LEVELS;l++) {
+  const unsigned size=1u<<waveBank_levelBits((uint8_t)l);
+  for(unsigned i=0;i<size;i++)
+   bank[f][waveBank_levelOffset((uint8_t)l)+i]=(int16_t)((f<3?((int)f-1)*10000:7000+((int)f-3)*1000)+(int)l*100+((int)(i*1024/size)-512)*4);
+ }
+ bankCount=2;
+ {
+  OscInfo o;int16_t b[16],m[16];memset(m,0,sizeof(m));
+#define AT_ZERO(wave,pw,expect,name) do{memset(&o,0,sizeof(o));o.waveform=(wave);o.tableOffset=3;o.scanPos=(pw)<0?0.f:(pw)>1?1.f:(pw);memset(b,0,sizeof(b)); \
+   calcNextOscSampleBlock(&o,b,16,1.f,(pw));check(abs(b[0]-(expect))<=1&&abs(b[15]-(expect))<=1,name);}while(0)
+  /* phase 0 reads sample 0: (0-512)*4 = -2048, level 3 adds 300 */
+  const unsigned before=builtinCalls;
+  AT_ZERO(PWM+1,0.f,-10000+300-2048,"plain mode plays the first frame");
+  check(builtinCalls==before,"the wavetable needs no built-in waveform");
+  AT_ZERO(PWM+1,1.f,10000+300-2048,"full PWM reaches the last frame");
+  AT_ZERO(PWM+1,0.5f,300-2048,"half PWM is the middle frame");
+  AT_ZERO(PWM+1,0.25f,-5000+300-2048,"a quarter blends the first two frames");
+  AT_ZERO(PWM+1,-1.f,-10000+300-2048,"PWM below 0 clamps");
+  AT_ZERO(PWM+1,2.f,10000+300-2048,"PWM above 1 clamps, inside the wavetable");
+  AT_ZERO(PWM+2,0.f,7000+300-2048,"a wavetable with one frame plays it");
+  AT_ZERO(PWM+2,0.8f,7000+300-2048,"a wavetable with one frame ignores PWM");
+  AT_ZERO(PWM+3,0.f,0,"an empty slot is silent");
+  /* every level reads its own length */
+  for(uint8_t l=0;l<12;l++) {
+   const uint8_t used=l<WAVEBANK_LEVELS?l:WAVEBANK_LEVELS-1;
+   const uint8_t bits=waveBank_levelBits(used);
+   memset(&o,0,sizeof(o));o.waveform=PWM+1;o.tableOffset=l;
+   o.phase=((1u<<bits)-1)<<(32-bits);o.phaseInc=1u<<(31-bits);
+   calcNextOscSampleBlock(&o,b,3,1.f,0.f);
+   const int last=-10000+used*100+((int)(((1u<<bits)-1)*1024>>bits)-512)*4,first=-10000+used*100-2048;
+   check(b[0]==last&&abs(b[1]-(last+first)/2)<=1&&b[2]==first,"each level wraps at its own length");
+  }
+  /* the sweep moves without steps and never back */
+  int previous=-32768,maxStep=0,monotonic=1;
+  for(unsigned k=0;k<=1000;k++) {
+   memset(&o,0,sizeof(o));o.waveform=PWM+1;o.scanPos=k/1000.f;calcNextOscSampleBlock(&o,b,1,1.f,k/1000.f);
+   if(k){monotonic&=b[0]>=previous;if(b[0]-previous>maxStep)maxStep=b[0]-previous;}
+   previous=b[0];
+  }
+  check(monotonic&&maxStep<=25,"the PWM sweep is smooth");
+  /* FM at zero depth and expo FM at zero depth equal the plain block, also while scanning */
+  for(unsigned k=0;k<=4;k++) {
+   OscInfo a,f,e;memset(&a,0,sizeof(a));a.waveform=PWM+1;a.phaseInc=0x01234000u; /* exact as a float, as expo FM computes it */a.tableOffset=5;a.fmMod=0;
+   f=a;e=a;int16_t ba[16],bf[16],be[16];
+   for(unsigned i=0;i<16;i++)m[i]=(int16_t)(i*2000-16000);
+   calcNextOscSampleBlock(&a,ba,16,1.f,k/4.f);
+   calcNextOscSampleFmBlock(&f,m,bf,16,1.f,k/4.f);
+   calcExpoFmBlock(&e,m,be,16,k/4.f);
+   check(!memcmp(ba,bf,sizeof(ba))&&a.phase==f.phase,"FM at zero depth is the plain wavetable");
+   check(!memcmp(ba,be,sizeof(ba))&&a.phase==e.phase,"expo FM at zero depth is the plain wavetable");
+  }
+  /* FM moves the read position */
+  {
+   OscInfo a,f;memset(&a,0,sizeof(a));a.waveform=PWM+1;a.phaseInc=1u<<22;f=a;f.fmMod=0.5f;
+   int16_t ba[16],bf[16];for(unsigned i=0;i<16;i++)m[i]=8000;
+   calcNextOscSampleBlock(&a,ba,16,1.f,0.f);calcNextOscSampleFmBlock(&f,m,bf,16,1.f,0.f);
+   check(memcmp(ba,bf,sizeof(ba))!=0,"FM changes the wavetable read");
+  }
+  memset(&o,0,sizeof(o));o.waveform=PWM+4;memset(b,1,sizeof(b));calcNextOscSampleFmBlock(&o,m,b,16,1.f,0.f);
+  check(!b[0]&&!b[15],"FM on an empty slot is silent");
+  /* a single wave scans on through the single waves after it */
+  bankCount=4;
+  AT_ZERO(PWM+2,0.f,7000+300-2048,"a single wave plays itself at PWM 0");
+  AT_ZERO(PWM+2,0.5f,8000+300-2048,"half PWM reaches the middle single wave");
+  AT_ZERO(PWM+2,0.25f,7500+300-2048,"a quarter blends the first two single waves");
+  AT_ZERO(PWM+2,1.f,9000+300-2048,"full PWM reaches the last slot");
+  AT_ZERO(PWM+3,0.f,8000+300-2048,"a later slot starts at itself");
+  AT_ZERO(PWM+3,1.f,9000+300-2048,"a later slot scans to the last one too");
+  AT_ZERO(PWM+4,0.7f,9000+300-2048,"the last slot ignores PWM");
+  AT_ZERO(PWM+1,1.f,10000+300-2048,"a wavetable scans only its own frames");
+  AT_ZERO(PWM+5,0.f,0,"past the count is silent");
+  bankCount=2;
+  /* the octave levels blend */
+  memset(&o,0,sizeof(o));o.waveform=PWM+1;o.tableOffset=3;o.levelMix=16384;
+  calcNextOscSampleBlock(&o,b,1,1.f,0.f);
+  check(abs(b[0]-(-10000+350-2048))<=1,"half level mix blends two octave levels");
+  memset(&o,0,sizeof(o));o.waveform=PWM+1;o.tableOffset=9;o.levelMix=32767;
+  calcNextOscSampleBlock(&o,b,1,1.f,0.f);
+  check(b[0]==-10000+900-2048,"the top level has no next level");
+  {
+   double prev=-1;int ok=1;
+   for(float f=10.f;f<22000.f;f*=1.001f) {
+    const uint8_t l=waveBank_level(f);
+    const double level=l+osc_levelMix(f,l)/32767.;
+    if(prev>=0&&(level<prev-1e-3||level-prev>0.01))ok=0;
+    prev=level;
+   }
+   check(ok&&prev==WAVEBANK_LEVELS-1,"the octave levels fade into each other without a jump");
+   check(osc_levelMix(54.9f,0)>32000&&osc_levelMix(56.f,1)<1000&&osc_levelMix(20.f,0)==0&&osc_levelMix(15000.f,9)==0,"level mix edges");
+  }
+  /* the scan glides to a new PWM value */
+  memset(&o,0,sizeof(o));o.waveform=PWM+1;o.tableOffset=3;
+  calcNextOscSampleBlock(&o,b,1,1.f,1.f);
+  check(fabsf(o.scanPos-OSC_SCAN_GLIDE)<1e-6f&&abs(b[0]-(-8000+300-2048))<=2,"the scan glides to a new PWM value");
+  for(unsigned k=0;k<200;k++)calcNextOscSampleBlock(&o,b,1,1.f,1.f);
+  check(o.scanPos>0.999f,"the scan arrives");
+ }
 
  /* Amount zero is the plain sine. */
  {
@@ -129,6 +251,21 @@ int main(void)
   check(jump<16000,"steep edge spans several samples");
  }
  check(previous>0.15,"full amount is far from a sine");
+ /* A falling amount, block by block like the pitch EG: no step at the block edges.
+    The second difference of a smooth curve stays small; a shape step shows up in it. */
+ {
+  OscInfo o;memset(&o,0,sizeof(o));o.phaseInc=1u<<20;
+  int16_t b[64];int prev2=0,prev1=0,first=2,worst=0;
+  for(unsigned k=0;k<64;k++) {
+   o.fmMod=1.f-k/64.f;
+   calcPhaseDistBlock(&o,b,64);
+   for(unsigned i=0;i<64;i++) {
+    if(!first){const int d=abs(b[i]-2*prev1+prev2);if(d>worst)worst=d;} else first--;
+    prev2=prev1;prev1=b[i];
+   }
+  }
+  check(worst<PD_SWEEP_LIMIT,"a falling PD amount glides without steps");
+ }
  /* Every phase and amount stays inside the table, even at the top pitch. */
  for(uint32_t inc=1u<<20;inc&&inc<=0x70000000u;inc=inc*3u) {
   OscInfo o;memset(&o,0,sizeof(o));o.phaseInc=inc;
@@ -175,24 +312,52 @@ def main() -> None:
     node = read('Core/Src/Soundengine/DSPAudio/modulationNode.c')
     names = read('Core/Inc/menu/MenuText.h')
     assert 'mixOscs >= 2 ? 1.f' in drum and 'mixOscs == 4' in drum and 'mixOscs == 3' in drum
+    menu_source = read('Core/Src/menu/menu.c')
+    for v in '123':
+        # the modulator offers the user wavetables too; DrumVoice plays it through calcNextOscSampleBlock
+        assert f'/*PAR_MOD_WAVE_DRUM{v}*/  DTYPE_MENU | (MENU_WAVEFORM_WT<<8)' in menu_source
+    assert 'calcNextOscSampleBlock(&voiceArray[voiceNr].modOsc' in drum
     assert 'isFloatModulator ? (uint8_t)(v*4.f+0.5f) : value.itg > 4 ? 4 : value.itg' in parser
     assert 'originalValue=activeParameters[destination]/4.f' in node
     menu = re.search(r'mixFmNames\[\]\[6\] =\s*\{(.*?)\};', names, re.S).group(1)
     assert re.findall(r'\{(.*?)\}', menu) == ['5', '"FM"', '"Mix"', '"rng"', '"exp"', '"pd"']
 
-    defines = ''.join(re.findall(r'#define (?:EXPO_FM_OCTAVES|OSC_MAX_PHASE_INC|PD_MIN_KNEE).*\n', header)).replace('#define', '\n#define')
+    defines = ''.join(re.findall(r'#define (?:EXPO_FM_OCTAVES|OSC_MAX_PHASE_INC|PD_MIN_KNEE|OSC_SCAN_GLIDE).*\n', header)).replace('#define', '\n#define')
     struct = re.search(r'typedef struct OscStruct.*?\} OscInfo;', header, re.S).group(0)
+    oscillator = oscillator.replace('\r\n', '\n')
+    bank = read('Core/Inc/Soundengine/DSPAudio/WaveBank.h').replace('\r\n', '\n')
+    bank_defines = ''.join(re.findall(r'#define WAVEBANK_(?:MAX|LEVELS|FRAME_SAMPLES) .*\n', bank))
+    bank_helpers = '\n'.join(extract(bank, sig) for sig in
+                             ('static inline uint8_t waveBank_levelBits', 'static inline uint16_t waveBank_levelOffset'))
+    scan_type = re.search(r'typedef struct\s*\{[^}]*\} WaveBankScan;', oscillator).group(0)
     bodies = [extract(oscillator, s) for s in (
-        'static inline float osc_expoRatio', 'static inline int16_t osc_readTable',
+        'static inline float osc_expoRatio', 'static inline int16_t osc_readTable')]
+    bodies.append(scan_type)
+    bodies += [extract(oscillator, s) for s in (
+        'static inline uint16_t osc_levelMix', 'static uint8_t osc_waveBankScan', 'static inline int16_t osc_readLevel',
+        'static inline int16_t osc_readFrame', 'static inline int16_t osc_readScan',
+        'void calcWaveBankBlock(OscInfo', 'void calcWaveBankFmBlock(OscInfo',
         'static inline int16_t osc_readSine', 'IN_ITCM_RAM void calcExpoFmBlock',
-        'IN_ITCM_RAM void calcPhaseDistBlock')]
+        'IN_ITCM_RAM void calcPhaseDistBlock', 'IN_ITCM_RAM void calcNextOscSampleFmBlock',
+        'IN_ITCM_RAM void calcNextOscSampleBlock')]
+    wavebank = read('Core/Src/Soundengine/DSPAudio/WaveBank.c').replace('\r\n', '\n')
+    bodies.append(extract(wavebank, 'uint8_t waveBank_level(float freq)'))
     source = '\n'.join(bodies)
     if '--mutate' in sys.argv:
         source = source.replace('if(inc>OSC_MAX_PHASE_INC) inc = OSC_MAX_PHASE_INC;', '')
         source = source.replace('0.5f - amount*(0.5f-minKnee)', '0.5f')
+        old = 'default:\n\t\t\tcalcWaveBankBlock(osc,buf,size,gain,pwm);'
+        assert old in source, 'mutation anchor'
+        source = source.replace(old, 'default:')
+        old = 'const float knee = start + kneeStep*(i+1);'
+        assert old in source, 'mutation anchor'
+        source = source.replace(old, 'const float knee = target;')
+        old = 'level < WAVEBANK_LEVELS-1 ? osc->levelMix : 0'
+        assert old in source, 'mutation anchor'
+        source = source.replace(old, '0')
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
         out = Path(folder)
-        (out / 'contract.c').write_text(PRELUDE + defines + struct + STUBS + source + TESTS, encoding='utf-8')
+        (out / 'contract.c').write_text(PRELUDE + defines + bank_defines + struct + bank_helpers + STUBS + source + TESTS, encoding='utf-8')
         command = (f'call "{VS}" -arch=x64 >nul && cl /nologo /O2 /W3 /TC /Fe:contract.exe contract.c '
                    f'&& .\\contract.exe')
         subprocess.run(command, shell=True, cwd=out, check=True)

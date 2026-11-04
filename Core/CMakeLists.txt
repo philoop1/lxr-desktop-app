@@ -90,12 +90,14 @@ add_library(lxr_dsp OBJECT
     Src/Soundengine/DSPAudio/TiltEq.c
     Src/Soundengine/DSPAudio/transientGenerator.c
     Src/Soundengine/DSPAudio/transientTables.c
+    Src/Soundengine/DSPAudio/WaveBank.c
     Src/Soundengine/DSPAudio/wavetable.c
     Src/Soundengine/DSPAudio/FX/Compressor.c
     Src/Soundengine/DSPAudio/FX/Delay.c
     Src/Soundengine/DSPAudio/FX/Distortion.c
     Src/Soundengine/DSPAudio/FX/FxRamBuffer.c
     Src/Soundengine/DSPAudio/FX/Reverb.c
+    Src/Soundengine/DSPAudio/FX/TapeDelay.c
     Src/Soundengine/DSPAudio/FX/Ringmod.c
     Src/Soundengine/DSPAudio/FX/VerbTools/AllpassDelay.c
     Src/Soundengine/DSPAudio/FX/VerbTools/sinCos.c
@@ -180,6 +182,7 @@ set(LXR_ITCM_SOURCES
     Src/Soundengine/DSPAudio/transientGenerator.c
     Src/Soundengine/DSPAudio/FX/Distortion.c
     Src/Soundengine/DSPAudio/FX/Reverb.c
+    Src/Soundengine/DSPAudio/FX/TapeDelay.c
     Src/Soundengine/MIDI/ParameterArray.c
     Src/Soundengine/Sequencer/sequencer.c
     Src/Soundengine/Sequencer/PerformanceSteps.c
@@ -192,3 +195,5 @@ endif()
 # jump-threads the loop back edge through that switch and duplicates the whole
 # loop body per case (ResonantFilter.c: 2772 B -> 6720 B at -O3, 8028 B at -O2).
 set_property(SOURCE Src/Soundengine/DSPAudio/ResonantFilter.c APPEND PROPERTY COMPILE_OPTIONS -fno-thread-jumps)
+# -O3 versions the tape delay loop per mode and needs about 2.1 KB of ITCM.
+set_property(SOURCE Src/Soundengine/DSPAudio/FX/TapeDelay.c APPEND PROPERTY COMPILE_OPTIONS -O2)

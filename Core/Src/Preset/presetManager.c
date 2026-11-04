@@ -43,6 +43,13 @@
 //FIL SDFile;		/* place to hold 1 file*/
 static uint8_t morph_state = 0; //flag for non blocking morph
 static uint8_t morph_index = 0;
+static uint8_t morph_again = 0; // morph changed while a pass runs: one more pass
+/* Morph from MIDI CC glides to its target like on the LXR1 Mutador: every
+ * 26 ms it moves half of the remaining distance. */
+#define MORPH_SLEW_TICKS 104u // 26 ms at 4 kHz
+static uint8_t morph_slewTarget = 0;
+static uint8_t morph_slewActive = 0;
+static uint32_t morph_slewLast = 0;
 char savefileNames[NUM_KIT_SLOTS][NUM_SAVEFILE_NAMES][8];
 
 char currentFolder[13];
@@ -2583,8 +2590,30 @@ FRESULT preset_loadPatternRAM(uint8_t presetNr)
 }
 //----------------------------------------------------
 //called periodically to process non blocking morph
+void preset_setMorphTarget(uint8_t target)
+{
+	morph_slewTarget = target;
+	morph_slewActive = 1;
+}
+static void preset_morphSlew(void)
+{
+	if(!morph_slewActive || systick_ticks - morph_slewLast < MORPH_SLEW_TICKS) return;
+	morph_slewLast = systick_ticks;
+	uint8_t current = activeParameters[PAR_MORPH];
+	const uint8_t target = morph_slewTarget;
+	if(current == target)
+	{
+		morph_slewActive = 0;
+		return;
+	}
+	const uint8_t step = (uint8_t)(((current < target ? target - current : current - target) + 1) / 2);
+	current = current < target ? (uint8_t)(current + step) : (uint8_t)(current - step);
+	activeParameters[PAR_MORPH] = current;
+	preset_morph(current);
+}
 void preset_morph_tick()
 {
+	preset_morphSlew();
 	if(!morph_state) return;
 
 	// A kit load uses parameterOrder because some settings depend on others.
@@ -2617,7 +2646,11 @@ void preset_morph_tick()
 	}
 
 	if(++morph_index >= END_OF_SOUND_PARAMETERS)
-		morph_state = 0;
+	{
+		morph_index = 0;
+		morph_state = morph_again;
+		morph_again = 0;
+	}
 }
 //----------------------------------------------------
 // This will determine an interpolated value between parameters
@@ -2627,7 +2660,14 @@ void preset_morph_tick()
 void preset_morph(uint8_t morph)
 {
 #if 1
-	//initialize new morph
+	// A running pass reads the morph value per parameter, so it keeps going and
+	// one more full pass follows; restarting at 0 would starve the last
+	// parameters while morph keeps changing.
+	if(morph_state)
+	{
+		morph_again = 1;
+		return;
+	}
 	morph_state = 1; //start morph
 	morph_index = 0; //reset index
 #else

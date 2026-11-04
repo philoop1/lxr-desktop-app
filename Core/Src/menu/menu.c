@@ -36,10 +36,12 @@
 #include "front.h"
 
 #include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Sequencer/clockSync.h"
 #include "Soundengine/Soundengine.h"
 #include "Soundengine/DSPAudio/lfo.h"
 #include "Soundengine/AudioCodecManager.h"
 #include "Soundengine/MIDI/MidiParser.h"
+#include "Soundengine/FxBus.h"
 
 
 uint8_t display_refresh_state = 0;
@@ -49,11 +51,13 @@ uint8_t saveScreenPots[4]; //hold absolute pot position for save page name editi
 
 
 #include "Soundengine/DSPAudio/modulationNode.h"
+#include "Soundengine/DSPAudio/WaveBank.h"
 
 // uppercase 3 letters in buf
 static void upr_three(char *buf);
 // given a menuid and a param value fill buf with the short menu item value. will not exceed 3 chars
 static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmVal, char *buf);
+static uint8_t menu_formatTapeValue(uint16_t parNr, uint8_t value, char *buf);
 // given a menu id returns the number of entries
 static uint8_t getMaxEntriesForMenu(uint8_t menuId);
 // given a number, convert it to a note name
@@ -436,8 +440,8 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_FEEDBACK, CAT_FX, LONG_FEEDBACK},/*TEXT_FX_FEEDBACK*/
 		{SHORT_RANGE, CAT_FX, LONG_RANGE},/*TEXT_FX_RANGE*/
 		{SHORT_TIME, CAT_FX, LONG_TIME},/*TEXT_FX_TIME*/
-		{SHORT_PRE, CAT_FX, LONG_PREDELAY},/*TEXT_FX_PREDELAY*/
-		{SHORT_REF, CAT_FX, LONG_REFLECTION},/*TEXT_FX_REFLECTION*/
+		{SHORT_RATE, CAT_FX, LONG_RATE},/*TEXT_FX_RATE*/
+		{SHORT_FX_FINE, CAT_FX, LONG_FX_FINE},/*TEXT_FX_FINE*/
 		{SHORT_P1, CAT_FX, LONG_P1},/*TEXT_FX_P1*/
 		{SHORT_P2, CAT_FX, LONG_P2},/*TEXT_FX_P2*/
 		{SHORT_P3, CAT_FX, LONG_P3},/*TEXT_FX_P3*/
@@ -527,9 +531,9 @@ const Name valueNames[NUM_NAMES] =
 // Parameter types. These correspond with ParamEnums and entries in parameter_values
 const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_NONE*/ 			DTYPE_0B127,							// 0
-	    /*PAR_OSC_WAVE_DRUM1*/ 	DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_OSC_WAVE_DRUM2*/ 	DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_OSC_WAVE_DRUM3*/ 	DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_OSC_WAVE_DRUM1*/ 	DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
+	    /*PAR_OSC_WAVE_DRUM2*/ 	DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
+	    /*PAR_OSC_WAVE_DRUM3*/ 	DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
 	    /*PAR_OSC_WAVE_SNARE*/  DTYPE_MENU | (MENU_WAVEFORM<<8),
 	    /*NRPN_DATA_ENTRY_COARSE*/ DTYPE_0B127,
 	    /*PAR_WAVE1_CYM*/  		DTYPE_MENU | (MENU_WAVEFORM<<8),
@@ -546,9 +550,9 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_FINE5*/ 			DTYPE_PM63,
 	    /*PAR_COARSE6*/ 		DTYPE_PM63,//DTYPE_0B127,,
 	    /*PAR_FINE6*/ 			DTYPE_PM63,
-	    /*PAR_MOD_WAVE_DRUM1*/  DTYPE_MENU | (MENU_WAVEFORM<<8),		//20
-	    /*PAR_MOD_WAVE_DRUM2*/  DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_MOD_WAVE_DRUM3*/  DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_MOD_WAVE_DRUM1*/  DTYPE_MENU | (MENU_WAVEFORM_WT<<8),		//20
+	    /*PAR_MOD_WAVE_DRUM2*/  DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
+	    /*PAR_MOD_WAVE_DRUM3*/  DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
 	    /*PAR_WAVE2_CYM*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
 	    /*PAR_WAVE3_CYM*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
 	    /*PAR_WAVE2_HH*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
@@ -2141,7 +2145,8 @@ void menu_repaintGeneric()
 			case DTYPE_1B64:
 			case DTYPE_VOICE_LFO:
 
-				if(parNr==PAR_PERF_AVL) {
+				if(menu_formatTapeValue(parNr,curParmVal,&editDisplayBuffer[1][13])) {}
+				else if(parNr==PAR_PERF_AVL) {
                     perf_formatVelocityGain(&editDisplayBuffer[1][11],curParmVal);
                     editDisplayBuffer[1][15]='%';
                 }
@@ -2299,7 +2304,8 @@ void menu_repaintGeneric()
 				case DTYPE_0B15:
 				case DTYPE_1B64:
 				case DTYPE_VOICE_LFO:
-					if(parNr == PAR_BPM)
+					if(menu_formatTapeValue(parNr,curParmVal,valueAsText)) {}
+					else if(parNr == PAR_BPM)
 					{
 						if(curParmVal == 0)
 						{
@@ -3109,6 +3115,8 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 		return nextPatternNames[0][0];
 	case MENU_WAVEFORM:
 		return (uint8_t)(waveformNames[0][0] + menu_numSamples);
+	case MENU_WAVEFORM_WT:
+		return (uint8_t)(waveformNames[0][0] + waveBank_count());
 	case MENU_REPEAT_SYNC:
 		return repeatSyncNames[0][0];
 	case MENU_DELAY_MODE:
@@ -3161,6 +3169,30 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 	}
 }
 
+// Tape delay: P1 shows the division it plays, P2 the fine offset
+static uint8_t menu_formatTapeValue(uint16_t parNr, uint8_t value, char *buf)
+{
+	if(fxBus.fxType != FX_TAPE) return 0;
+	if(parNr == PAR_FX_P1)
+	{
+		const uint8_t division = TapeDelay_division(value/127.f, activeParameters[PAR_FX_P2]/127.f, sync_getBeatBpm(), fxBus.tape.pingPong);
+		memcpy(buf, repeatSyncNames[division + 1], 3);
+		return 1;
+	}
+	if(parNr == PAR_FX_P2)
+	{
+		numtostrps(buf, (int8_t)(value - 64));
+		return 1;
+	}
+	if(parNr == PAR_FX_P4)
+	{
+		// feedback in percent, 100 is unity
+		numtostrpu(buf, (uint8_t)((value*(uint16_t)(TAPE_FEEDBACK_MAX*100.f) + 63)/127), ' ');
+		return 1;
+	}
+	return 0;
+}
+
 // given a menu id, and a value returns the name from PROGMEM
 static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmVal, char *buf)
 {
@@ -3199,6 +3231,14 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 		break;
 	case MENU_FILTER:
 		p = filterTypes[curParmVal + 1];
+		break;
+	case MENU_WAVEFORM_WT:
+		if(curParmVal >= waveformNames[0][0])
+		{
+			memcpy(buf, waveBank_name((uint8_t)(curParmVal - waveformNames[0][0])), 3);
+			return;
+		}
+		p=waveformNames[curParmVal + 1];
 		break;
 	case MENU_WAVEFORM:
 		if(curParmVal < waveformNames[0][0])
@@ -4715,6 +4755,13 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 		else if(tmpValue>127) tmpValue = 127;
 		saveScreenPots[potNr] = tmpValue;
 
+		// knob 1 picks the slot like the encoder
+		if(potNr == 0 && menu_saveOptions.state == SAVE_STATE_EDIT_PRESET_NR && diff != 0)
+		{
+			menu_handleLoadSaveMenu(diff > 0 ? 1 : -1, 0);
+			menu_repaintAll();
+			return 0;
+		}
 		menu_handleSaveScreenKnobValue(potNr, tmpValue);
 		return 0;
 	}

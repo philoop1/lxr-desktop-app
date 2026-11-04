@@ -15,6 +15,7 @@
 #include "Soundengine/DSPAudio/Oscillator.h"
 #include "Soundengine/DSPAudio/random.h"
 #include "Soundengine/DSPAudio/Samples.h"
+#include "Soundengine/DSPAudio/WaveBank.h"
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/MIDI/MidiNoteNumbers.h"
 #include "Soundengine/Sequencer/sequencer.h"
@@ -265,6 +266,136 @@ static inline int16_t osc_readTable(const int16_t table[][1024], const uint8_t o
 	return (int16_t)(a + (int32_t)(((int64_t)(b - a) * (index&0x3FFFFF))>>22));
 }
 //-----------------------------------------------------------
+// User wavetables. Waveform picks the wavetable, PWM scans its frames from the
+// first to the last; both frames are read at the octave level of the pitch.
+typedef struct
+{
+	const int16_t* from;	// the frame, all levels
+	const int16_t* to;		// 0 when no blend is needed
+	int32_t mix;			// share of `to`, 0..32767
+	int32_t levelMix;		// share of the next octave level, 0..32767
+	uint16_t offset;		// the level inside the frame
+	uint16_t nextOffset;
+	uint8_t bits;			// the level holds 2^bits samples
+	uint8_t nextBits;
+} WaveBankScan;
+
+// Level j covers 27.5 Hz * 2^j up to 55 Hz * 2^j; the next level fades in over
+// it, so a pitch sweep does not switch the partials at once
+static inline uint16_t osc_levelMix(const float freq, const uint8_t level)
+{
+	if(level >= WAVEBANK_LEVELS-1) return 0;
+	const float mix = freq/(27.5f*(float)(1u<<level)) - 1.f;
+	return mix <= 0.f ? 0 : mix >= 1.f ? 32767 : (uint16_t)(mix*32767.f);
+}
+//-----------------------------------------------------------
+// A wavetable scans its frames; a single wave scans on through the single
+// waves in the slots after it
+static uint8_t osc_waveBankScan(OscInfo* osc, const float pwm, WaveBankScan* scan)
+{
+	const uint8_t table = (uint8_t)(osc->waveform-NUM_OSC_WAVEFORMS);
+	const uint8_t frames = waveBank_frames(table);
+	if(!frames) return 0;
+	const float target = pwm < 0.f ? 0.f : pwm > 1.f ? 1.f : pwm;
+	osc->scanPos += (target-osc->scanPos)*OSC_SCAN_GLIDE;
+	uint8_t span = frames;
+	if(frames == 1)
+		while(table+span < WAVEBANK_MAX && waveBank_frames((uint8_t)(table+span)) == 1) span++;
+	const float position = osc->scanPos*(span-1);
+	uint8_t step = (uint8_t)position;
+	int32_t mix = (int32_t)((position-step)*32768.f);
+	if(mix >= 32768)
+	{
+		step++;
+		mix = 0;
+	}
+	if(step >= span-1)
+	{
+		step = (uint8_t)(span-1);
+		mix = 0;
+	}
+	const uint8_t level = osc->tableOffset < WAVEBANK_LEVELS ? osc->tableOffset : WAVEBANK_LEVELS-1;
+	scan->offset = waveBank_levelOffset(level);
+	scan->bits = waveBank_levelBits(level);
+	scan->nextOffset = waveBank_levelOffset((uint8_t)(level+1));
+	scan->nextBits = waveBank_levelBits((uint8_t)(level+1));
+	scan->levelMix = level < WAVEBANK_LEVELS-1 ? osc->levelMix : 0;
+	if(frames == 1)
+	{
+		scan->from = waveBank_frame((uint8_t)(table+step),0);
+		scan->to = mix ? waveBank_frame((uint8_t)(table+step+1),0) : 0;
+	}
+	else
+	{
+		scan->from = waveBank_frame(table,step);
+		scan->to = mix ? waveBank_frame(table,(uint8_t)(step+1)) : 0;
+	}
+	scan->mix = mix;
+	return 1;
+}
+//-----------------------------------------------------------
+static inline int16_t osc_readLevel(const int16_t* level, const uint8_t bits, const uint32_t index)
+{
+	const uint32_t itg = index>>(32-bits);
+	const int32_t a = level[itg];
+	const int32_t b = level[(itg+1)&((1u<<bits)-1)];
+	const uint32_t frac = (index<<bits)>>10;	// 22 bit
+	return (int16_t)(a + (int32_t)(((int64_t)(b - a) * frac)>>22));
+}
+//-----------------------------------------------------------
+static inline int16_t osc_readFrame(const WaveBankScan* scan, const int16_t* frame, const uint32_t index)
+{
+	const int32_t a = osc_readLevel(frame+scan->offset,scan->bits,index);
+	if(!scan->levelMix) return (int16_t)a;
+	const int32_t b = osc_readLevel(frame+scan->nextOffset,scan->nextBits,index);
+	return (int16_t)(a + (((b-a)*scan->levelMix)>>15));
+}
+//-----------------------------------------------------------
+static inline int16_t osc_readScan(const WaveBankScan* scan, const uint32_t index)
+{
+	const int32_t a = osc_readFrame(scan,scan->from,index);
+	if(!scan->to) return (int16_t)a;
+	const int32_t b = osc_readFrame(scan,scan->to,index);
+	return (int16_t)(a + (((b-a)*scan->mix)>>15));
+}
+//-----------------------------------------------------------
+// silent when the slot has no table
+void calcWaveBankBlock(OscInfo* osc, int16_t* buf, const uint8_t size, const float gain, const float pwm)
+{
+	WaveBankScan scan;
+	if(!osc_waveBankScan(osc,pwm,&scan))
+	{
+		for(uint8_t i=0;i<size;i++) buf[i] = 0;
+		osc->output = 0;
+		return;
+	}
+	for(uint8_t i=0;i<size;i++)
+	{
+		const int16_t oscOut = osc_readScan(&scan,osc->phase);
+		osc->phase += osc->phaseInc;
+		osc->output = oscOut;
+		buf[i] = oscOut * gain;
+	}
+}
+//-----------------------------------------------------------
+void calcWaveBankFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size, const float gain, const float pwm)
+{
+	WaveBankScan scan;
+	if(!osc_waveBankScan(osc,pwm,&scan))
+	{
+		calcWaveBankBlock(osc,buf,size,gain,pwm);
+		return;
+	}
+	for(uint8_t i=0;i<size;i++)
+	{
+		const uint32_t index = osc->phase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<19);
+		const int16_t oscOut = osc_readScan(&scan,index);
+		osc->phase += osc->phaseInc;
+		osc->output = oscOut;
+		buf[i] = oscOut * gain;
+	}
+}
+//-----------------------------------------------------------
 static inline int16_t osc_readSine(const uint32_t index)
 {
 	const uint32_t itg = index>>20;
@@ -281,9 +412,11 @@ IN_ITCM_RAM void calcExpoFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf,
 		calcNoiseBlock(osc,buf,size,1.f);
 		return;
 	}
-	if(osc->waveform>PWM)
+	WaveBankScan scan = {0};
+	const uint8_t user = osc->waveform>PWM;
+	if(user && !osc_waveBankScan(osc,pwm,&scan))
 	{
-		calcUserSampleOscBlock(osc,buf,size,1.f);
+		calcWaveBankBlock(osc,buf,size,1.f,pwm);
 		return;
 	}
 	const float depth = osc->fmMod*EXPO_FM_OCTAVES/32768.f;
@@ -309,6 +442,11 @@ IN_ITCM_RAM void calcExpoFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf,
 			break;
 		default:
 		{
+			if(user)
+			{
+				oscOut = osc_readScan(&scan,oscPhase);
+				break;
+			}
 			const uint32_t oscPhase2 = oscPhase + pwm * (UINT32_MAX/2);
 			oscOut = __QSUB16(osc_readTable(sawTable,osc->tableOffset,oscPhase),
 				osc_readTable(sawTable,osc->tableOffset,oscPhase2));
@@ -326,10 +464,10 @@ IN_ITCM_RAM void calcExpoFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf,
 // Casio style phase distortion: amount warps the read speed of one sine cycle, from pure sine to saw.
 IN_ITCM_RAM void calcPhaseDistBlock(OscInfo* osc, int16_t* buf, uint8_t size)
 {
-	// user samples run on their own phase scale and have no sine to warp
+	// user wavetables have no sine to warp; DrumVoice plays them plain with their scan
 	if(osc->waveform>PWM)
 	{
-		calcUserSampleOscBlock(osc,buf,size,1.f);
+		calcWaveBankBlock(osc,buf,size,1.f,0.f);
 		return;
 	}
 	float amount = osc->fmMod;
@@ -339,12 +477,18 @@ IN_ITCM_RAM void calcPhaseDistBlock(OscInfo* osc, int16_t* buf, uint8_t size)
 	float minKnee = osc->phaseInc*(2.f/4294967296.f);
 	if(minKnee<PD_MIN_KNEE) minKnee = PD_MIN_KNEE;
 	else if(minKnee>0.5f) minKnee = 0.5f;
-	const float knee = 0.5f - amount*(0.5f-minKnee);
-	const float riseSlope = 0.5f/knee;
-	const float fallSlope = 0.5f/(1.f-knee);
+	// the amount follows the pitch EG once a block; the knee glides to it within
+	// the block, so the shape does not step every block and click
+	const float target = 0.5f - amount*(0.5f-minKnee);
+	const float start = osc->pdKnee > 0.f ? osc->pdKnee : target;
+	const float kneeStep = (target-start)/size;
+	osc->pdKnee = target;
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
+		const float knee = start + kneeStep*(i+1);
+		const float riseSlope = 0.5f/knee;
+		const float fallSlope = 0.5f/(1.f-knee);
 		const uint32_t oscPhase = osc->phase;
 		// a quarter cycle back, so no warp reads the plain sine from phase 0
 		const float phase = (oscPhase+0xC0000000u)*(1.f/4294967296.f);
@@ -387,7 +531,7 @@ IN_ITCM_RAM void calcNextOscSampleFmBlock(OscInfo* osc, int16_t* modBuffer, int1
 			break;
 
 		default:
-			calcUserSampleOscFmBlock(osc,modBuffer,buf,size,gain);
+			calcWaveBankFmBlock(osc,modBuffer,buf,size,gain,pwm);
 			break;
 
 		}
@@ -510,10 +654,8 @@ IN_ITCM_RAM void calcNextOscSampleBlock(OscInfo* osc, int16_t* buf, const uint8_
 			calcPwmBlock(osc,buf,size, gain, pwm);
 			break;
 
-		default://sample playback
-		//	if( osc->waveform - OSC_SAMPLE_START > sampleMemory_getNumSamples() ) return; // return if out of range
-
-		//	calcUserSampleOscBlock(osc,buf,size, gain);
+		default:
+			calcWaveBankBlock(osc,buf,size,gain,pwm);
 			break;
 		}
 }
@@ -662,79 +804,6 @@ int16_t calcSampleOscFm(OscInfo* osc, OscInfo* modOsc)
 };
 */
 //------------------------------------------------------------------
-void calcUserSampleOscFmBlock(OscInfo* osc,int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain)
-{
-#if 0
-	//TODO optimize performance by moving sampleInfo to oscillator struct
-	SampleInfo info = sampleMemory_getSampleInfo(osc->waveform - OSC_SAMPLE_START);
-
-	//cast sample data to signed int16_t array
-	int16_t* sampleData = (int16_t*)((int8_t*)(info.offset));
-
-	uint8_t i;
-	for(i=0;i<size;i++)
-	{
-		const uint32_t oscPhase 	= osc->phase;
-		int16_t oscOut ;
-
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<14);
-		uint32_t  itg	= index>>17;
-
-	#if INTERPOLATE_FM_OSC
-		oscOut = sampleData[itg++];
-		const float frac	= (index&20000)*0.00000762939453125f;//=> * 1/0x20000
-		oscOut += frac*(sampleData[itg] - oscOut);
-	#else
-		oscOut = sampleData[itg];
-	#endif
-
-		//one shot
-		if(itg < info.size)
-		{
-			osc->phase = oscPhase + osc->phaseInc;
-		}
-		osc->output = oscOut;
-		buf[i] = oscOut * gain;
-	}
-#endif
-}
-//---------------------------------------------------------------
-void calcUserSampleOscBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain)
-{
-#if 0
-	//TODO optimize performance by moving sampleInfo to oscillator struct
-	SampleInfo info = sampleMemory_getSampleInfo(osc->waveform - OSC_SAMPLE_START);
-
-	//cast sample data to signed int16_t array
-	int16_t* sampleData = (int16_t*)((int8_t*)(info.offset));
-
-	uint8_t i;
-	for(i=0;i<size;i++)
-	{
-		const uint32_t oscPhase = osc->phase;
-		int16_t oscOut ;
-		uint32_t  itg	= oscPhase>>17;
-
-
-	#if INTERPOLATE_OSC
-
-		oscOut = sampleData[itg++];
-		const float frac = (oscPhase&20000)*0.00000762939453125f;//=> * 1/0x20000
-		oscOut += frac*(sampleData[itg] - oscOut);
-	#else
-		oscOut = sampleData[itg];
-	#endif
-	//	oscOut = (oscOut - 127)*256;
-
-		//one shot
-		if(itg < info.size)
-		{
-			osc->phase = oscPhase + osc->phaseInc;
-		}
-		buf[i] = oscOut * gain;
-	}
-#endif
-}
 //---------------------------------------------------------------
 /*
 void calcSampleOscBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain)
@@ -857,7 +926,9 @@ void osc_calcSampleFreq(OscInfo* osc)
 void osc_calcUserSampleFreq(OscInfo* osc)
 {
 	const float currentFreq = osc->freq*osc->pitchMod*osc->modNodeValue;
-	osc->phaseInc = freq2PhaseIncr32767(currentFreq);
+	osc->phaseInc = freq2PhaseIncr1024(currentFreq);
+	osc->tableOffset = waveBank_level(currentFreq);
+	osc->levelMix = osc_levelMix(currentFreq,osc->tableOffset);
 }
 //-----------------------------------------------------------
  void osc_setFreq(OscInfo* osc)

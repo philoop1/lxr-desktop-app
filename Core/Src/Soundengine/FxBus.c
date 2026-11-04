@@ -16,6 +16,8 @@
 #include "Soundengine/FxBus.h"
 #include "Soundengine/DSPAudio/BufferTools.h"
 #include "Soundengine/DSPAudio/mixer.h"
+#include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Sequencer/clockSync.h"
 INDTCMZ FxBus fxBus;
 
 void FxBus_init()
@@ -30,6 +32,7 @@ void FxBus_init()
 	Ringmod_init(&fxBus.ringmod);
 	Compressor_init(&fxBus.compressor);
 	Delay_init(&fxBus.delay);
+	TapeDelay_init(&fxBus.tape);
 
 
 
@@ -124,6 +127,9 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 			Delay_processPingPong(&fxBus.delay, fxBuffer, out, out2, size, channels, fxBus.dryWet);
 		}
 		break;
+	case FX_TAPE:
+		TapeDelay_process(&fxBus.tape, fxBuffer, out, size, channels, fxBus.dryWet, sync_getBeatBpm());
+		break;
 #if USE_REVERB
 	case FX_REVERB:
 		Reverb_process(&fxBus.reverb, fxBuffer, out, out2, size, channels, fxBus.dryWet);
@@ -137,6 +143,8 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 void FxBus_prepareFxChange()
 {
 	//memset(FX_BUFFER, 0, FX_BUFFER_SIZE*sizeof(__fp16) );
+	// the tape delay mutes what other effects left in FX_BUFFER
+	TapeDelay_reset(&fxBus.tape);
 //	Ringmod_resetPhase(&fxBus.ringmod);
 }
 
@@ -174,6 +182,12 @@ void FxBus_updateParameter()
 		Delay_setFilter(&fxBus.delay, fxBus.parameter[2]);
 		Delay_setFeedback(&fxBus.delay, fxBus.parameter[3]);
 
+		break;
+	case FX_TAPE:
+		TapeDelay_setRate(&fxBus.tape, fxBus.parameter[0]);
+		TapeDelay_setFine(&fxBus.tape, fxBus.parameter[1]);
+		TapeDelay_setTone(&fxBus.tape, fxBus.parameter[2]);
+		TapeDelay_setFeedback(&fxBus.tape, fxBus.parameter[3]*TAPE_FEEDBACK_MAX);
 		break;
 #if USE_REVERB
 	case FX_REVERB:

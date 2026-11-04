@@ -93,7 +93,9 @@ Program Change still uses Global `ch` and selects desktop patterns 0..63.
 `Pch` means performance control, not Program Change. Pch defaults to channel
 2. CC2 controls Morph only when Pch differs from Global and all Voice channels;
 CC overlap retains the legacy mapping. That CC policy differs from Pch note
-priority above. RX `C` is required. Pch CC27 now controls global pitch with Mutador's mapping: CC values 61..66
+priority above. RX `C` is required. From 0.2.35 CC2 Morph glides to the sent value:
+every 26 ms it moves half the remaining distance, about 0.2 s from 0 to full.
+The Morph knob stays direct. Pch CC27 now controls global pitch with Mutador's mapping: CC values 61..66
 are neutral, 0 is -63 and 127 is +64 semitones. It has Pch precedence even
 on overlapping channels, unlike the legacy-preserving Morph CC2 rule.
 Pch CC1 srt is not imported. The common Voice CC map is implemented from 0.1.22; see below.

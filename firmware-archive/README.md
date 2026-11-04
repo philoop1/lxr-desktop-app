@@ -144,3 +144,37 @@ Copied to SD F: and hash verified.
 
 Mutador 0.2.30: `LXR_V2_V1.7_Mutador0.2.30.img`, 341164 bytes, SHA256 `736BABA5F0C40C8B48797581F71BAE4D73126BFAD6994DAD76CE27FE38086AB9`. Reverb removed; hardware test pending.
 Copied to SD F: and hash verified.
+
+Mutador 0.2.31: `LXR_V2_V1.7_Mutador0.2.31.img`, 343180 bytes, SHA256 `95B63E2F6C5CA54905A6514CE80349A0E573C7B7708050092BD70C43C93B1590`. Tape delay FX; hardware test pending.
+Copied to SD F: and hash verified.
+
+Mutador 0.2.32: `LXR_V2_V1.7_Mutador0.2.32.img`, 343204 bytes, SHA256 `808B3D297FB79B8CD3D264DB11C270B63D4744735E0D19C2571C8A682AD43630`. Knob 1 on Load/Save; hardware test pending.
+Copied to SD F: and hash verified.
+
+Mutador 0.2.33: `LXR_V2_V1.7_Mutador0.2.33.img`, 343580 bytes, SHA256 `5D9D977536A050D68DE11D7992463D77E9A6493E42998DF5193FF0D9FBB581E8`. Tape delay ignores MIDI clock jitter; hardware test pending.
+
+Mutador 0.2.34: `LXR_V2_V1.7_Mutador0.2.34.img`, 343772 bytes, SHA256 `F073FA445154A41C2B509F895D37E02B868F94ECD3E6F56A8F7B88137128DB3E`. Tape feedback over 100 %, fine +-20 %; hardware test pending.
+
+Mutador 0.2.35: `LXR_V2_V1.7_Mutador0.2.35.img`, 343988 bytes, SHA256 `A4E3508CC4FCD7D21323E0BA24A4E46868F9ABC24D183B641013E68A98509478`. CC morph glides; hardware test pending.
+
+Mutador 0.2.36: `LXR_V2_V1.7_Mutador0.2.36.img`, 346940 bytes, SHA256 `932F2540FCAB34876B41845177B9034857DCC200A9B572A79E4B062FD14C6068`. User wavetables for Drum 1-3; hardware test pending.
+
+Mutador 0.2.37: `LXR_V2_V1.7_Mutador0.2.37.img`, 348212 bytes, SHA256 `2C0ED1555EE785024EE9EB4BB43A2CF8FC30E7AE058EC13A18193645BF78238F`. Wavetable plain-mode fix, PWM scan; hardware test pending.
+
+Mutador 0.2.38: `LXR_V2_V1.7_Mutador0.2.38.img`, 348588 bytes, SHA256 `CF13C06AFEDA2BC986384C9D3915405775BB8D0E151CB0CC08C5FC7F5FE920D0`. Serum wavetables, PWM scans the frames; hardware test pending.
+
+Mutador 0.2.39: `LXR_V2_V1.7_Mutador0.2.39.img`, 348780 bytes, SHA256 `0B6EBD9247AF8CC9C05953FCDA5DC5D71A11ED81FDA7129086467347FA8A005A`. Flash size test display; hardware test pending.
+
+Mutador 0.2.40: `LXR_V2_V1.7_Mutador0.2.40.img`, 348884 bytes, SHA256 `5CE27F149D4DD0374BE52755C43D41738A4CEF0106CAFB1AB57B935356DB2CC5`. Wavetables in sectors 7 to 11, 284 frames; hardware test pending.
+
+Mutador 0.2.41: `LXR_V2_V1.7_Mutador0.2.41.img`, 348148 bytes, SHA256 `81E4D46B6B497551BB1C3377CDAE0546FFA5C3AB51D1B5E37286CADEE9F1361F`. 32 wavetable slots; hardware test pending.
+
+Mutador 0.2.42: `LXR_V2_V1.7_Mutador0.2.42.img`, 349748 bytes, SHA256 `5BB3EC4E43893DEB3D93CE20682FCC8A9B675B74868A93227225F549BF4C6F64`. Slot scan, level blend, gliding scan; hardware test pending.
+
+Mutador 0.2.43: `LXR_V2_V1.7_Mutador0.2.43.img`, 349748 bytes, SHA256 `5B891E0670D66A6ED606EAE4F7B38E52168F57893FB58B1938BE77EB389867CD`. Dither click fix; hardware test pending.
+
+Mutador 0.2.44: `LXR_V2_V1.7_Mutador0.2.44.img`, 349748 bytes, SHA256 `A449FC4EEBAC5DA9E3529E6D118DBBF54FF22BA8AE83D655B620F8E3CC1C0826`. Envelope end click fix; hardware test pending.
+
+Mutador 0.2.45: `LXR_V2_V1.7_Mutador0.2.45.img`, 349748 bytes, SHA256 `D39C5B0003F8A4467A55D8E0600A1F1C89EC435FBC3AD65F03D96D12BA2DE6F4`. Wavetables as drum modulator; hardware test pending.
+
+Mutador 0.2.46: `LXR_V2_V1.7_Mutador0.2.46.img`, 349868 bytes, SHA256 `7DBF15829541485DC1AAAE65A02808E46D8D04D9D8B581936A7455690746B023`. PD click fix, pitch slope 127 fix; hardware test pending.

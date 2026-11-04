@@ -71,6 +71,8 @@ IN_ITCM_RAM double slopeEg2_calc(SlopeEg2* eg)
 		if(val>0)
 		{
 			val -= eg->attack;
+			// a step below 0 gave a negative gain, up to (1+slope) steps deep, and clicked
+			if(val < 0) val = 0;
 		}
 		else
 		{
@@ -110,6 +112,8 @@ IN_ITCM_RAM double slopeEg2_calc(SlopeEg2* eg)
 		if(val>0)
 		{
 			val -= eg->decay;
+			// a step below 0 gave a negative gain, up to (1+slope) steps deep, and clicked
+			if(val < 0) val = 0;
 			eg->value = val;
 			return slopeEg2_calcSlopeValue(val,eg->slope);
 		}

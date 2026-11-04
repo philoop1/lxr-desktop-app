@@ -47,6 +47,7 @@ typedef struct ImageFileHeaderStruct
 #include "Soundengine/Soundengine.h"
 #include "Soundengine/AudioCodecManager.h"
 #include "Soundengine/DSPAudio/random.h"
+#include "Soundengine/DSPAudio/WaveBank.h"
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/MIDI/Uart.h"
 
@@ -106,6 +107,15 @@ static void MX_TIM2_Init(void);
 static void MX_SDMMC1_SD_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
+// second display line while WAVES.BIN is copied to flash
+static void main_showWaveProgress(uint8_t percent)
+{
+	char text[17];
+	sprintf(text, "%3u%%", percent);
+	lcd_setcursor(0,2);
+	lcd_string(text);
+}
+
 void sd_formatRoutine()
 {
 
@@ -467,6 +477,30 @@ if(sd_card_ok)
 		f_chdir(currentFolder);
 	}
 }
+
+	//user wavetables: copy WAVES/WAVES.BIN to flash sectors 7..11 when it changed
+	waveBank_init();
+	if(sd_card_ok)
+	{
+		lcd_clear();
+		lcd_home();
+		lcd_string("Loading waves");
+		const uint8_t waveResult = waveBank_installFromSd(main_showWaveProgress);
+		if(waveResult == WAVEBANK_WRITTEN || waveResult == WAVEBANK_UNCHANGED)
+		{
+			char text[17];
+			sprintf(text, "%u wavetables", waveBank_count());
+			lcd_setcursor(0,2);
+			lcd_string(text);
+			HAL_Delay(waveResult == WAVEBANK_WRITTEN ? 1000 : 300);
+		}
+		else if(waveResult != WAVEBANK_NO_FILE)
+		{
+			lcd_setcursor(0,2);
+			lcd_string(waveResult == WAVEBANK_BAD_FILE ? "WAVES.BIN error" : "Flash error");
+			HAL_Delay(1500);
+		}
+	}
 
 	audioCodec_initCpuMeter();
 	soundengine_init();

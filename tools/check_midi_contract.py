@@ -143,7 +143,8 @@ uint8_t menu_limitSoundParameter(uint16_t p,uint8_t v){
  if(p==PAR_SNARE_LAYER_MODE&&v>2)return 2;
  return v;
 }
-void preset_morph(uint8_t x) { morphed++; lastMorph=x; }
+void preset_morph(uint8_t x) { (void)x; }
+void preset_setMorphTarget(uint8_t x) { morphed++; lastMorph=x; }
 void midiParser_ccHandler(MidiMsg m,int a,int b,float c) {
     (void)b;(void)c;
     uint16_t index=(m.status&0xf0)==MIDI_CC?m.data1:(uint16_t)(128+m.data1);

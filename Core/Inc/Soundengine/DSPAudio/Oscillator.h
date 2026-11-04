@@ -40,6 +40,7 @@ enum OscWaveforms
 #define EXPO_FM_OCTAVES		4
 #define OSC_MAX_PHASE_INC	2147483648.f	// half the sample rate
 #define PD_MIN_KNEE			0.02f
+#define OSC_SCAN_GLIDE		0.1f	// share of the way to the PWM value per block
 
 //-----------------------------------------------------------
 
@@ -52,6 +53,9 @@ typedef struct OscStruct
 	uint8_t		waveform;	// the selected waveform of the osc
 
 	uint8_t		tableOffset;	//overtone table
+	uint16_t	levelMix;		// user wavetables: share of the next octave level, 0..32767
+	float		scanPos;		// user wavetables: PWM scan position, glides to the PWM value
+	float		pdKnee;			// phase distortion: knee of the last block, 0 after a trigger
 
 
 	float		pitchMod;	// modulation value for frequency
@@ -118,9 +122,11 @@ void calcPwmBlock(OscInfo* osc, int16_t* buf, uint8_t size ,const float gain, co
 //-----------------------------------------------------------
 //void calcSampleOscBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain);
 //-----------------------------------------------------------
-void calcUserSampleOscFmBlock(OscInfo* osc,int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain);
+// user wavetables (waveform > PWM); pwm scans the frames of the selected wavetable,
+// or from a single wave on through the single waves in the slots after it
+void calcWaveBankFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size, const float gain, const float pwm);
 //-----------------------------------------------------------
-void calcUserSampleOscBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain);
+void calcWaveBankBlock(OscInfo* osc, int16_t* buf, const uint8_t size, const float gain, const float pwm);
 //-----------------------------------------------------------
 //int16_t calcSampleOsc(OscInfo* osc);
 //-----------------------------------------------------------

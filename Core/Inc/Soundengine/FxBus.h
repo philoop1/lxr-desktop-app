@@ -22,6 +22,7 @@
 #include "Soundengine/DSPAudio/FX/Compressor.h"
 #include "Soundengine/DSPAudio/FX/Delay.h"
 #include "Soundengine/DSPAudio/FX/Reverb.h"
+#include "Soundengine/DSPAudio/FX/TapeDelay.h"
 
 #define USE_REVERB 0
 
@@ -32,6 +33,7 @@ enum FxTypeEnum
 	FX_RING,
 	FX_COMPRESSOR,
 	FX_DELAY,
+	FX_TAPE,
 #if USE_REVERB
 	FX_REVERB
 #endif
@@ -51,6 +53,7 @@ typedef struct FxStruct
 	Ringmod ringmod;
 	Compressor compressor;
 	Delay delay;
+	TapeDelay tape;
 
 
 

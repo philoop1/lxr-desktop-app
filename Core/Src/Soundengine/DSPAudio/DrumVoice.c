@@ -150,6 +150,7 @@ void Drum_trigger(const uint8_t voiceNr, const uint8_t vol, const uint8_t note)
 			voiceArray[voiceNr].osc.phase = (0xff<<22)*offset;
 		else
 			voiceArray[voiceNr].osc.phase = 0;
+		voiceArray[voiceNr].osc.pdKnee = 0.f; // a new note starts at its own PD shape
 
 		//reset mod osc phase
 		if(voiceArray[voiceNr].modOsc.waveform == SINE)
@@ -255,7 +256,11 @@ IN_ITCM_RAM void calcDrumVoiceSyncBlock(const uint8_t voiceNr, int16_t* buf, con
 
 	if(voiceArray[voiceNr].mixOscs == 4)
 	{
-		calcPhaseDistBlock(&voiceArray[voiceNr].osc,buf,size);
+		// a user wavetable has no sine to warp: it plays plain and keeps its PWM scan
+		if(voiceArray[voiceNr].osc.waveform > PWM)
+			calcWaveBankBlock(&voiceArray[voiceNr].osc,buf,size,1.f,voiceArray[voiceNr].pwm);
+		else
+			calcPhaseDistBlock(&voiceArray[voiceNr].osc,buf,size);
 	}
 	else if(voiceArray[voiceNr].mixOscs == 3)
 	{

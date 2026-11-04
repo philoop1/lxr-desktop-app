@@ -12,7 +12,7 @@ work; its checkboxes do not claim that a feature has already been ported.
 
 ## Experimental Mutador changes
 
-Current preview: **Mutador 0.2.30**, experimental and awaiting broader physical-device
+Current preview: **Mutador 0.2.46**, experimental and awaiting broader physical-device
 checks of its new controls. The startup display identifies this version.
 
 - **SHIFT+Step 1 from every mode:** opens pattern selection with the first PERF view.
@@ -153,13 +153,13 @@ When the build has finished it shows where the update file is and how to install
 ```
 ======================================================================
   Firmware update file:
-    .../lxr2-Mutador/build/release/LXR_V2_V1.7_Mutador0.2.30.img
+    .../lxr2-Mutador/build/release/LXR_V2_V1.7_Mutador0.2.46.img
   ...
 ```
 
 The base version `1.7` comes from `project(VERSION ...)` in
 [CMakeLists.txt](CMakeLists.txt). `LXR_MUTADOR_VERSION` in the same file sets the
-`Mutador0.2.30` suffix of this experimental fork image and the `Mutador 0.2.30`
+`Mutador0.2.46` suffix of this experimental fork image and the `Mutador 0.2.46`
 line on the startup screen.
 Verified build artifacts and their hashes are in the
 [firmware image archive](firmware-archive/README.md).

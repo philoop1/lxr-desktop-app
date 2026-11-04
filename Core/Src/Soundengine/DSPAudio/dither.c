@@ -15,7 +15,7 @@
  This is a simple implementation of highpass triangular-PDF dither (a good general-purpose
 dither) with optional 2nd-order noise shaping (which lowers the noise floor by 11dB below
 0.1 Fs).
-The code assumes input data is in the range +1 to -1 and doesn't check for overloads!
+The code assumes input data is in the range +1 to -1; the output is limited to 16 bit.
 
 To save time when generating dither for multiple channels you can re-use lower bits of a
 previous random number instead of calling rand() again. e.g. r3=(r1 & 0x7F)<<8;
@@ -32,11 +32,16 @@ int16_t dither_process(Dither* dither, float in)
 	in += DITHER_S * (dither->s1 + dither->s1 - dither->s2);            		//error feedback
 	dither->tmp = in + DITHER_O + DITHER_D * (float)(dither->r1 - dither->r2); 	//dc offset and dither
 
-	dither->out = (int)(DITHER_W * dither->tmp);                				//truncate downwards
-	if(dither->tmp<0.0f) dither->out--;                  						//this is faster than floor()
+	int32_t out = (int32_t)(DITHER_W * dither->tmp);                			//truncate downwards
+	if(dither->tmp<0.0f) out--;                  								//this is faster than floor()
+	// near full scale the dither and the error feedback reach 32768, which
+	// wrapped to -32768 in the int16 and clicked
+	if(out > 32767) out = 32767;
+	else if(out < -32768) out = -32768;
+	dither->out = (int16_t)out;
 
 	dither->s2 = dither->s1;
-	dither->s1 = in - DITHER_WI * (float)dither->out;           				//error
+	dither->s1 = in - DITHER_WI * (float)out;           						//error
 
 	return dither->out;
 }

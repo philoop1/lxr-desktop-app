@@ -6,6 +6,85 @@ are recorded here. The upstream project keeps its own Git history.
 
 ## Unreleased
 
+### Mutador 0.2.46 (hardware test pending)
+
+- Fixes clicks in the `pd` Drum mode: the warp amount follows the pitch EG once a block, and the shape stepped every block. The knee now glides within the block and starts fresh on every trigger.
+- Pitch EG Slope 127 no longer divides by zero (from the original LXR firmware); it is as steep as the amp EG at 127.
+
+### Mutador 0.2.45 (hardware test pending)
+
+- The modulator of Drum Voices 1-3 (FM, Mix, ring and expo FM source) can play the user wavetables too: its Waveform list continues after `PWM` with the wavetable names. It follows the voice PWM scan like the main oscillator.
+
+### Mutador 0.2.44 (hardware test pending)
+
+- Fixes the click at the end of drum notes with Slope above about 11 (from the original LXR firmware): the last decay step of the amp EG went below 0, and the slope curve made that a negative gain up to (1+slope) steps deep. The amp EG (also in repeat mode) and the pitch EG now stop at 0.
+
+### Mutador 0.2.43 (hardware test pending)
+
+- Fixes clicks on loud drum voices (from the original LXR firmware): the dither after the amp EG could reach 32768 near full scale, which wrapped to -32768. The output is now limited to the 16-bit range.
+
+### Mutador 0.2.42 (hardware test pending)
+
+- PWM on a single wave scans on through the single waves in the slots after it, up to the last one or the next multi-frame wavetable, as in 0.2.37. A multi-frame wavetable still scans only its own frames.
+- Against clicks: the octave levels of a wavetable fade into each other with the pitch instead of switching, and the scan position glides to the PWM value (about 15 ms).
+- `WAVES.BIN` from 0.2.41 stays valid.
+
+### Mutador 0.2.41 (hardware test pending)
+
+- Up to 32 wavetables instead of 12, so a folder of single cycles built with `--each` gives every wave its own named Waveform slot.
+- New file format `LXRWT003` (256-byte header): rebuild `WAVES/WAVES.BIN` with `tools/make_wavetables.py`; a 0.2.40 file shows "WAVES.BIN error".
+
+### Mutador 0.2.40 (hardware test pending)
+
+- Wavetables use flash sectors 7 to 11 (1280 KB): 284 frames in all, up to 255 per wavetable. A file that needs only sector 7 erases only sector 7.
+- The display counts the copy from SD to flash in percent; the first boot with a new `WAVES.BIN` takes longer.
+- `tools/make_wavetables.py` takes several sources: a WAV or `.wt` file is one wavetable (Serum `clm `, Surge `srge` frame size, Surge `.wt`), a folder of single cycles is one wavetable with one frame per file. `--each <folder>` makes every file its own wavetable.
+- The flash size display from 0.2.39 is gone. The firmware refuses a bank past sector 7 on a chip with less than 2 MB.
+
+### Mutador 0.2.39 (hardware test pending)
+
+- Test build: at boot the display shows the flash size of the chip and its bank mode (for example "Flash 2048K" / "single bank") for 2.5 s. It only reads; Helicase reports 2 MB on the LXR-02, which would leave sectors 8 to 11 (1 MB) free for wavetables.
+
+### Mutador 0.2.38 (hardware test pending)
+
+- Serum wavetables: a WAV file with several 2048-sample frames is one wavetable. Waveform picks the wavetable (up to 12), PWM scans its frames from the first to the last. A single-cycle file is a wavetable with one frame.
+- The octave levels above the first four are shorter (1024, 512, 256, 128, then 64 samples), so a frame needs 4.6 KB instead of 20 KB: 56 frames fit in flash. Where the files hold more, the generator keeps evenly spaced frames of the largest wavetables.
+- New file format `LXRWT002`: rebuild `WAVES/WAVES.BIN` with `tools/make_wavetables.py`; a 0.2.36/0.2.37 file shows "WAVES.BIN error".
+
+### Mutador 0.2.37 (hardware test pending)
+
+- Fix: a user wavetable was silent in the plain oscillator mode (no FM); 0.2.36 had connected only FM, ring, expo FM and PD.
+- PWM scans the user wavetables: 0 plays the selected table, full PWM the last one, and in between it blends smoothly through the tables in order. PWM is already stored in kits, morphs, and is a target for LFO, velocity and automation, so a LFO on PWM sweeps through the tables. It works in every mode, PD included.
+
+### Mutador 0.2.36 (hardware test pending)
+
+- User wavetables for Drum 1-3: up to 12 single-cycle WAV files become extra waveforms after `PWM`, shown with three letters of their file name. `tools/make_wavetables.py` builds `WAVES/WAVES.BIN` on the card; at boot the display shows "Loading waves" and the firmware copies a new or changed file to flash sector 7. Each table has 10 band-limited octave levels and works with plain, FM, ring, expo FM and PD (plays plain) modes.
+- The firmware image may now use 736 KB of flash instead of 992 KB; sector 7 holds the wavetables.
+
+### Mutador 0.2.35 (hardware test pending)
+
+- Morph from MIDI CC 2 glides to its target like on the LXR1 Mutador: every 26 ms it moves half of the remaining distance, so a jump from 0 to full takes about 0.2 s. The Morph knob stays direct.
+- A morph change no longer restarts the parameter update from the first parameter. During a dense CC stream every parameter now follows instead of only the first few.
+
+### Mutador 0.2.34 (hardware test pending)
+
+- Tape delay `fbk` reaches 125 %. Above 100 the repeats grow into a soft tape saturation and keep ringing instead of clipping hard. The page shows `fbk` in percent.
+- Tape delay `fin` moves the time by up to +-20 % (was +-10 %).
+
+### Mutador 0.2.33 (hardware test pending)
+
+- Tape delay on MIDI clock: the time follows whole beats of 24 clocks, smoothed, so clock jitter no longer bends the echo pitch. A tempo change of more than 4 % is taken after two beats; after 500 ms without clock the delay follows the sequencer tempo.
+- The BPM taken from MIDI clock is rounded instead of cut, so 120 no longer flickers to 119.
+
+### Mutador 0.2.32 (hardware test pending)
+
+- Load and Save: knob 1 picks the slot like the encoder. While a name is edited it still moves the cursor.
+
+### Mutador 0.2.31 (hardware test pending)
+
+- New FX type `tpe`: a tempo-synced tape delay in the Delay buffer. Slots: `typ` (`nrm` mono or `pp` ping pong), `rte` (note division), `fin` (+-10 %), `ton`, `fbk`. Time changes glide like tape and bend the pitch. Mono reaches 0.74 s, ping pong 0.37 s per side; a division that does not fit at the current tempo falls to the next shorter one, and the display shows the division that plays.
+- A kit saved with the old `rev` type now loads as `tpe`.
+
 ### Mutador 0.2.30 (hardware test pending)
 
 - Reverb removed again: FX type `rev` is gone and the reverb sources are back to their upstream state. A kit saved with `rev` plays with FX off.

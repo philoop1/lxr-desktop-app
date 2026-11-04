@@ -1516,8 +1516,8 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 
 			case CC2_FX_TYPE:
 #if 1
-				// Kits saved while reverb existed can hold its type
-				if(value.itg > FX_DELAY) value.itg = FX_OFF;
+				// Clamp types this firmware does not have
+				if(value.itg > FX_TAPE) value.itg = FX_OFF;
 #if USE_REVERB
 				if((value.itg == FX_REVERB) && (fxBus.fxType != value.itg)) FxBus_prepareFxChange();
 #else
@@ -1572,7 +1572,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				break;
 
 			case CC2_FX_REVERB_TYPE:
-
+				TapeDelay_setPingPong(&fxBus.tape, value.itg);
 				break;
 
 			case CC2_FX_DELAY_TYPE:
@@ -2586,9 +2586,7 @@ void midiParser_parseMidiMessage(MidiMsg msg)
 		if(msgonly == MIDI_CC && chanonly == midi_ControlChannel &&
 		   !midiParser_isValidChannel(chanonly) && msg.data1 == 2 &&
 		   (midiParser_txRxFilter & MIDI_FILTER_CC)) {
-			uint8_t morph = msg.data2 == 127 ? 255 : (uint8_t)(msg.data2 * 2u);
-			activeParameters[PAR_MORPH] = morph;
-			preset_morph(morph);
+			preset_setMorphTarget(msg.data2 == 127 ? 255 : (uint8_t)(msg.data2 * 2u));
 			return;
 		}
 

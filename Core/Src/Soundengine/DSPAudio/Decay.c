@@ -56,6 +56,8 @@ IN_ITCM_RAM float DecayEg_calc(DecayEg* eg)
 	if(val>0)
 	{
 		val -= eg->decay;
+		// a step below 0 bent the pitch below its base for one step
+		if(val < 0) val = 0;
 
 	} else
 	{
@@ -73,7 +75,9 @@ void DecayEg_setDecay(DecayEg* eg, uint8_t data2)
 //--------------------------------------------------
 IN_ITCM_RAM void DecayEg_setSlope(DecayEg* eg, uint8_t data2)
 {
-	const float amount 	= ((data2/127.f)-0.5f)*2;
+	float amount 	= ((data2/127.f)-0.5f)*2;
+	// 127 gave amount 1 and a division by zero; this is the steepest the amp EG gets too
+	if(amount > 0.9995f) amount = 0.9995f;
 	eg->slope 			= 2*amount/(1-amount);
 }
 //--------------------------------------------------

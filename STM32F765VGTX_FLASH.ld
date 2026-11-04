@@ -38,8 +38,8 @@ MEMORY
   ITCM_RAM (xr)    : ORIGIN = 0x00000000, LENGTH = 16K
   DTCM   (xrw)     : ORIGIN = 0x20000000, LENGTH = 128K	
   RAM    (xrw)     : ORIGIN = 0x20020000,   LENGTH = 384K
-  /* sector 1 to end*/
-  FLASH    (rx)    : ORIGIN = 0x08008000,   LENGTH = 992K 
+  /* sectors 1 to 6; sectors 7 to 11 (0x080C0000..0x081FFFFF) hold the wavetables */
+  FLASH    (rx)    : ORIGIN = 0x08008000,   LENGTH = 736K 
 }
 
 /* Highest address of the user mode stack */

@@ -132,6 +132,8 @@ FRESULT preset_loadPatternRAM(uint8_t presetNr);
 //void preset_savePatternTemp(uint8_t presetNr);
 /** morph pattern linear to �pattern buffer 2*/
 void preset_morph(uint8_t morph);
+// MIDI CC morph: glides to the target in 26 ms half steps
+void preset_setMorphTarget(uint8_t target);
 void preset_morph_tick(); //handler for non blocking morph
 uint8_t preset_getMorphValue(uint16_t index, uint8_t morph);
 void preset_sendDrumsetParameters();

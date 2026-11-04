@@ -46,6 +46,8 @@ uint8_t sync_shouldLeadStep(void);
 void sync_markLeadStep(void);
 void sync_requestStartOnNextBar(void);
 uint8_t sync_processStartLead(void);
+// smoothed MIDI clock tempo, the sequencer tempo without a clock
+float sync_getBeatBpm(void);
 extern uint32_t sync_delayedStepTimer;
 
 #endif /* CLOCKSYNC_H_ */

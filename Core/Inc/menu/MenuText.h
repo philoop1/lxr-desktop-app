@@ -52,6 +52,7 @@
 #define MENU_LFO_POL 34
 #define MENU_TRIG_CONDITION 35
 #define MENU_SCALE_TRANSFORM 36
+#define MENU_WAVEFORM_WT 37 // Drum 1-3 osc and modulator: MENU_WAVEFORM plus the user wavetables
 #define MENU_AUDIO_OUT_FX	26
 
 //-----------------------------------------------------------------
@@ -119,8 +120,9 @@ const char patModeNames[][4] =
 //-----------------------------------------------------------------
 const char reverbNames[][4] =
 {
-	{1},		//number of entries
-	{"Plt"},
+	{2},		//number of entries
+	{"nrm"},
+	{"pp"},
 
 };
 //-----------------------------------------------------------------
@@ -145,13 +147,13 @@ const char ratioNames[][4] =
 //-----------------------------------------------------------------
 const char fxNames[][4] =
 {
-	{5},		//number of entries
+	{6},		//number of entries
 	{"off"},
 	{"drv"},
 	{"rng"},
 	{"cmp"},
 	{"del"},
-	//{"rev"}
+	{"tpe"}
 };
 //-----------------------------------------------------------------
 const char distNames[][4] =
@@ -500,8 +502,8 @@ const char shortNames[][4]  =
 	{"fbk"},
 	{"rng"},
 	{"tim"},
-	{"pre"},
-	{"ref"},
+	{"rte"},
+	{"fin"},
 	{"p1"},
 	{"p2"},
 	{"p3"},
@@ -705,8 +707,8 @@ const char longNames[][16] =
 	{"Feedback"},
 	{"Range"},
 	{"Time"},
-	{"PreDelay"},
-	{"Reflxion"},
+	{"Rate"},
+	{"Fine"},
 	{"Param 1"},
 	{"Param 2"},
 	{"Param 3"},
