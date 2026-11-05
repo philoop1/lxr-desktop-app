@@ -219,6 +219,130 @@ static void preset_readTrigConditions(uint8_t pattern)
             if(seq_patternSet.trigCondition[pattern][track][step]>=TRIG_COND_COUNT)
                 seq_patternSet.trigCondition[pattern][track][step]=TRIG_COND_ALWAYS;
 }
+/* 0.2.61: the flam velocity belongs to the flam preset. A 0.2.56..0.2.60 pattern
+ * still has the per-step FLV1 block after CND2: a step with its own velocity
+ * then points at a preset with the same flam and that velocity. New presets
+ * take F15..F11 while they are unchanged and no step uses them. */
+static uint8_t preset_flamSlotUsed(uint8_t slot)
+{
+    const StepTiming *timing=&seq_patternSet.seq_stepTiming[0][0][0];
+    for(uint32_t i=0;i<(uint32_t)NUM_PATTERN*NUM_TRACKS*NUM_STEPS;i++)
+        if(timing[i].flam==slot)return 1;
+    return 0;
+}
+static uint8_t preset_flamSameShape(const FlamPreset *a,const FlamPreset *b)
+{
+    return (uint8_t)(a->repeats==b->repeats && a->grid==b->grid && a->pitch==b->pitch &&
+                     a->plusOne==b->plusOne && a->accel==b->accel);
+}
+static uint8_t preset_flamForVelocity(uint8_t flam,uint8_t velo)
+{
+    const FlamPreset *want=&seq_flamPresets[flam];
+    uint8_t best=flam;
+    uint8_t bestDiff=(uint8_t)(want->velo>velo ? want->velo-velo : velo-want->velo);
+    for(uint8_t i=1;i<NUM_FLAM_PRESETS;i++)
+        if(preset_flamSameShape(&seq_flamPresets[i],want) && seq_flamPresets[i].velo==velo)return i;
+    for(uint8_t i=NUM_FLAM_PRESETS-1;i>10;i--) {
+        FlamPreset factory;
+        seq_flamDefaultPreset(i,&factory);
+        if(memcmp(&seq_flamPresets[i],&factory,FLAM_PRESET_BYTES) || preset_flamSlotUsed(i))continue;
+        seq_flamPresets[i]=*want;
+        seq_flamPresets[i].velo=velo;
+        seq_flamPresetsChanged();
+        preset_touchFlamTimer();
+        return i;
+    }
+    for(uint8_t i=1;i<NUM_FLAM_PRESETS;i++) {
+        if(!preset_flamSameShape(&seq_flamPresets[i],want))continue;
+        const uint8_t v=seq_flamPresets[i].velo;
+        const uint8_t diff=(uint8_t)(v>velo ? v-velo : velo-v);
+        if(diff<bestDiff){bestDiff=diff;best=i;}
+    }
+    return best;
+}
+static void preset_readFlamVelocity(uint8_t pattern)
+{
+    UINT read=0;
+    uint8_t magic[4]={0};
+    if(f_read((FIL*)&SDFile,magic,4,&read)!=FR_OK || read!=4 || memcmp(magic,"FLV1",4))return;
+    for(uint8_t track=0;track<NUM_TRACKS;track++) {
+        uint8_t velo[NUM_STEPS];
+        if(f_read((FIL*)&SDFile,velo,NUM_STEPS,&read)!=FR_OK || read!=NUM_STEPS)return;
+        for(uint8_t step=0;step<NUM_STEPS;step++) {
+            StepTiming *timing=&seq_patternSet.seq_stepTiming[pattern][track][step];
+            if(timing->flam && timing->flam<NUM_FLAM_PRESETS && velo[step]<=100 &&
+               velo[step]!=seq_flamPresets[timing->flam].velo)
+                timing->flam=preset_flamForVelocity(timing->flam,velo[step]);
+        }
+    }
+}
+/* 0.2.61 flam presets of the project: in prj.nfo after the name, and as
+ * /tmp/flam.cfg after an edit until the project is saved. */
+static uint8_t preset_flamDirty=0;
+static uint32_t preset_flamTimer=0;
+#define FLAM_FILE_BYTES (4+(NUM_FLAM_PRESETS-1)*FLAM_PRESET_BYTES+1)
+void preset_touchFlamTimer(void)
+{
+    preset_flamTimer=HAL_GetTick();
+    preset_flamDirty=1;
+}
+static void preset_writeFlamPresets(void)
+{
+    uint8_t data[FLAM_FILE_BYTES]={'F','L','M','1'};
+    UINT written;
+    uint8_t checksum=0;
+    for(uint8_t i=1;i<NUM_FLAM_PRESETS;i++) {
+        const FlamPreset *p=&seq_flamPresets[i];
+        uint8_t *d=&data[4+(i-1)*FLAM_PRESET_BYTES];
+        d[0]=p->repeats;d[1]=p->grid;d[2]=p->velo;d[3]=p->pitch;d[4]=p->plusOne;d[5]=p->accel;
+    }
+    for(uint8_t i=4;i<FLAM_FILE_BYTES-1;i++)checksum=(uint8_t)(checksum+data[i]);
+    data[FLAM_FILE_BYTES-1]=checksum;
+    f_write((FIL*)&SDFile,data,FLAM_FILE_BYTES,&written);
+}
+static uint8_t preset_readFlamPresets(void)
+{
+    uint8_t data[FLAM_FILE_BYTES];
+    UINT read=0;
+    uint8_t checksum=0;
+    if(f_read((FIL*)&SDFile,data,FLAM_FILE_BYTES,&read)!=FR_OK || read!=FLAM_FILE_BYTES ||
+       memcmp(data,"FLM1",4))return 0;
+    for(uint8_t i=4;i<FLAM_FILE_BYTES-1;i++)checksum=(uint8_t)(checksum+data[i]);
+    if(checksum!=data[FLAM_FILE_BYTES-1])return 0;
+    for(uint8_t i=1;i<NUM_FLAM_PRESETS;i++) {
+        FlamPreset *p=&seq_flamPresets[i];
+        const uint8_t *d=&data[4+(i-1)*FLAM_PRESET_BYTES];
+        p->repeats=d[0];p->grid=d[1];p->velo=d[2];p->pitch=d[3];p->plusOne=d[4];p->accel=d[5];
+    }
+    seq_flamPresetsChanged();
+    return 1;
+}
+static void preset_flamShowEdited(void)
+{
+    menu_flamEditSelect((uint8_t)(activeParameters[PAR_FLAM_SLOT]+1u));
+}
+static FRESULT preset_saveTmpFlam(void)
+{
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+    HAL_TIM_Base_Start_IT(&htim2);	//calc sample interrupt - prio 1
+#endif
+    FRESULT res=f_open((FIL*)&SDFile,"flam.cfg",FA_CREATE_ALWAYS | FA_WRITE);
+    if(res==FR_OK) {
+        preset_writeFlamPresets();
+        res=f_close((FIL*)&SDFile);
+    }
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+    HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
+#endif
+    return res;
+}
+static void preset_loadTmpFlam(void)
+{
+    if(f_open((FIL*)&SDFile,"flam.cfg",FA_OPEN_EXISTING | FA_READ)!=FR_OK)return;
+    preset_readFlamPresets();
+    f_close((FIL*)&SDFile);
+    preset_flamShowEdited();
+}
 static void preset_defaultSnareLayer(uint8_t *parameters)
 {
 	parameters[PAR_SNARE_LAYER_WAVE]=0;
@@ -318,6 +442,8 @@ FRESULT loadTmpFolderFiles()
 #endif
 
 	FRESULT res;
+	// 0.2.61: edited flam presets first, so old patterns convert against them
+	preset_loadTmpFlam();
 	//check tmp folder for *.snd and *.pat files and load them to RAM
 	for(uint8_t i=0;i<NUM_KIT_SLOTS;i++)
 	{
@@ -661,6 +787,7 @@ FRESULT preset_LoadTmpPat()
 		preset_readPatternScale(patternNr);
 		preset_readFlamProbability(patternNr);
 		preset_readTrigConditions(patternNr);
+		preset_readFlamVelocity(patternNr);
 			if(bytesRead == 0) success = 0;
 
 		}
@@ -700,11 +827,16 @@ FRESULT preset_LoadTmpPat()
 
 }
 
+static FRESULT preset_saveTmpPatNr(uint8_t presetNr);
 FRESULT preset_saveTmpPat()
+{
+	return preset_saveTmpPatNr(menu_playedPattern);
+}
+static FRESULT preset_saveTmpPatNr(uint8_t presetNr)
 {
 
 	//don't save invalid pattern
-	if(menu_playedPattern >= NUM_PATTERN) return FR_INVALID_PARAMETER;
+	if(presetNr >= NUM_PATTERN) return FR_INVALID_PARAMETER;
 #if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
 	HAL_TIM_Base_Start_IT(&htim2);	//calc sample interrupt - prio 1
 #else
@@ -713,7 +845,6 @@ FRESULT preset_saveTmpPat()
 
 	FRESULT res;
 	UINT bytesWritten;
-	uint8_t presetNr = menu_playedPattern;
 	//lcd_clear();
 	//lcd_home();
 	//lcd_string(PSTR("Saving pattern"));
@@ -731,7 +862,7 @@ FRESULT preset_saveTmpPat()
 	}
 
 	//write current preset nr to file
-	res = f_write((FIL*)&SDFile,(void*)&menu_playedPattern,1,&bytesWritten);
+	res = f_write((FIL*)&SDFile,(void*)&presetNr,1,&bytesWritten);
 	if(res != FR_OK)
 	{
 		f_close((FIL*)&SDFile);
@@ -897,8 +1028,27 @@ void preset_processTimer()
 			preset_saveTmpKit();
 		}
 	}
+
+	if(preset_flamDirty && HAL_GetTick()-preset_flamTimer >= PRESET_SAVE_TIME)
+	{
+		preset_flamDirty = 0;
+		preset_saveTmpFlam();
+	}
 }
 
+
+/* 0.2.59: a real save also rewrites the autosave copy, so an older tmp.pat or
+ * tmp.snd cannot overwrite the saved pattern or kit when the device starts. */
+void preset_refreshTmpPat(uint8_t presetNr)
+{
+	preset_patDirty = 0;
+	preset_saveTmpPatNr(presetNr);
+}
+void preset_refreshTmpKit(void)
+{
+	preset_kitDirty = 0;
+	preset_saveTmpKit();
+}
 
 /*------------------------------------------------------------/
 / Remove all contents of a directory
@@ -1015,6 +1165,20 @@ void preset_init(uint8_t presetNr)
 }
 
 //----------------------------------------------------
+/* The kit you hear at the current Morph position. Same rule as the live Morph
+ * (preset_morph_tick): selectors, audio routing, the bank change and the Morph
+ * target slot are not morphed and come from the playing kit. */
+static uint8_t preset_morphedKitValue(uint16_t i)
+{
+	if((i >= PAR_VEL_DEST_1 && i <= PAR_VEL_DEST_6) ||
+	   (i >= PAR_TARGET_LFO1 && i <= PAR_TARGET_LFO6) ||
+	   (i >= PAR_VOICE_LFO1 && i <= PAR_VOICE_LFO6) ||
+	   (i >= PAR_AUDIO_OUT1 && i <= PAR_AUDIO_OUT6) ||
+	   i == PAR_MORPH_KIT_DEST || i == PAR_BANK_CHANGE)
+		return activeParameters[i];
+	return preset_getMorphValue(i, activeParameters[PAR_MORPH]);
+}
+//----------------------------------------------------
 static void preset_writeDrumsetData(uint8_t presetNr, uint8_t isMorph)
 {
 	uint16_t i;
@@ -1024,22 +1188,7 @@ static void preset_writeDrumsetData(uint8_t presetNr, uint8_t isMorph)
 	{
 		for(i=0;i<END_OF_SOUND_PARAMETERS;i++)
 		{
-			uint8_t value;
-			//Mod targets are not morphed!!!
-			if( (i >= PAR_VEL_DEST_1) && (i <= PAR_VEL_DEST_6) )
-			{
-				value = activeParameters[i];
-			} else if( (i >= PAR_TARGET_LFO1) && (i <= PAR_TARGET_LFO6) )
-			{
-				value = activeParameters[i];
-			} else if( (i >= PAR_VOICE_LFO1) && (i <= PAR_VOICE_LFO6) )
-			{
-				value = activeParameters[i];
-			} 
-			else 
-			{
-				value = preset_getMorphValue(i,activeParameters[PAR_MORPH]);
-			}					
+			const uint8_t value = preset_morphedKitValue(i);					
 			f_write((FIL*)&SDFile,&value,1,&bytesWritten);
 		}
 	} else {
@@ -1103,25 +1252,13 @@ void preset_saveDrumsetRam(uint8_t presetNr, uint8_t isMorph)
 	{
 		for(uint16_t i=0;i<END_OF_SOUND_PARAMETERS;i++)
 		{
-			uint8_t value;
-			//Mod targets are not morphed!!!
-			if( (i >= PAR_VEL_DEST_1) && (i <= PAR_VEL_DEST_6) )
-			{
-				value = activeParameters[i];
-			} else if( (i >= PAR_TARGET_LFO1) && (i <= PAR_TARGET_LFO6) )
-			{
-				value = activeParameters[i];
-			} else if( (i >= PAR_VOICE_LFO1) && (i <= PAR_VOICE_LFO6) )
-			{
-				value = activeParameters[i];
-			}
-			else
-			{
-				value = preset_getMorphValue(i,activeParameters[PAR_MORPH]);
-			}
+			const uint8_t value = preset_morphedKitValue(i);
 			//f_write((FIL*)&SDFile,&value,1,&bytesWritten);
 			mainParameters[presetNr][i] = value;
 		}
+		// LFO and rps extras are not morphed: take the playing kit's, like the mod targets
+		preset_captureLfoExtras(mainLfoExtras[presetNr]);
+		preset_captureRpsExtras(mainRpsExtras[presetNr]);
 	}
 	else
 	{
@@ -1172,8 +1309,9 @@ static void preset_loadPerformanceExtension(void)
     static const uint8_t magicV2[8]={'M','U','T','A','0','0','0','2'};
     static const uint8_t magicV3[8]={'M','U','T','A','0','0','0','3'};
     static const uint8_t magicV4[8]={'M','U','T','A','0','0','0','4'};
+    static const uint8_t magicV5[8]={'M','U','T','A','0','0','0','5'};
     uint8_t modernScale=0;
-    uint8_t data[8+PERFORMANCE_EXTRA_BYTES+2+1]={0};
+    uint8_t data[8+PERFORMANCE_EXTRA_BYTES+2+4+1]={0};
     UINT bytes=0;
     performance_resetExtended();
     if(f_open((FIL*)&SDFile,"MUTA.CFG",FA_OPEN_EXISTING|FA_READ)==FR_OK) {
@@ -1181,19 +1319,22 @@ static void preset_loadPerformanceExtension(void)
         f_close((FIL*)&SDFile);
         if(result==FR_OK) {
             uint8_t count=0;
-            if(bytes==sizeof(data)&&!memcmp(data,magicV4,8))count=PERFORMANCE_EXTRA_BYTES+2;
+            if(bytes==sizeof(data)&&!memcmp(data,magicV5,8))count=PERFORMANCE_EXTRA_BYTES+2+4;
+            else if(bytes==sizeof(data)-4&&!memcmp(data,magicV4,8))count=PERFORMANCE_EXTRA_BYTES+2;
             else if(bytes==8+PERFORMANCE_EXTRA_BYTES+1&&(!memcmp(data,magicV2,8)||!memcmp(data,magicV3,8)))count=PERFORMANCE_EXTRA_BYTES;
             else if(bytes==8+18+1&&!memcmp(data,magicV1,8))count=18;
             if(count) {
                 uint8_t checksum=0;
                 for(uint8_t i=8;i<8+count;i++)checksum=(uint8_t)(checksum+data[i]);
                 if(checksum==data[8+count]) {
-                    modernScale=(uint8_t)(!memcmp(data,magicV3,8)||!memcmp(data,magicV4,8));
+                    modernScale=(uint8_t)(!memcmp(data,magicV3,8)||!memcmp(data,magicV4,8)||!memcmp(data,magicV5,8));
                     memcpy(&activeParameters[PAR_FX_OUTPUT_MODE],&data[8],count>PERFORMANCE_EXTRA_BYTES ? PERFORMANCE_EXTRA_BYTES : count);
-                    if(count==PERFORMANCE_EXTRA_BYTES+2) {
+                    if(count>=PERFORMANCE_EXTRA_BYTES+2) {
                         activeParameters[PAR_PERF_RANDOM_VELO]=data[8+PERFORMANCE_EXTRA_BYTES];
                         activeParameters[PAR_PERF_AVL]=data[9+PERFORMANCE_EXTRA_BYTES];
                     }
+                    if(count==PERFORMANCE_EXTRA_BYTES+2+4)
+                        for(uint8_t i=0;i<4;i++)activeParameters[PAR_HUMANIZE1+i]=data[10+PERFORMANCE_EXTRA_BYTES+i];
                     performance_validateExtended();
                 }
             }
@@ -1205,11 +1346,12 @@ static void preset_loadPerformanceExtension(void)
 }
 static FRESULT preset_savePerformanceExtension(void)
 {
-    uint8_t data[8+PERFORMANCE_EXTRA_BYTES+2+1]={'M','U','T','A','0','0','0','4'};
+    uint8_t data[8+PERFORMANCE_EXTRA_BYTES+2+4+1]={'M','U','T','A','0','0','0','5'};
     UINT bytes=0;
     memcpy(&data[8],&activeParameters[PAR_FX_OUTPUT_MODE],PERFORMANCE_EXTRA_BYTES);
     data[8+PERFORMANCE_EXTRA_BYTES]=activeParameters[PAR_PERF_RANDOM_VELO];
     data[9+PERFORMANCE_EXTRA_BYTES]=activeParameters[PAR_PERF_AVL];
+    for(uint8_t i=0;i<4;i++)data[10+PERFORMANCE_EXTRA_BYTES+i]=activeParameters[PAR_HUMANIZE1+i];
     uint8_t checksum=0;
     for(uint8_t i=8;i<sizeof(data)-1;i++)checksum=(uint8_t)(checksum+data[i]);
     data[sizeof(data)-1]=checksum;
@@ -2427,6 +2569,7 @@ static uint8_t preset_readPatternData(uint8_t patternNr, uint8_t dataVersion)
 		preset_readPatternScale(patternNr);
 		preset_readFlamProbability(patternNr);
 		preset_readTrigConditions(patternNr);
+		preset_readFlamVelocity(patternNr);
 		if(bytesRead == 0) success = 0;
 
 	}
@@ -2657,6 +2800,10 @@ void preset_morph_tick()
 // and morph parameters and send the data to the back
 // if the morph value is 0 it will just send the parameter values
 // to the back
+uint8_t preset_morphBusy(void)
+{
+	return morph_state;
+}
 void preset_morph(uint8_t morph)
 {
 #if 1
@@ -2751,8 +2898,19 @@ FRESULT preset_createProject(uint8_t presetNr)
 	}
 
 	sprintf(savefileNames[presetNr][PROJECT_NAMES], "Init");
+	seq_flamResetPresets();
+	preset_flamDirty = 0;
+	preset_flamShowEdited();
 
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+	// 0.2.60: keep audio running while the tmp folder is deleted
+	const uint8_t timerWasOn = (htim2.Instance->CR1 & TIM_CR1_CEN) && (htim2.Instance->DIER & TIM_IT_UPDATE);
+	if(!timerWasOn) HAL_TIM_Base_Start_IT(&htim2);
+#endif
 	preset_clearTmpFolder();
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+	if(!timerWasOn) HAL_TIM_Base_Stop_IT(&htim2);
+#endif
 
 	return FR_OK;
 }
@@ -2873,6 +3031,12 @@ FRESULT preset_saveProject(uint8_t presetNr)
 	unsigned int bytesWritten;
 	//write preset name to file
 	res = f_write((FIL*)&SDFile,(void*)savefileNames[presetNr][PROJECT_NAMES],8,&bytesWritten);
+	if(res == FR_OK)
+	{
+		// 0.2.61: the project's flam presets follow the name
+		preset_writeFlamPresets();
+		preset_flamDirty = 0;
+	}
 	if(res != FR_OK) {
 		lcd_process_display_interrupt = 1;
 		preset_initTmpFolder();
@@ -2937,13 +3101,14 @@ FRESULT preset_saveProject(uint8_t presetNr)
 
 	lcd_process_display_interrupt = 1;
 	preset_initTmpFolder();
+	// 0.2.60: delete the tmp folder before the save interrupt stops; deleting
+	// all files took over 100 ms without audio or sequencer
+	preset_clearTmpFolder();
 #if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
 			HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
 #else
 
 #endif
-
-			preset_clearTmpFolder();
 
 	return FR_OK;
 
@@ -3228,6 +3393,8 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 	UINT bytesRead;
 
 	//open the file
+	seq_flamResetPresets();
+	preset_flamDirty = 0;
 	res = f_open((FIL*)&SDFile,"prj.nfo",FA_OPEN_EXISTING | FA_READ);
 	if (res != FR_OK)
 	{
@@ -3275,6 +3442,9 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 	{
 		sprintf((void*)savefileNames[presetNr][PROJECT_NAMES], "Empty");
 	}
+	// 0.2.61: flam presets after the name; older projects keep the factory presets
+	if(bytesRead == 8) preset_readFlamPresets();
+	preset_flamShowEdited();
 	//close the file
 	f_close((FIL*)&SDFile);
 

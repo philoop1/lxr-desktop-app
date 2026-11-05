@@ -25,7 +25,7 @@ struct {uint8_t kitNr[64],scale[64],shuffle[64];}seq_patternSet;
 struct {uint8_t fxType;}fxBus;
 unsigned restores,backups,loads,repaints,resets,leadChecks,tickBody,checks;
 uint8_t restored,backedUp,loaded;
-void seq_setPendingPatternActive(void);void seq_tick(void);
+void seq_setPendingPatternActive(void);void seq_tick(void);static void saveDiag_seq(void){}
 void check(int ok,const char *msg){checks++;if(!ok){puts(msg);exit(1);}}
 void seq_setStepIndexToStart(void){resets++;}
 void seq_copyBackupBufferToPattern(uint8_t p){restores++;restored=p;}

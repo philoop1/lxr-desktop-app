@@ -6,6 +6,94 @@ are recorded here. The upstream project keeps its own Git history.
 
 ## Unreleased
 
+### Mutador 0.2.62 (hardware test pending)
+
+- Import/export page: turning the encoder or confirming no longer clicks. The page reads names and kits from the SD card on every step; it now keeps the sample interrupt running around that access, like a save.
+
+### Mutador 0.2.61 (hardware test pending)
+
+- Flam presets: the Flam control of a Step picks one of 15 presets of the project (F1..F15). A preset has repeats (1..12), resolution (x2..x12 grid), velocity curve (fvl), pitch step per hit (-12..+12 semitones), +1 hit and accelerate/brake (bb). F1..F10 start as the former x2..8+1, so patterns sound the same. The presets are edited on a third Step screen and saved with the project (prj.nfo) and, after an edit, in the tmp folder.
+- Flam velocity moved from the Step into the preset; Flam probability stays per Step. Patterns from 0.2.56..0.2.60 with their own Flam velocity convert to presets on loading. The per-Step velocity table is gone: RAM use drops from 93.7 % to 86.4 %.
+- Test harness: check_performance_import wrote past its own 16-page menu table (LFO extra pages); the table now covers all pages.
+
+### Mutador 0.2.60 (measurement build, hardware test pending)
+
+- Project save glitch: at the end of a project save the tmp folder was deleted after the save interrupt had stopped, so sound and sequencer stood still for more than 0.1 s (measured on 0.2.59: B 9999+, S 99999+, L 72). The folder is now deleted while the interrupt still runs. Creating a new project keeps the sound running in the same way.
+- Measurement after a kit load from the Load page, to find the short glitch on kit changes: the display shows once all kit parameters reached the voices. L 0 means no audio block was late (then the glitch is the jump of the sound values), L above 0 means sending the kit takes too long.
+- Note on the display: one audio block is about 1451 us on this device (64 samples), so B and O are normally about 1450, not 726 as written for 0.2.57.
+
+### Mutador 0.2.59 (measurement build, hardware test pending)
+
+- Audio glitch while writing to the SD card: the I2S audio DMA interrupts now run above the sample interrupt that keeps the sound going during a save. Before, the main output could restart late while a sample block was calculated. This also covers the automatic copy of the kit that is written 2 s after each change (encoder, knob, kit change, dst).
+- Saving a pattern or kit now also rewrites the automatic copy (tmp.pat / tmp.snd). Before, an older automatic copy could overwrite the pattern you had saved when the device started, so the last changes were missing.
+- MorphKit save takes the audio outputs and the bank from the playing kit, like the live Morph. Before, the outputs were mixed, so voices could move to other outputs.
+- The save timing display also shows after SAVE + Pattern (step chooses the slot). New layout: `B` audio block gap, `O` gap between main output restarts (both normally about 726), `L` late blocks, then `S` sequencer tick gap and `C` MIDI clock delay, all in us.
+
+### Mutador 0.2.58 (measurement build, hardware test pending)
+
+- MorphKit save writes the kit you hear at the current Morph position to the SD card, like on the LXR1. Before, it only changed the kit slot in RAM and was lost without a project save. The LFO and rps extras and the Morph target slot come from the playing kit, like the mod targets; the playing sound does not change. If you save onto the slot that is the current Morph target, the Morph now runs towards the saved mix.
+- The save timing display from 0.2.57 also shows after a MorphKit save.
+
+### Mutador 0.2.57 (measurement build, hardware test pending)
+
+- USB MIDI in and out keep running while a pattern, kit or project is written to the SD card. Before, USB MIDI was only read by the main loop, which stops during the write; DIN MIDI and the trigger clock already ran in the save interrupt.
+- Measurement build for the timing stumble when saving: after a pattern, kit or project save from the Save menu the display shows for 2 s `Bk` (longest gap between audio blocks in us, normal about 726), `L` (audio blocks that were late), `Sq` (longest gap between sequencer ticks in us) and `Ck` (longest delay of a MIDI clock in us). The display goes away in a later version.
+
+### Mutador 0.2.56 (hardware test pending)
+
+- Flam velocity `fvl` per step, after `shf` on the Step screen (-100..+100 % in 2 % steps, 0 = all hits equal). Negative values fade the flam like the MIDI delay's velocity target: the first hit has the step velocity, the last (100-|fvl|) %. Positive values rise from (100-fvl) % to the step velocity. The +1 hit of 2+1..8+1 is the last hit of the curve. Works with shift, groove, humanize, fpr and Step edit groups.
+- Patterns save it in a new FLV1 trailer after CND2 (448 bytes); older patterns load with 0. RAM use 93.7 % (the table takes 28 KB).
+
+### Mutador 0.2.55 (hardware test pending)
+
+- Humanize per groove lane: the second half of the Groove page (SHIFT + Step 4) has `hm1`..`hm4`, one for each of the four steps that `shf`/`sh2`/`sh3`/`sh4` shape. 0 is off, 127 moves each hit randomly up to a quarter step (12 of 48 fine frames) earlier or later, in 2-frame steps. Every voice on a step rolls its own offset, and each pass rolls again. Humanize works on top of shift, groove and flam and also without shuffle.
+- `MUTA.CFG` v5 (35 bytes) stores hm1..hm4 with the project; v1..v4 files still load, with humanize off.
+
+### Mutador 0.2.54 (hardware test pending)
+
+- `fil` moved from the second half of the Groove page (SHIFT + Step 4) to the first PERF page, after `spd`. The second half of the Groove page is free for humanize.
+- PERF display: the `avl` value starts one character further left and `sct` one further right, so the two no longer run together.
+
+### Mutador 0.2.53 (hardware test pending)
+
+- Step edit: a short press on a step button selects the step (and, holding it, a group as before); holding a single step button for half a second sets or clears the step. The step stays selected, so its note, velocity and other values can be edited at once. A chord of several step buttons only selects. Another button or leaving Step edit cancels the hold.
+
+### Mutador 0.2.52 (hardware test pending)
+
+- Long presses swapped: hold PERFORMANCE (0.5 s) to open pattern selection (as SHIFT + Step 1), hold LOAD (1 s) to open the pattern Scale. Short presses and LOAD + Step chords are unchanged.
+- Hold a voice button (0.5 s) to see which patterns have steps: the 16 step LEDs light the patterns of the played bank that have a step on any track and bar; free patterns stay dark and the played pattern blinks. PAGE UP/DOWN change the bank while the voice is held; releasing it brings back the normal LEDs. A short press selects the voice as before. Not with SHIFT, on the PERF page (mute), in copy mode or on the MIDI delay page.
+- LXR1 import: step notes move down by 3 (LXR1 plays coarse + note - 63, the LXR2 coarse + note - 60), so converted patterns keep their LXR1 pitch. The 488 LXR1 patterns on the card are converted again.
+
+### Mutador 0.2.51 (hardware test pending)
+
+- One-shot user samples. `tools/make_samples.py` packs WAV files into `SAMPLES/SAMPLES.BIN` (up to 48 samples, 16 bit mono, the rate of the file is kept). At boot the firmware copies it into flash behind the wavetables, only when the file changed ("Loading samples", then "17 samples"). The bank starts at the first free 256 KB sector after the wavetables, sector 8 at the earliest (1 MB with one sector of wavetables); it needs the 2 MB chip.
+- Waveform numbers: 0-5 built-in, 6-37 wavetables, 38 and up samples. The numbers stay fixed when the number of wavetables changes; the encoder and the knobs jump over the empty wavetable slots.
+- New pitch system for samples: coarse 0 (note 60) plays the sample at its own pitch, with the file rate set against the engine rate; one semitone per note, fine in cents, pitch EG and modulation as for the oscillators. Linear interpolation with the right fraction, no length limit below 1M frames, silent and still after the last frame; the tool fades the last 64 frames. FM moves the read point (4096 frames at full depth, as on the LXR1). Expo FM and PD play a sample plain.
+- The Cymbal and Hihat modulators (wave 2 and 3) and the snare layer offer wavetables and samples too.
+- The LXR1 Mutador set: `make_samples.py --mutador` builds the 16 samples of the LXR1 Mutador card in name order and the LXR1 crash (Samples.c, 32 kHz) as sample 17 (waveform 54).
+- LXR1 kits: `prepare_lxr1_card_library.py` moves LXR1 sample waveforms 6+n to 38+n and the crash 5 to 54, and shifts coarse and fine of each oscillator that plays a sample so it runs at its LXR1 speed (+31.23 semitones at 44.1 kHz, +36.79 for the crash). Modulator pitches have no fine, so they keep about 0.2 semitones. The snare layer sample keeps the LXR2 layer pitch. Step automation of these waveforms and coarse values is converted too. `--no-samples` gives the files of 0.2.50 byte for byte.
+
+### Mutador 0.2.50 (hardware test pending)
+
+- Snare `wmd=FM` now modulates: the FM depth (`osc.fmMod`) of the Snare oscillator was always 0, so FM sounded like the plain Snare. The layer amount `sla` is the FM depth, as the layer level was meant to be. Kits that used FM sound different now.
+
+### Mutador 0.2.49 (hardware test pending)
+
+- LFO: `rps` is no longer an LFO wave; the six Random per Step modulators on the third and fourth LFO views stay. Its slot is now `xtr`, an exponential triangle (up, then down).
+- LFO one-shots `si1`, `tr1`, `su1`, `sd1`, `sq1`, `rn1`, `xu1`, `xd1`, `xt1`: after a retrigger they run one cycle at the set rate and hold the end value. Offset delays the start by up to one cycle. `sq1` is on first, then off; `rn1` takes one new random value per trigger. A newly chosen one-shot runs once without a retrigger. The one-shots run from flash, ITCM grows by 80 bytes.
+- Snare `wmd` adds `exp` (the layer oscillator bends the rate in octaves) and `pd` (phase distortion of the Snare oscillator). The depth is the layer amount times the Snare pitch EG, as in the Drum modes; FM keeps its own setting.
+- The main waveform of Snare, Cymbal and Hihat offers the user wavetables.
+
+### Mutador 0.2.48 (hardware test pending)
+
+- Adds the Flam values 2+1, 3+1, 4+1, 6+1 and 8+1 after x8. They roll like x2..x8 and add one hit, with the note and velocity of their Step, at the start of the following Step when that Step has no note. A note there (also one muted by its chance) and the last Step of the track leave the normal Flam. Shift and groove move the extra hit; fpr drops it with the other repeats. The values fit the existing 4-bit field; older firmware plays them as off.
+- Kit transfers now run while the sequencer plays. Pattern, P+K and LXR1 transfers still ask to stop it.
+
+### Mutador 0.2.47 (hardware test pending)
+
+- Fixes "Copy failed" on every project transfer (Kit, Pattern, P+K and the LXR1 performance import). FatFs allowed one open file (`_FS_LOCK 1`), and the copy keeps the source open while it creates the target. `_FS_LOCK` is now 2.
+- An unnamed transfer error now shows its FatFs code, for example "Copy failed 18".
+
 ### Mutador 0.2.46 (hardware test pending)
 
 - Fixes clicks in the `pd` Drum mode: the warp amount follows the pitch EG once a block, and the shape stepped every block. The knee now glides within the block and starts fresh on every trigger.

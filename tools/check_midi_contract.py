@@ -156,6 +156,7 @@ void seq_recordAutomation(uint8_t t,uint8_t c,uint8_t v) {recordedTrack=t;record
 void seq_setNextPattern(uint8_t p) { if(p<64) pattern=p; }
 int seq_getExtSync(void) { return extSync; }
 uint8_t seq_isRunning(void) { return runState; }
+void seq_setHumanize(uint8_t lane, uint8_t amount) { (void)lane; (void)amount; }
 void seq_sync(void) {}
 void sync_tickAtCycles(uint32_t cycles) {(void)cycles;}
 void sync_midiResetPosition(void) {}

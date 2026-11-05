@@ -48,6 +48,13 @@ static uint8_t bankCount;
 static uint8_t waveBank_frames(uint8_t t){return t<bankCount?(t==0?3:1):0;}
 static const int16_t* waveBank_frame(uint8_t t,uint8_t f){return f<waveBank_frames(t)?bank[t==0?f:2+t]:0;}
 static int16_t __QSUB16(int32_t a,int32_t b){int32_t r=a-b;return (int16_t)(r>32767?32767:r<-32768?-32768:r);}
+/* 0.2.51 user samples: waveform 38 and up go to the sample blocks */
+#define SAMPLEBANK_FIRST_WAVE 38u
+static unsigned sampleCalls,sampleFmCalls;
+static uint8_t osc_isSample(const OscInfo* osc){return osc->waveform >= SAMPLEBANK_FIRST_WAVE;}
+static void calcSampleBankBlock(OscInfo *o,int16_t *b,const uint8_t s,const float g){(void)o;(void)g;for(uint8_t i=0;i<s;i++)b[i]=1234;sampleCalls++;}
+static void calcSampleBankFmBlock(OscInfo *o,int16_t *m,int16_t *b,const uint8_t s,const float g){(void)o;(void)m;(void)g;for(uint8_t i=0;i<s;i++)b[i]=4321;sampleFmCalls++;}
+void calcNextOscSampleBlock(OscInfo* osc, int16_t* buf, const uint8_t size, const float gain, const float pwm);
 """
 TESTS = r"""
 static unsigned checks,failures;
@@ -285,6 +292,18 @@ int main(void)
    check(s>=-32768,"edge phases read the table");
   }
  }
+ {
+  /* samples: the dispatchers, expo FM and PD play them through the sample blocks */
+  OscInfo o;memset(&o,0,sizeof(o));o.waveform=SAMPLEBANK_FIRST_WAVE+2;
+  int16_t m[8]={0},b[8];
+  sampleCalls=sampleFmCalls=0;
+  calcNextOscSampleBlock(&o,b,8,1.f,0.f);check(sampleCalls==1&&b[7]==1234,"plain dispatcher plays the sample");
+  calcNextOscSampleFmBlock(&o,m,b,8,1.f,0.f);check(sampleFmCalls==1&&b[0]==4321,"FM dispatcher plays the sample with FM");
+  calcExpoFmBlock(&o,m,b,8,0.f);check(sampleCalls==2&&b[0]==1234,"expo FM plays a sample plain");
+  calcPhaseDistBlock(&o,b,8);check(sampleCalls==3&&b[0]==1234,"PD plays a sample plain");
+  o.waveform=SAMPLEBANK_FIRST_WAVE-1;bankCount=4;memset(b,1,sizeof(b));
+  calcNextOscSampleBlock(&o,b,8,1.f,0.f);check(sampleCalls==3&&!b[0],"the last wavetable slot is no sample");
+ }
  printf("%s %u assertions\n",failures?"OSC MODES FAIL":"OSC MODES PASS",checks);
  return failures!=0;
 }
@@ -317,6 +336,20 @@ def main() -> None:
         # the modulator offers the user wavetables too; DrumVoice plays it through calcNextOscSampleBlock
         assert f'/*PAR_MOD_WAVE_DRUM{v}*/  DTYPE_MENU | (MENU_WAVEFORM_WT<<8)' in menu_source
     assert 'calcNextOscSampleBlock(&voiceArray[voiceNr].modOsc' in drum
+    # 0.2.49: the main waves of Snare, Cymbal and HiHat offer the user wavetables;
+    # both osc dispatchers play every wave above PWM from the wave bank
+    for par in ('PAR_OSC_WAVE_SNARE*/  DTYPE_MENU', 'PAR_WAVE1_CYM*/  \t\tDTYPE_MENU', 'PAR_WAVE1_HH*/  \t\tDTYPE_MENU'):
+        assert '/*' + par + ' | (MENU_WAVEFORM_WT<<8)' in menu_source, par
+    # 0.2.51: the Cymbal and HiHat modulators and the snare layer offer wavetables and samples too
+    for par in ('PAR_WAVE2_CYM', 'PAR_WAVE3_CYM', 'PAR_WAVE2_HH', 'PAR_WAVE3_HH'):
+        assert '/*' + par + '*/ \t\tDTYPE_MENU | (MENU_WAVEFORM_WT<<8)' in menu_source, par
+    assert '/*PAR_SNARE_LAYER_WAVE*/ DTYPE_MENU | (MENU_WAVEFORM_WT<<8)' in menu_source
+    osc_source = read('Core/Src/Soundengine/DSPAudio/Oscillator.c')
+    for dispatcher, call in (('calcNextOscSampleBlock', 'calcWaveBankBlock(osc,buf,size,gain,pwm);'),
+                             ('calcNextOscSampleFmBlock', 'calcWaveBankFmBlock(osc,modBuffer,buf,size,gain,pwm);')):
+        body = osc_source[osc_source.index('IN_ITCM_RAM void ' + dispatcher + '('):]
+        body = body[:body.index('\n}')]
+        assert 'default:' in body and call in body, dispatcher
     assert 'isFloatModulator ? (uint8_t)(v*4.f+0.5f) : value.itg > 4 ? 4 : value.itg' in parser
     assert 'originalValue=activeParameters[destination]/4.f' in node
     menu = re.search(r'mixFmNames\[\]\[6\] =\s*\{(.*?)\};', names, re.S).group(1)
@@ -346,9 +379,12 @@ def main() -> None:
     if '--mutate' in sys.argv:
         source = source.replace('if(inc>OSC_MAX_PHASE_INC) inc = OSC_MAX_PHASE_INC;', '')
         source = source.replace('0.5f - amount*(0.5f-minKnee)', '0.5f')
-        old = 'default:\n\t\t\tcalcWaveBankBlock(osc,buf,size,gain,pwm);'
+        old = 'else calcWaveBankBlock(osc,buf,size,gain,pwm);'
         assert old in source, 'mutation anchor'
-        source = source.replace(old, 'default:')
+        source = source.replace(old, ';')
+        old = 'if(osc_isSample(osc)) calcSampleBankBlock(osc,buf,size,gain);'
+        assert old in source, 'mutation anchor'
+        source = source.replace(old, 'if(0);')
         old = 'const float knee = start + kneeStep*(i+1);'
         assert old in source, 'mutation anchor'
         source = source.replace(old, 'const float knee = target;')

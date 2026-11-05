@@ -36,9 +36,27 @@ enum
 	LFO_EXP_DOWN,
 	LFO_STRAY,
 	LFO_GLIDE,
-	LFO_RANDOM_STEP,
-	NUM_LFO_WAVEFORMS
+	LFO_EXP_TRI,		// xtr: exponential up, then exponential down (this slot was rps until 0.2.48)
+	// One-shots: one cycle after a retrigger, then they hold the end value.
+	// The offset delays the start by up to one cycle. Same order as the looping waves.
+	LFO_ONESHOT_SINE,
+	LFO_ONESHOT_TRI,
+	LFO_ONESHOT_SAW_UP,
+	LFO_ONESHOT_SAW_DOWN,
+	LFO_ONESHOT_REC,	// on first, then off
+	LFO_ONESHOT_NOISE,	// one new random value per retrigger
+	LFO_ONESHOT_EXP_UP,
+	LFO_ONESHOT_EXP_DOWN,
+	LFO_ONESHOT_EXP_TRI,
+	NUM_LFO_WAVEFORMS,
+	// internal: the Random per Step modulators, not selectable as an LFO wave
+	LFO_RANDOM_STEP = NUM_LFO_WAVEFORMS
 };
+#define LFO_ONESHOT_FIRST LFO_ONESHOT_SINE
+// one-shot state in Lfo.shot
+#define LFO_SHOT_DONE 0
+#define LFO_SHOT_WAIT 1
+#define LFO_SHOT_RUN 2
 
 
 #define LFO_MAX_F 		200 //[Hz]
@@ -56,6 +74,7 @@ typedef struct LfoStruct
 	float stepValue;
 	uint8_t stepSlew;
 	uint8_t stepPolarity;
+	uint8_t shot;			// one-shot state, LFO_SHOT_*
 	uint8_t 	sync;
 	float 		freq;
 	ModulationNode modTarget;

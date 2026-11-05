@@ -12,13 +12,13 @@ work; its checkboxes do not claim that a feature has already been ported.
 
 ## Experimental Mutador changes
 
-Current preview: **Mutador 0.2.46**, experimental and awaiting broader physical-device
+Current preview: **Mutador 0.2.62**, experimental and awaiting broader physical-device
 checks of its new controls. The startup display identifies this version.
 
 - **SHIFT+Step 1 from every mode:** opens pattern selection with the first PERF view.
 - **Velocity headroom:** new/reset steps default to 100. The active projects and TMP on the mounted card were proportionally converted once, with verified backups.
 - **rvl then avl after cnt:** Mutador Random Velocity plus a -100 to +100 percent proportional velocity gain for all sequencer voices and MIDI output: +50 is x1.5, +100 is x2, clipped at 127. Both persist with project settings; pbr moves to the last field.
-- **Pattern Scale 2/4/6/8/12/16/24/32:** hold PERFORMANCE, turn the encoder to preview, then click to confirm. A running change starts Step 1 on the next transport bar; stopped changes apply immediately. Confirmation enables `scl=pat`. Save the pattern/project to retain it.
+- **Pattern Scale 2/4/6/8/12/16/24/32:** hold LOAD (from 0.2.52; PERFORMANCE before), turn the encoder to preview, then click to confirm. A running change starts Step 1 on the next transport bar; stopped changes apply immediately. Confirmation enables `scl=pat`. Save the pattern/project to retain it.
 - At **12**, each 16-step page plays slots 1-12; slots 13-16 remain stored. Other divisions retain all 64 steps. At **32**, 64 steps take two bars; **6** and **24** provide triplet timing.
 - **Random per played Step LFO (`rps`):** its `rtg` voice supplies triggers only from audible sequencer Steps; the target `voi` is independent. The third/fourth LFO views expose trigger, destination, amount, offset, slew and neg/pos/bi polarity. Kit storage has compatible defaults for old kits.
 - **Step Flam Probability (`fpr`):** after the main Step passes `prob`, fpr decides whether its Flam repeats play. It is saved per Step; old patterns default to 100.
@@ -153,13 +153,13 @@ When the build has finished it shows where the update file is and how to install
 ```
 ======================================================================
   Firmware update file:
-    .../lxr2-Mutador/build/release/LXR_V2_V1.7_Mutador0.2.46.img
+    .../lxr2-Mutador/build/release/LXR_V2_V1.7_Mutador0.2.62.img
   ...
 ```
 
 The base version `1.7` comes from `project(VERSION ...)` in
 [CMakeLists.txt](CMakeLists.txt). `LXR_MUTADOR_VERSION` in the same file sets the
-`Mutador0.2.46` suffix of this experimental fork image and the `Mutador 0.2.46`
+`Mutador0.2.62` suffix of this experimental fork image and the `Mutador 0.2.62`
 line on the startup screen.
 Verified build artifacts and their hashes are in the
 [firmware image archive](firmware-archive/README.md).

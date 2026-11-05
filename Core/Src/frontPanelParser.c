@@ -398,6 +398,7 @@ void frontPanel_parseData(uint8_t data)
 						
 						case SEQ_FLAM:
 						activeParameters[PAR_STEP_FLAM] = frontParser_midiMsg.data2;
+							menu_flamEditSelect(frontParser_midiMsg.data2);
 							menu_repaintAll();
 							break;
 						case SEQ_FLAM_PROB:

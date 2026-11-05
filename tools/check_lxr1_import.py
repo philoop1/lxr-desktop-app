@@ -24,7 +24,7 @@ for hits, timing in (((0,), 0x70), ((3,), 0xA0), ((0, 4), 0x71),
     images, warnings = convert(sample(hits), ".pat")
     assert len(images) == 8 and all(len(x) == 4574 for x in images)
     step, byte = first_step(images[0])
-    assert step == bytes((0x80 | 91, 100, 63, 255, 0, 255, 0)), hits
+    assert step == bytes((0x80 | 91, 100, 60, 255, 0, 255, 0)), hits  # LXR1 note 63 is LXR2 note 60 (0.2.52)
     assert byte == timing, hits
     assert images[0][14 + 16 * 7] == 100  # bar 2 empty by default
     assert not warnings, warnings[:2]

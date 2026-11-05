@@ -29,6 +29,7 @@ void trigger_setPin(uint8_t index,uint8_t on){(void)index;pinState=on;pinWrites+
 clock+='\n'.join(extract(n,trigger) for n in ('trigger_setGrooveClock','trigger_clockGrooveTick','trigger_clockTick'))
 
 program='''#include <stdint.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "Soundengine/Sequencer/PerformanceGroove.h"
@@ -79,9 +80,36 @@ int main(void) {
         for(unsigned frame=0;frame<48;frame++) {
           int expected=neighbor*48+(int)pulse*2+shift*6+seq_grooveOffset[lane]*3;
           if(perf_grooveDue(&g,1u<<(23-pulse),(int8_t)shift,(uint8_t)lane,
-                             (int8_t)neighbor,(uint8_t)frame)!=(frame==(unsigned)expected)) return 5;
+                             (int8_t)neighbor,(uint8_t)frame,0)!=(frame==(unsigned)expected)) return 5;
           checks++;
         }
+  }
+  {
+    /* 0.2.55 humanize: per-hit offset, even, within +-12 frames, fixed per eventId */
+    PerfGroove h;memset(&h,0,sizeof(h));
+    if(perf_grooveActive(&h)) return 20;
+    h.human[2]=127;
+    if(!perf_grooveActive(&h)) return 21;
+    if(perf_grooveHuman(&h,0,77)||perf_grooveHuman(&h,1,77)||perf_grooveHuman(&h,2,0)) return 22;
+    unsigned seen[13]={0};
+    for(uint32_t id=1;id<=4000;id++) {
+      int16_t v=perf_grooveHuman(&h,2,id);
+      if(v<-HUMANIZE_MAX_FRAMES||v>HUMANIZE_MAX_FRAMES||(v&1)) return 23;
+      if(v!=perf_grooveHuman(&h,6,id)) return 24; /* lane&3, same id -> same roll */
+      seen[(v+12)/2]++;checks++;
+    }
+    for(unsigned i=0;i<13;i++) if(seen[i]<200) return 25; /* every offset occurs */
+    unsigned differ=0;for(uint32_t id=1;id<=100;id++) differ+=perf_grooveHuman(&h,2,id)!=perf_grooveHuman(&h,2,id+1);
+    if(differ<70) return 26; /* neighbouring hits (other voices) roll their own */
+    h.human[2]=10;for(uint32_t id=1;id<=500;id++){int16_t v=perf_grooveHuman(&h,2,id);if(v<-0||v>0){if(v<-2||v>2)return 27;}}
+    h.human[2]=127;
+    for(unsigned frame=0;frame<48;frame++) {
+      const uint8_t due=perf_grooveDue(&h,1u<<23,0,2,0,(uint8_t)frame,8);
+      if(due!=(frame==8u)) return 28;
+      const uint8_t early=perf_grooveDue(&h,1u<<23,0,2,1,(uint8_t)frame,-8);
+      if(early!=(frame==40u)) return 29;
+      checks+=2;
+    }
   }
   for(unsigned divider=0;divider<=6;divider++) {
     trigger_dividerClockOut1=(uint8_t)divider;

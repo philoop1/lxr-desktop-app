@@ -15,6 +15,7 @@
 
 #include "Soundengine/Sequencer/clockSync.h"
 #include "Soundengine/Sequencer/PerformanceScale.h"
+#include "Soundengine/saveDiag.h"
 
 static float sync_window[WINDOW_SIZE];
 float sync_timeLast = 0;
@@ -108,6 +109,7 @@ void sync_tick()
 }
 void sync_tickAtCycles(uint32_t nowCycles)
 {
+    saveDiag_clock(nowCycles);
     const uint32_t now=systick_ticks;
     const uint32_t cycleInterval=nowCycles-sync_lastClockCycles;
     if(now-sync_lastClockTick>SYNC_CLOCK_LOST_TICKS)sync_barPhaseFromStart=0;

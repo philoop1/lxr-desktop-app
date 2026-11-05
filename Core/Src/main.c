@@ -48,6 +48,7 @@ typedef struct ImageFileHeaderStruct
 #include "Soundengine/AudioCodecManager.h"
 #include "Soundengine/DSPAudio/random.h"
 #include "Soundengine/DSPAudio/WaveBank.h"
+#include "Soundengine/DSPAudio/SampleBank.h"
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/MIDI/Uart.h"
 
@@ -498,6 +499,31 @@ if(sd_card_ok)
 		{
 			lcd_setcursor(0,2);
 			lcd_string(waveResult == WAVEBANK_BAD_FILE ? "WAVES.BIN error" : "Flash error");
+			HAL_Delay(1500);
+		}
+	}
+
+	//user samples: copy SAMPLES/SAMPLES.BIN behind the wavetables when it changed
+	sampleBank_init();
+	if(sd_card_ok)
+	{
+		lcd_clear();
+		lcd_home();
+		lcd_string("Loading samples");
+		const uint8_t sampleResult = sampleBank_installFromSd(main_showWaveProgress);
+		if(sampleResult == SAMPLEBANK_WRITTEN || sampleResult == SAMPLEBANK_UNCHANGED)
+		{
+			char text[17];
+			sprintf(text, "%u samples", sampleBank_count());
+			lcd_setcursor(0,2);
+			lcd_string(text);
+			HAL_Delay(sampleResult == SAMPLEBANK_WRITTEN ? 1000 : 300);
+		}
+		else if(sampleResult != SAMPLEBANK_NO_FILE)
+		{
+			lcd_setcursor(0,2);
+			lcd_string(sampleResult == SAMPLEBANK_BAD_FILE ? "SAMPLES.BIN err" :
+				sampleResult == SAMPLEBANK_NO_SPACE ? "No sample space" : "Flash error");
 			HAL_Delay(1500);
 		}
 	}
@@ -1016,16 +1042,14 @@ lcd_process_display_interrupt = 1;
     checkMainLoc = -8;
 
 	  //check if we have some usb midi messages and process them
-	  MidiMsg msg;
-	  if(usb_getMidi(&msg)) {
-		  midiParser_parseMidiMessage(msg);
-	  }
+	  usb_processMidiIn(1);
 
 		//process midi on midi port
 			uart_processMidi();
 
 	  //check if we have to save something
 	  preset_processTimer();
+	  menu_kitLoadDiagTick();
 
     checkMainLoc = -7;
 
@@ -1582,10 +1606,12 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Stream4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 5, 0);
+  /* Mutador 0.2.59: above TIM2 (4), so a save-time sample block in the TIM2
+   * interrupt cannot delay the I2S restart. The callback only re-arms the DMA. */
+  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
   /* DMA1_Stream5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
   /* DMA2_Stream0_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 3, 0);

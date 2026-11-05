@@ -16,6 +16,7 @@
 #include "Soundengine/DSPAudio/random.h"
 #include "Soundengine/DSPAudio/Samples.h"
 #include "Soundengine/DSPAudio/WaveBank.h"
+#include "Soundengine/DSPAudio/SampleBank.h"
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/MIDI/MidiNoteNumbers.h"
 #include "Soundengine/Sequencer/sequencer.h"
@@ -396,6 +397,82 @@ void calcWaveBankFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t
 	}
 }
 //-----------------------------------------------------------
+// User samples (waveform >= SAMPLEBANK_FIRST_WAVE): one shot from the trigger,
+// silent after the last frame. The phase holds the frame in its upper 20
+// bits and the fraction in the lower 12; the pitch comes from osc_calcSampleBankFreq.
+typedef char SampleBankFirstWave[(SAMPLEBANK_FIRST_WAVE == NUM_OSC_WAVEFORMS + WAVEBANK_MAX) ? 1 : -1];
+#define OSC_SAMPLE_FRAC ((1u << SAMPLEBANK_PHASE_BITS) - 1u)
+#define OSC_SAMPLE_FM_SHIFT 9	// a full modulator moves the read point by 4096 frames, as on the LXR1
+
+static inline uint8_t osc_isSample(const OscInfo* osc)
+{
+	return osc->waveform >= SAMPLEBANK_FIRST_WAVE;
+}
+
+static inline int16_t osc_readSample(const int16_t* data, const uint32_t index)
+{
+	const uint32_t pos = index >> SAMPLEBANK_PHASE_BITS;
+	const int32_t a = data[pos];
+	const int32_t b = data[pos+1];
+	return (int16_t)(a + (((b - a) * (int32_t)(index & OSC_SAMPLE_FRAC)) >> SAMPLEBANK_PHASE_BITS));
+}
+
+static inline uint32_t osc_sampleStep(const uint32_t phase, const uint32_t inc, const uint32_t end)
+{
+	const uint32_t next = phase + inc;
+	return (next < phase || next > end) ? end : next;
+}
+
+void calcSampleBankBlock(OscInfo* osc, int16_t* buf, const uint8_t size, const float gain)
+{
+	const uint8_t sample = (uint8_t)(osc->waveform - SAMPLEBANK_FIRST_WAVE);
+	const int16_t* data = sampleBank_data(sample);
+	if(!data)
+	{
+		for(uint8_t i=0;i<size;i++) buf[i] = 0;
+		osc->output = 0;
+		return;
+	}
+	const uint32_t end = (sampleBank_frames(sample) - 1u) << SAMPLEBANK_PHASE_BITS;
+	for(uint8_t i=0;i<size;i++)
+	{
+		int16_t oscOut = 0;
+		if(osc->phase < end)
+		{
+			oscOut = osc_readSample(data, osc->phase);
+			osc->phase = osc_sampleStep(osc->phase, osc->phaseInc, end);
+		}
+		osc->output = oscOut;
+		buf[i] = oscOut * gain;
+	}
+}
+
+void calcSampleBankFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, const uint8_t size, const float gain)
+{
+	const uint8_t sample = (uint8_t)(osc->waveform - SAMPLEBANK_FIRST_WAVE);
+	const int16_t* data = sampleBank_data(sample);
+	if(!data)
+	{
+		calcSampleBankBlock(osc, buf, size, gain);
+		return;
+	}
+	const uint32_t end = (sampleBank_frames(sample) - 1u) << SAMPLEBANK_PHASE_BITS;
+	for(uint8_t i=0;i<size;i++)
+	{
+		int16_t oscOut = 0;
+		if(osc->phase < end)
+		{
+			int64_t index = (int64_t)osc->phase + ((int64_t)(int32_t)(modBuffer[i]*osc->fmMod) << OSC_SAMPLE_FM_SHIFT);
+			if(index < 0) index = 0;
+			else if(index >= end) index = end - 1u;
+			oscOut = osc_readSample(data, (uint32_t)index);
+			osc->phase = osc_sampleStep(osc->phase, osc->phaseInc, end);
+		}
+		osc->output = oscOut;
+		buf[i] = oscOut * gain;
+	}
+}
+//-----------------------------------------------------------
 static inline int16_t osc_readSine(const uint32_t index)
 {
 	const uint32_t itg = index>>20;
@@ -410,6 +487,11 @@ IN_ITCM_RAM void calcExpoFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf,
 	if(osc->waveform==NOISE)
 	{
 		calcNoiseBlock(osc,buf,size,1.f);
+		return;
+	}
+	if(osc_isSample(osc))
+	{
+		calcSampleBankBlock(osc,buf,size,1.f);
 		return;
 	}
 	WaveBankScan scan = {0};
@@ -464,10 +546,10 @@ IN_ITCM_RAM void calcExpoFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf,
 // Casio style phase distortion: amount warps the read speed of one sine cycle, from pure sine to saw.
 IN_ITCM_RAM void calcPhaseDistBlock(OscInfo* osc, int16_t* buf, uint8_t size)
 {
-	// user wavetables have no sine to warp; DrumVoice plays them plain with their scan
+	// user wavetables and samples have no sine to warp; they play plain
 	if(osc->waveform>PWM)
 	{
-		calcWaveBankBlock(osc,buf,size,1.f,0.f);
+		calcNextOscSampleBlock(osc,buf,size,1.f,0.f);
 		return;
 	}
 	float amount = osc->fmMod;
@@ -531,7 +613,8 @@ IN_ITCM_RAM void calcNextOscSampleFmBlock(OscInfo* osc, int16_t* modBuffer, int1
 			break;
 
 		default:
-			calcWaveBankFmBlock(osc,modBuffer,buf,size,gain,pwm);
+			if(osc_isSample(osc)) calcSampleBankFmBlock(osc,modBuffer,buf,size,gain);
+			else calcWaveBankFmBlock(osc,modBuffer,buf,size,gain,pwm);
 			break;
 
 		}
@@ -655,7 +738,8 @@ IN_ITCM_RAM void calcNextOscSampleBlock(OscInfo* osc, int16_t* buf, const uint8_
 			break;
 
 		default:
-			calcWaveBankBlock(osc,buf,size,gain,pwm);
+			if(osc_isSample(osc)) calcSampleBankBlock(osc,buf,size,gain);
+			else calcWaveBankBlock(osc,buf,size,gain,pwm);
 			break;
 		}
 }
@@ -931,6 +1015,18 @@ void osc_calcUserSampleFreq(OscInfo* osc)
 	osc->levelMix = osc_levelMix(currentFreq,osc->tableOffset);
 }
 //-----------------------------------------------------------
+// The root note (coarse 0, note 60) plays the sample at its own rate; one
+// semitone per note, fine tune and the pitch modulation as for the oscillators
+void osc_calcSampleBankFreq(OscInfo* osc)
+{
+	const float rate = (float)sampleBank_rate((uint8_t)(osc->waveform - SAMPLEBANK_FIRST_WAVE));
+	const float speed = osc->freq*osc->pitchMod*osc->modNodeValue*rate/(REAL_FS*MidiNoteFrequencies[SAMPLEBANK_ROOT_NOTE]);
+	float inc = speed*(float)(1u << SAMPLEBANK_PHASE_BITS);
+	if(!(inc > 0.f)) inc = 0.f;
+	else if(inc > (float)(64u << SAMPLEBANK_PHASE_BITS)) inc = (float)(64u << SAMPLEBANK_PHASE_BITS);
+	osc->phaseInc = (uint32_t)(inc + 0.5f);
+}
+//-----------------------------------------------------------
  void osc_setFreq(OscInfo* osc)
  {
 		switch(osc->waveform)
@@ -960,9 +1056,10 @@ void osc_calcUserSampleFreq(OscInfo* osc)
 			osc_calcWavetableFreq(osc);
 			break;
 
-		//samples
+		//user wavetables and samples
 		default:
-			osc_calcUserSampleFreq(osc);
+			if(osc_isSample(osc)) osc_calcSampleBankFreq(osc);
+			else osc_calcUserSampleFreq(osc);
 			break;
 
 		}

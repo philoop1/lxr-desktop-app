@@ -23,7 +23,7 @@ pos=ring_open+1;depth=1
 while depth:
     depth+=(drum[pos]=='{')-(drum[pos]=='}');pos+=1
 ring=drum[ring_start:pos].replace('else if','if',1)
-code=r'''
+code='\n'.join(re.findall(r'#define SNARE_LAYER_\w+ \w+',read('Core/Inc/Soundengine/DSPAudio/Snare.h')))+r'''
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -71,7 +71,7 @@ void actualRing(int16_t*buf,int16_t*modBuf,uint8_t size){const uint8_t voiceNr=0
 '''+ring+r'''
 }
 '''
-code+='\n'.join(function(preset,n) for n in ('preset_defaultSnareLayer','preset_defaultSnareNoise','preset_validateSnareExtension','preset_writeDrumsetData','preset_readDrumsetData'))
+code+='\n'.join(function(preset,n) for n in ('preset_defaultSnareLayer','preset_defaultSnareNoise','preset_validateSnareExtension','preset_morphedKitValue','preset_writeDrumsetData','preset_readDrumsetData'))
 code+='\n'.join(function(snare,n) for n in ('Snare_updateNoiseEnvelopeEnabled','Snare_setNoiseAttack','Snare_setNoiseDecay','Snare_setNoiseSlope','Snare_setLayerWave','Snare_setLayerAmount','Snare_setLayerFreq','Snare_setLayerMode'))
 code+=r'''
 int main(void){
@@ -103,7 +103,7 @@ int main(void){
  Snare_setNoiseDecay(127);Snare_setNoiseSlope(63);check(snareVoice.noiseEnvelopeEnabled,"slope enables envelope");
  Snare_setNoiseSlope(64);check(!snareVoice.noiseEnvelopeEnabled,"neutral values restore legacy path");
  Snare_setLayerWave(3);Snare_setLayerAmount(127);Snare_setLayerFreq(42);Snare_setLayerMode(7);
- check(snareVoice.layerOsc.waveform==3&&snareVoice.layerAmount==1.f&&snareVoice.layerFreqControl==42&&snareVoice.layerMode==2,"layer setters and mode clamp");
+ check(snareVoice.layerOsc.waveform==3&&snareVoice.layerAmount==1.f&&snareVoice.layerFreqControl==42&&snareVoice.layerMode==SNARE_LAYER_MODE_MAX,"layer setters and mode clamp");
  // Check ring's actual production branch at dry, mixed and full wet.
  int16_t buf[16],mod[16];for(unsigned i=0;i<16;i++){mainSamples[i]=(int16_t)(i*3541-26000);mod[i]=(int16_t)(21000-i*3199);}
  for(unsigned value=0;value<=127;value++){

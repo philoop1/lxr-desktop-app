@@ -32,6 +32,7 @@
 #include "menu/menu.h"
 #include "Soundengine/Soundengine.h"
 #include "Soundengine/MIDI/Uart.h"
+#include "Soundengine/USB/usb_manager.h"
 #include "lcd.h"
 /* USER CODE END Includes */
 
@@ -271,6 +272,9 @@ void TIM2_IRQHandler(void)
 	seq_tick();
 	soundengine_calcNextSampleBlock();
   uart_processMidi();
+  /* The main loop is blocked by the SD write: keep USB MIDI in and out alive. */
+  usb_processMidiIn(8);
+  usb_tick();
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_RESET);
 
 

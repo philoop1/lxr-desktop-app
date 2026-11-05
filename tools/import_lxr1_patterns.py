@@ -8,6 +8,7 @@ The output is staged in a fresh directory; existing project files are never edit
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 import re
 import struct
@@ -21,6 +22,14 @@ LXR1_PATTERN_BYTES = TRACKS * LXR1_PATTERNS * LXR1_STEPS * STEP_BYTES + 112 + 16
 ROLLS = {(0, 4): 1, (0, 2, 4, 6): 3, tuple(range(8)): 5}
 DEFAULT_STEP = bytes((100, 100, 60, 255, 0, 255, 0))
 LXR1_KIT_BYTES = 228
+# The LXR1 plays coarse + note - 63, the LXR2 coarse + note - 60 (SEQ_DEFAULT_NOTE):
+# a step note moves down by 3 to keep its pitch (Mutador 0.2.52)
+LXR1_DEFAULT_NOTE = 63
+LXR2_DEFAULT_NOTE = 60
+
+
+def lxr2_note(note: int) -> int:
+    return max(0, min(127, note - LXR1_DEFAULT_NOTE + LXR2_DEFAULT_NOTE))
 
 
 def enum_values(header: Path) -> dict[str, int]:
@@ -77,7 +86,147 @@ def source_kit(data: bytes, suffix: str) -> bytes | None:
     return None
 
 
-def convert_kit(data: bytes, suffix: str, lxr1_source: Path) -> tuple[bytes, list[str]]:
+# --- samples (Mutador 0.2.51) ---------------------------------------------
+# The LXR1 plays its card samples as waveform 6+n and the crash as 5, at
+# 1024*f(note) frames per second. Mutador LXR2 plays bank sample n as 38+n at
+# its own rate on note 60. SampleMap moves the waveform numbers and shifts the
+# pitch of each oscillator that plays a sample, so the sample sounds as on the LXR1.
+LXR1_CRASH = 5
+LXR1_SAMPLE_START = 6
+SAMPLE_FIRST_WAVE = 38
+SAMPLE_ROOT_NOTE = 60
+SEMITONE_UP = 2 ** (1 / 12)
+# the LXR1 Mutador set of tools/make_samples.py --mutador: 16 samples at 44.1 kHz, then the 32 kHz crash
+MUTADOR_RATES = [44100] * 16 + [32000]
+MUTADOR_CRASH = 16
+# waveform parameter, its coarse pitch parameter, its fine parameter
+SAMPLE_OSCILLATORS = (
+    ("PAR_OSC_WAVE_DRUM1", "PAR_COARSE1", "PAR_FINE1"),
+    ("PAR_OSC_WAVE_DRUM2", "PAR_COARSE2", "PAR_FINE2"),
+    ("PAR_OSC_WAVE_DRUM3", "PAR_COARSE3", "PAR_FINE3"),
+    ("PAR_OSC_WAVE_SNARE", "PAR_COARSE4", "PAR_FINE4"),
+    ("PAR_WAVE1_CYM", "PAR_COARSE5", "PAR_FINE5"),
+    ("PAR_WAVE1_HH", "PAR_COARSE6", "PAR_FINE6"),
+    ("PAR_MOD_WAVE_DRUM1", "PAR_FM_FREQ1", None),
+    ("PAR_MOD_WAVE_DRUM2", "PAR_FM_FREQ2", None),
+    ("PAR_MOD_WAVE_DRUM3", "PAR_FM_FREQ3", None),
+    ("PAR_WAVE2_CYM", "PAR_MOD_OSC_F1_CYM", None),
+    ("PAR_WAVE3_CYM", "PAR_MOD_OSC_F2_CYM", None),
+    ("PAR_WAVE2_HH", "PAR_MOD_OSC_F1", None),
+    ("PAR_WAVE3_HH", "PAR_MOD_OSC_F2", None),
+    ("PAR_SNARE_LAYER_WAVE", None, None),  # follows a fixed note times the layer ratio
+)
+
+
+def sample_bank(path: Path | None) -> tuple[list[int], int | None]:
+    """Rates of the bank samples and the index of the crash ("crs"), from a SAMPLES.BIN."""
+    if path is None:
+        return list(MUTADOR_RATES), MUTADOR_CRASH
+    data = path.read_bytes()
+    if data[:8] != b"LXRSM001":
+        raise ValueError(f"{path}: not a SAMPLES.BIN")
+    count = struct.unpack_from("<H", data, 8)[0]
+    rates, crash = [], None
+    for i in range(count):
+        name, _, _, rate = struct.unpack_from("<4sIII", data, 24 + 16 * i)
+        rates.append(rate)
+        if name[:3] == b"crs":
+            crash = i
+    return rates, crash
+
+
+def lxr1_pitch_shift(rate: int) -> float:
+    """Semitones from an LXR1 sample note to the LXR2 note of the same pitch."""
+    return SAMPLE_ROOT_NOTE - 69 + 12 * math.log2(1024 * 440.0 / rate)
+
+
+def detune(fine: int) -> float:
+    return 1 + (fine / 127 - 0.5) * (SEMITONE_UP - 1)
+
+
+def shift_pitch(coarse: int, fine: int | None, shift: float) -> tuple[int, int | None, bool]:
+    """New coarse and fine for a pitch shift in semitones; True when coarse had to be clamped."""
+    if fine is None:
+        new = coarse + round(shift)
+        return max(0, min(127, new)), None, not 0 <= new <= 127
+    steps = math.floor(shift)
+    target = detune(fine) * 2 ** ((shift - steps) / 12)
+    if target > detune(127):
+        steps += 1
+        target /= SEMITONE_UP
+    new_fine = max(0, min(127, round(((target - 1) / (SEMITONE_UP - 1) + 0.5) * 127)))
+    new = coarse + steps
+    return max(0, min(127, new)), new_fine, not 0 <= new <= 127
+
+
+class SampleMap:
+    """Moves LXR1 sample waveforms to the bank numbers and keeps their pitch."""
+
+    def __init__(self, enum: dict[str, int], rates: list[int], crash: int | None):
+        self.enum = enum
+        self.rates = rates
+        self.crash = crash
+        self.card_samples = crash if crash is not None else len(rates)
+        self.wave_params = {enum[w] for w, _, _ in SAMPLE_OSCILLATORS}
+        self.coarse_shift: dict[int, float] = {}
+        self.notes: list[str] = []
+        self.oscillators = []
+
+    def scan(self, kit: bytes) -> None:
+        """Reads the LXR1 waveforms of a kit already in the LXR2 parameter layout."""
+        enum = self.enum
+        self.coarse_shift = {}
+        self.oscillators = []
+        for wave_name, coarse_name, fine_name in SAMPLE_OSCILLATORS:
+            wave, rate = self.map_wave(kit[enum[wave_name]], wave_name)
+            self.oscillators.append((wave_name, coarse_name, fine_name, wave, rate))
+            if rate and coarse_name:
+                self.coarse_shift[enum[coarse_name]] = lxr1_pitch_shift(rate)
+            elif rate:
+                self.notes.append(f"{wave_name}: the snare layer sample keeps the LXR2 layer pitch")
+
+    def map_wave(self, wave: int, where: str = "") -> tuple[int, int | None]:
+        if wave < LXR1_CRASH:
+            return wave, None
+        if wave == LXR1_CRASH:
+            if self.crash is None:
+                self.notes.append(f"{where}: no crash in the sample bank; PWM")
+                return LXR1_CRASH, None
+            return SAMPLE_FIRST_WAVE + self.crash, self.rates[self.crash]
+        index = wave - LXR1_SAMPLE_START
+        if index < self.card_samples:
+            return SAMPLE_FIRST_WAVE + index, self.rates[index]
+        self.notes.append(f"{where}: LXR1 sample {index} is not in the sample bank; sine")
+        return 0, None
+
+    def apply(self, kit: bytearray, offset: int = 0) -> None:
+        if not self.oscillators:
+            self.scan(bytes(kit[offset:]))
+        for wave_name, coarse_name, fine_name, wave, rate in self.oscillators:
+            kit[offset + self.enum[wave_name]] = wave
+            if not rate or not coarse_name:
+                continue
+            c = offset + self.enum[coarse_name]
+            f = offset + self.enum[fine_name] if fine_name else None
+            coarse, fine, clamped = shift_pitch(kit[c], kit[f] if f is not None else None,
+                                                lxr1_pitch_shift(rate))
+            kit[c] = coarse
+            if f is not None:
+                kit[f] = fine
+            if clamped:
+                self.notes.append(f"{coarse_name}: the sample pitch is out of range; coarse clamped")
+
+    def remap(self, dest: int, value: int) -> int:
+        """A step automation value for parameter dest."""
+        if dest in self.wave_params:
+            return self.map_wave(value, f"automation {dest}")[0]
+        if dest in self.coarse_shift:
+            return max(0, min(127, value + round(self.coarse_shift[dest])))
+        return value
+
+
+def convert_kit(data: bytes, suffix: str, lxr1_source: Path,
+                sample_map: SampleMap | None = None) -> tuple[bytes, list[str]]:
     raw = source_kit(data, suffix)
     if raw is None:
         raise ValueError(".pat has no kit; supply a matching .snd separately")
@@ -113,6 +262,10 @@ def convert_kit(data: bytes, suffix: str, lxr1_source: Path) -> tuple[bytes, lis
             kit[enum[name]] = extras_old[position]
         if any(extras_old[index] for index in (0, 5, 10, 11)):
             notes.append("LXR1 membrane parameters have no LXR2 equivalent")
+    if sample_map is not None:
+        sample_map.scan(bytes(kit))
+        sample_map.apply(kit)
+        notes.extend(sample_map.notes)
     extras = b"SNE2" + b"LFX1" + bytes(6) + bytes((2,)) * 6
     rps = bytearray(42)
     for voice in range(6):
@@ -136,7 +289,7 @@ def source_offset(data: bytes, suffix: str) -> int:
 
 def convert(data: bytes, suffix: str, repeat: bool = False,
             valid_automation: set[int] | None = None,
-            kit_slot: int = 0) -> tuple[list[bytes], list[str]]:
+            kit_slot: int = 0, sample_map: SampleMap | None = None) -> tuple[list[bytes], list[str]]:
     offset = source_offset(data, suffix)
     if len(data) < offset + LXR1_PATTERN_BYTES:
         raise ValueError(f"truncated LXR1 pattern block: {len(data)} bytes")
@@ -186,13 +339,13 @@ def convert(data: bytes, suffix: str, repeat: bool = False,
                         if dest in (0, 255):
                             automation.extend((255, 0))
                         elif valid_automation is not None and dest in valid_automation and dest < 221:
-                            automation.extend((dest, value & 127))
+                            automation.extend((dest, sample_map.remap(dest, value & 127) if sample_map else value & 127))
                         else:
                             automation.extend((255, 0))
                             if bar == 0:
                                 warnings.append(f"pattern {pat + 1}, voice {track + 1}, step {j + 1}: unsupported automation target {dest}")
                     probability = min(100, round((first[1] & 127) * 100 / 127))
-                    steps.extend((first[0], probability, first[2] & 127, *automation))
+                    steps.extend((first[0], probability, lxr2_note(first[2] & 127), *automation))
                     timing.append((shift << 4) | flam)
                     main[bar][track] |= 1 << j
             if not repeat:

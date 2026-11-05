@@ -1,6 +1,7 @@
 """Native tests of real desktop performance scheduling, flam dispatch and globals.
 
 python tools/check_performance_import.py
+python tools/check_performance_import.py --mutate   (each 2+1..8+1 flam mutation must fail)
 Requires the existing Visual Studio compiler on Windows, or CC elsewhere.
 Hardware output is replaced by spies; no SD card or firmware is written.
 """
@@ -8,6 +9,7 @@ from pathlib import Path
 import os
 import re
 import subprocess
+import sys
 
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'build/performance-audit'
@@ -29,6 +31,36 @@ def function(code,name):
 
 (OUT/'stm32f7xx_hal.h').write_text('#include <stdint.h>\n')
 seq=source('Core/Src/Soundengine/Sequencer/sequencer.c')
+# Each mutation removes one rule of the 2+1..8+1 flams; the tests must catch it.
+MUTATIONS={
+ 'no-plus-one':('if(!seq_flamHasPlusOne(flam))return 0;','return 0;'),
+ 'ignore-following-note':('return (uint8_t)!seq_intIsMainStepActive(track,following->source,seq_activePattern);','return 1;'),
+ 'wrap-last-step':('if(source->timeline+1u>=length)return 0;',''),
+ 'ignore-fpr':('if(source->flamRoll>seq_patternSet.flamProbability[seq_activePattern][track][source->source])return 0;',''),
+ 'no-negative-shift':('(plusOne ? (1UL<<(shiftCurrentStep-1)) : 0)','0'),
+ 'flat-flam-velocity':('	if(!amount)return volume;','	return volume;'),
+ 'no-flam-pitch':('	if(!step)return note;','	return note;'),
+ 'no-flam-accel':('a=(int32_t)p->accel-FLAM_ACCEL_FLAT;','a=0;'),
+ 'repeats-ignored':('	int32_t hits=p->repeats;','	int32_t hits=24/spacing;'),
+ 'grid-ignored':('	const int32_t spacing=seq_flamGridPulses[p->grid];','	const int32_t spacing=6;'),
+ 'flam-index-ignores-shift':('(int16_t)((int16_t)idx-getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][currentStep].shift)*3));','(int16_t)idx);'),
+ 'no-rise':('	const int32_t percent=amount<0 ? 100+(int32_t)amount*index/last\n	                               : 100-(int32_t)amount*(last-index)/last;','	const int32_t percent=amount<0 ? 100+(int32_t)amount*index/last : 100;'),
+ 'no-human':('const int16_t human=perf_grooveHuman(&seq_groove,planned->timeline,planned->eventId);','const int16_t human=0;'),
+ 'shared-human':('const int16_t human=perf_grooveHuman(&seq_groove,planned->timeline,planned->eventId);','const int16_t human=perf_grooveHuman(&seq_groove,planned->timeline,planned->source+1u);'),
+ 'no-groove':('due=perf_grooveDue(&seq_groove,1UL<<23,shift,steps[n+3]->timeline,(int8_t)(n+1),frame,human);','due=0;'),
+}
+if '--mutate' in sys.argv:
+    failed=[]
+    for name in MUTATIONS:
+        r=subprocess.run([sys.executable,__file__,'--mutation='+name],capture_output=True,text=True)
+        print(('caught ' if r.returncode else 'MISSED ')+name)
+        if not r.returncode: failed.append(name)
+    sys.exit(1 if failed else 0)
+for arg in sys.argv[1:]:
+    if arg.startswith('--mutation='):
+        old,new=MUTATIONS[arg.split('=',1)[1]]
+        assert seq.count(old)==1,old
+        seq=seq.replace(old,new)
 btn=source('Core/Src/buttonHandler.c')
 led=source('Core/Src/ledHandler.c')
 preset=source('Core/Src/Preset/presetManager.c')
@@ -41,6 +73,8 @@ assert re.search(r'case SEQ_DRUM3:\s*buttonHandler_openPerformanceLayer\(PERF_DE
 assert re.search(r'case SEQ_CLP:.*\s*buttonHandler_openPerformanceLayer\(PERF_SEND_SUBPAGE\)',btn)
 prelude=r'''
 #define DISABLE_CONV_WARNING
+static void saveDiag_seq(void){}
+static void saveDiag_clock(unsigned cycles){(void)cycles;}
 #define END_DISABLE_CONV_WARNING
 #include <assert.h>
 #include <stdio.h>
@@ -80,7 +114,8 @@ enum {TRIG_COND_ALWAYS,TRIG_COND_FIRST,TRIG_COND_NOT_FIRST,
 #define TEXT_EMPTY 0
 #define pgm_read_byte(p) (*(const uint8_t*)(p))
 #define menu_activePage currentPage
-struct {uint8_t top1,top2,top3,top4,top5,top6,top7,top8;}menuPages[16][8];
+/* all real pages: the LFO extra pages lie above 16 */
+struct {uint8_t top1,top2,top3,top4,top5,top6,top7,top8;}menuPages[64][8];
 typedef enum {STEP_PREV,STEP_CURRENT,STEP_NEXT} StepPosition;
 typedef struct {uint8_t note,volume,prob,token;} Step;
 struct {
@@ -107,7 +142,7 @@ uint16_t seq_scaleBarFrame;uint8_t seq_scaleRestart;
 void menu_repaint(void){}
 void seq_setStepIndexToStart(void);
 float seq_deltaT;
-unsigned fineNow,fineHits,fineTimes[2048],fineSources[2048];
+unsigned fineNow,fineHits,fineTimes[2048],fineSources[2048],fineVoices[2048],fineVelocities[2048];
 unsigned boundaryCalls,midiClocks,clockTicks,groovePulses,on2State,on4State;
 #define HANDLE_SEQ_IN_CLOCK_INTERRUPT 0
 #define WINDOW_SIZE 8
@@ -201,7 +236,7 @@ void trigger_clockGrooveTick(uint8_t a,uint8_t b){on2State=a;on4State=b;groovePu
 void seq_sendRealtime(uint8_t m){if(m==MIDI_CLOCK)midiClocks++;}
 void seq_parseAutomationNodes(uint8_t v,Step *s){(void)v;automations++;lastAuto=s->token;}
 void voiceControl_noteOff(uint8_t v){(void)v;off++;}
-void voiceControl_noteOnNoEchoWithMod(uint8_t v,uint8_t n,uint8_t vel,uint8_t modVelocity){(void)modVelocity;(void)v;hits++;lastNote=n;lastVelocity=vel;if(captureFine){assert(fineHits<2048);fineTimes[fineHits]=fineNow;fineSources[fineHits++]=(uint8_t)(n-40);}}
+void voiceControl_noteOnNoEchoWithMod(uint8_t v,uint8_t n,uint8_t vel,uint8_t modVelocity){(void)modVelocity;(void)v;hits++;lastNote=n;lastVelocity=vel;if(captureFine){assert(fineHits<2048);fineVelocities[fineHits]=vel;fineVoices[fineHits]=v;fineTimes[fineHits]=fineNow;fineSources[fineHits++]=(uint8_t)(n-40);}}
 void seq_sendMidiNoteOn(uint8_t c,uint8_t n,uint8_t v){(void)c;(void)n;outputs++;outVelocity=v;}
 typedef unsigned UINT;
 typedef int FIL;
@@ -212,9 +247,16 @@ int f_read(FIL *f,void *dest,unsigned count,unsigned *read){
  (void)f;*read=fileSize<count?fileSize:count;memcpy(dest,fileData,*read);return 0;
 }
 '''
+prelude+='\n'+'\n'.join(re.findall(r'#define FLAM_(?:PLUS_ONE_\w+|VELO_FLAT) \d+',source('Core/Inc/Preset/SeqStep.h')))+'\n'
+# 0.2.61 flam presets: the real preset type and table
+_step=source('Core/Inc/Preset/SeqStep.h')
+prelude+=_step[_step.index('#define NUM_FLAM_PRESETS'):_step.index('}FlamPreset;')+len('}FlamPreset;')]+'\n'
+for _line in ['FlamPreset seq_flamPresets[NUM_FLAM_PRESETS];','static uint32_t seq_flamMask[NUM_FLAM_PRESETS];','static const uint8_t seq_flamGridPulses[FLAM_NUM_GRIDS]={12,8,6,4,3,2};']:
+    assert _line in seq,_line; prelude+=_line+'\n'
 functions='\n'.join(function(seq,n) for n in (
     'seq_perfRandom','seq_perfAdvance','seq_conditionAllows','seq_conditionResolve','seq_intIsMainStepActive','seq_getLongestTrack','getShiftValue',
-    'flamIdxToPattern','seq_getShiftFlamPattern','seq_triggerVoice','seq_emitDelay','seq_processFlam',
+    'seq_flamDefaultPreset','seq_flamCalcMask','seq_flamPresetsChanged','seq_flamResetPresets',
+    'flamIdxToPattern','seq_flamHasPlusOne','seq_flamPlusOne','seq_flamHitIndex','seq_flamHitVolume','seq_flamHitNote','seq_getShiftFlamPattern','seq_triggerVoice','seq_emitDelay','seq_processFlam',
     'seq_processGrooveFine','seq_applyPendingScale','seq_applyPendingTransform','seq_processScaleFrame','seq_processFineFrame','seq_advanceFineFrame','seq_calcDeltaT','seq_MidiSyncQueue','seq_tick','seq_determineNextPattern'))
 functions+='\n'+'\n'.join(function(sync,n) for n in ('sync_calcBpm','sync_trackBeat','sync_getBeatBpm','sync_tick','sync_tickAtCycles','sync_requestStartOnNextBar','sync_processStartLead','sync_setClockOffset','sync_shouldLeadStep','sync_markLeadStep'))
 functions+='\n'+function(btn,'buttonHandler_selectPatternLoop')
@@ -244,6 +286,7 @@ static void check(int ok,const char *what){checks++;if(!ok){fprintf(stderr,"FAIL
 static void clearSpies(void){hits=outputs=off=automations=0;}
 static void setup(uint64_t active){
  memset(&seq_patternSet,0,sizeof(seq_patternSet));for(int t=0;t<7;t++)seq_perfTracks[t]=0;
+ seq_flamResetPresets();
  memset(lfoTriggers,0,sizeof(lfoTriggers));memset(seq_lastLfoEventId,0,sizeof(seq_lastLfoEventId));seq_triggerEventId=0;
  memset(lastWasNoteOn,0,sizeof(lastWasNoteOn));memset(activeParameters,0,sizeof(activeParameters));activeParameters[PAR_PERF_RANDOM_VELO]=100;activeParameters[PAR_PERF_AVL]=100;
  memset(seq_conditionLoop,0,sizeof(seq_conditionLoop));memset(seq_conditionCache,0,sizeof(seq_conditionCache));memset(seq_conditionHistoryValid,0,sizeof(seq_conditionHistoryValid));
@@ -589,6 +632,28 @@ int main(void){
  runFrames(192);
  check(fineHits==4,"neutral fine wrapper does not double trigger");
  for(unsigned i=0;i<4;i++)check(fineTimes[i]==i*perf_scaleFrames(),"neutral events stay on straight boundaries");
+ // 0.2.55 humanize: two voices on every step, each rolls its own offset within +-12 frames
+ setup(UINT64_MAX);perf_configure(0,0,100,100);seq_mutedTracks=124;
+ for(unsigned lane=0;lane<4;lane++)seq_groove.human[lane]=127;perf_delaySetGroove(&seq_groove);
+ runFrames(800);
+ {
+   int when[2][16];unsigned count[2][16];memset(count,0,sizeof(count));
+   for(unsigned i=0;i<fineHits;i++)if(fineVoices[i]<2&&fineSources[i]<16&&fineTimes[i]<15*48){
+     when[fineVoices[i]][fineSources[i]]=(int)fineTimes[i];count[fineVoices[i]][fineSources[i]]++;}
+   unsigned apart=0,moved=0;
+   for(unsigned s=1;s<15;s++){
+     check(count[0][s]==1&&count[1][s]==1,"humanize keeps one hit per voice and step");
+     for(unsigned v=0;v<2;v++){int d=when[v][s]-(int)s*48;check(d>=-12&&d<=12&&!(d&1),"humanize stays within +-12 even frames");moved+=d!=0;}
+     apart+=when[0][s]!=when[1][s];
+   }
+   check(apart>=7,"voices on the same step are humanized independently");
+   check(moved>=14,"humanize moves most hits");
+ }
+ setup(UINT64_MAX);perf_configure(0,0,100,100);seq_mutedTracks=124;
+ memset(seq_groove.human,0,sizeof(seq_groove.human));seq_groove.human[0]=127;perf_delaySetGroove(&seq_groove);
+ runFrames(15*48);
+ for(unsigned i=0;i<fineHits;i++)if(fineSources[i]&3)check(fineTimes[i]==fineSources[i]*48u,"hm1 leaves the other lanes straight");
+ memset(seq_groove.human,0,sizeof(seq_groove.human));
  // Odd Mutador offsets must survive as odd 192-PPQ frame positions.
  setup(2);perf_configure(0,0,100,100);
  perf_grooveConfigure(&seq_groove,127,68,63,63);perf_delaySetGroove(&seq_groove);
@@ -820,6 +885,103 @@ int main(void){
   check(sync_getBeatBpm()==133.f,"clock timeout falls back to the sequencer tempo");
  }
  externalSync=0;
+ // 2+1..8+1: the roll plus one hit at the start of the following empty step.
+ for(unsigned k=0;k<5;k++)
+   check(flamIdxToPattern((uint8_t)(FLAM_PLUS_ONE_FIRST+k))==flamIdxToPattern((uint8_t)(k+1)),"2+1..8+1 roll like x2..x8");
+ setup(1);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=FLAM_PLUS_ONE_FIRST;
+ runFrames(192);
+ check(fineHits==3&&fineTimes[0]==0&&fineTimes[1]==24&&fineTimes[2]==48,"2+1 adds one hit at the start of the empty next step");
+ check(fineSources[0]==0&&fineSources[1]==0&&fineSources[2]==0,"the +1 hit plays the note of its own step");
+ setup(1);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=FLAM_PLUS_ONE_LAST;
+ runFrames(192);
+ check(fineHits==9&&fineTimes[8]==48&&fineSources[8]==0,"8+1 plays the eight-hit roll and one more");
+ setup(1);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=5;
+ runFrames(192);
+ check(fineHits==8,"x8 stays inside its step");
+ // 0.2.56 flam velocity: straight path and fine (groove/humanize) path, fade and rise
+ for(unsigned path=0;path<2;path++){
+   static const char *names[2]={"straight","fine"};
+   for(unsigned curve=0;curve<3;curve++){
+     const uint8_t fvl=curve==0?0:curve==1?100:25; /* -100, +100, -50 */
+     setup(1);perf_configure(0,0,100,100);
+     if(path){seq_groove.human[1]=127;perf_delaySetGroove(&seq_groove);} /* fine path, lane 0 stays straight */
+     seq_patternSet.seq_stepTiming[0][0][0].flam=3; /* x4 */
+     seq_flamPresets[3].velo=fvl; /* 0.2.61: the velocity curve belongs to the preset */
+     runFrames(48);
+     const unsigned base=seq_patternSet.seq_subStepPattern[0][0][0].volume&STEP_VOLUME_MASK;
+     check(fineHits==4,names[path]);
+     if(fineHits==4){
+       if(curve==0)check(fineVelocities[0]==base&&fineVelocities[3]==0&&fineVelocities[1]>fineVelocities[2],"fvl -100 fades to silence");
+       if(curve==1)check(fineVelocities[0]==0&&fineVelocities[3]==base&&fineVelocities[1]<fineVelocities[2],"fvl +100 rises to the step velocity");
+       if(curve==2)check(fineVelocities[0]==base&&fineVelocities[3]==(base+1)/2,"fvl -50 ends at half");
+     }
+     memset(seq_groove.human,0,sizeof(seq_groove.human));perf_delaySetGroove(&seq_groove);
+   }
+ }
+ setup(1);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=FLAM_PLUS_ONE_FIRST;
+ seq_flamPresets[FLAM_PLUS_ONE_FIRST].velo=0;runFrames(192);
+ check(fineHits==3&&fineVelocities[2]==0&&fineVelocities[1]>0&&fineVelocities[1]<fineVelocities[0],"2+1: the +1 hit is the last of the curve");
+ setup(1);perf_configure(0,0,100,100);seq_flamPresets[3].velo=0;runFrames(48);
+ check(fineHits==1&&fineVelocities[0]==(seq_patternSet.seq_subStepPattern[0][0][0].volume&STEP_VOLUME_MASK),"fvl leaves a step without flam alone");
+ setup(1);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=3;seq_patternSet.seq_stepTiming[0][0][0].shift=10;
+ seq_flamPresets[3].velo=0;runFrames(96);
+ check(fineHits==4&&fineVelocities[0]==(seq_patternSet.seq_subStepPattern[0][0][0].volume&STEP_VOLUME_MASK)&&fineVelocities[0]>fineVelocities[1]&&fineVelocities[1]>fineVelocities[2]&&fineVelocities[3]==0,"shifted flam keeps its curve");
+ setup(3);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=FLAM_PLUS_ONE_FIRST;
+ runFrames(192);
+ check(fineHits==3&&fineTimes[2]==48&&fineSources[2]==1,"a note on the next step plays alone, the flam stays normal");
+ setup(3);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=FLAM_PLUS_ONE_FIRST;
+ seq_patternSet.seq_subStepPattern[0][0][1].prob=0;
+ runFrames(192);
+ check(fineHits==2,"a next note muted by its chance still blocks the +1 hit");
+ setup(1u<<15);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][15].flam=FLAM_PLUS_ONE_FIRST;
+ runFrames(17*48);
+ check(fineHits==2&&fineTimes[0]==720&&fineTimes[1]==744,"the last step of the track plays only its normal flam");
+ setup(1);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=FLAM_PLUS_ONE_FIRST;
+ seq_patternSet.flamProbability[0][0][0]=0;
+ runFrames(192);
+ check(fineHits==1,"fpr 0 drops the +1 hit with the other repeats");
+ setup(1);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=FLAM_PLUS_ONE_FIRST;
+ seq_patternSet.seq_stepTiming[0][0][0].shift=8;
+ runFrames(192);
+ check(fineHits==3&&fineTimes[0]==6&&fineTimes[1]==30&&fineTimes[2]==54,"a positive shift moves the +1 hit along");
+ setup(4);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][2].flam=FLAM_PLUS_ONE_FIRST;
+ seq_patternSet.seq_stepTiming[0][0][2].shift=6;
+ runFrames(192);
+ check(fineHits==3&&fineTimes[0]==90&&fineTimes[1]==114&&fineTimes[2]==138&&fineSources[2]==2,
+       "a negative shift moves the +1 hit back into its own step");
+ setup(1);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=FLAM_PLUS_ONE_FIRST;
+ perf_grooveConfigure(&seq_groove,127,127,63,63);perf_delaySetGroove(&seq_groove);
+ runFrames(192);
+ check(fineHits==3&&fineTimes[0]==0&&fineTimes[1]==24&&fineTimes[2]==84&&fineSources[2]==0,
+       "with groove the +1 hit takes the groove of the step it sits on");
+ // 0.2.61 flam presets: repeats on a grid, accelerate/brake, pitch per hit
+ for(unsigned path=0;path<2;path++){
+   setup(1);perf_configure(0,0,100,100);
+   if(path){seq_groove.human[1]=127;perf_delaySetGroove(&seq_groove);}
+   seq_flamPresets[11]=(FlamPreset){3,2,50,FLAM_PITCH_ZERO,0,FLAM_ACCEL_FLAT};seq_flamPresetsChanged();
+   seq_patternSet.seq_stepTiming[0][0][0].flam=11;runFrames(48);
+   check(fineHits==3&&fineTimes[0]==0&&fineTimes[1]==12&&fineTimes[2]==24,"3 repeats on the x4 grid");
+   setup(1);perf_configure(0,0,100,100);seq_flamPresets[11]=(FlamPreset){12,1,50,FLAM_PITCH_ZERO,0,FLAM_ACCEL_FLAT};seq_flamPresetsChanged();
+   seq_patternSet.seq_stepTiming[0][0][0].flam=11;runFrames(48);
+   check(fineHits==3&&fineTimes[2]==32,"repeats stay inside the step");
+   setup(1);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=11;runFrames(48);
+   check(fineHits==4&&fineTimes[1]==16&&fineTimes[2]==28&&fineTimes[3]==36,"F11 accelerates: gaps 8, 6, 4 pulses");
+   setup(1);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=12;runFrames(48);
+   check(fineHits==4&&fineTimes[1]==8&&fineTimes[2]==20&&fineTimes[3]==36,"F12 brakes: gaps 4, 6, 8 pulses");
+   setup(1);perf_configure(0,0,100,100);seq_patternSet.seq_stepTiming[0][0][0].flam=13;runFrames(48);
+   check(fineHits==3&&fineSources[0]==0&&fineSources[1]==2&&fineSources[2]==4,"F13 raises each hit by two semitones");
+   setup(1);perf_configure(0,0,100,100);seq_flamPresets[7].pitch=FLAM_PITCH_ZERO-1;seq_flamPresetsChanged();
+   seq_patternSet.seq_subStepPattern[0][0][0].note=43;seq_patternSet.seq_stepTiming[0][0][0].flam=7;runFrames(192);
+   check(fineHits==4&&fineSources[0]==3&&fineSources[1]==2&&fineSources[2]==1&&fineSources[3]==0&&fineTimes[3]==48,"pitch steps reach the +1 hit");
+   setup(1);perf_configure(0,0,100,100);seq_flamPresets[13].pitch=FLAM_PITCH_ZERO-3;seq_flamPresetsChanged();
+   seq_patternSet.seq_subStepPattern[0][0][0].note=1;seq_patternSet.seq_stepTiming[0][0][0].flam=13;runFrames(48);
+   check(fineHits==3&&fineSources[1]==(uint8_t)(0-40)&&fineSources[2]==(uint8_t)(0-40),"pitch stops at note 0");
+   memset(seq_groove.human,0,sizeof(seq_groove.human));perf_delaySetGroove(&seq_groove);
+ }
+ for(uint8_t i=1;i<NUM_FLAM_PRESETS;i++){
+   FlamPreset factory;seq_flamDefaultPreset(i,&factory);
+   check(factory.velo==FLAM_VELO_FLAT||i==14,"factory presets are flat except F14");
+ }
  puts("PERFORMANCE PASS");printf("%u assertions against actual performance/flam/trigger/button/LED/globals code\n",checks);
  return 0;
 }

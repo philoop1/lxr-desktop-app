@@ -50,7 +50,7 @@ void Snare_setNoiseSlope(uint8_t value)
 void Snare_setLayerWave(uint8_t value){snareVoice.layerOsc.waveform=value;}
 void Snare_setLayerAmount(uint8_t value){snareVoice.layerAmountControl=value;snareVoice.layerAmount=value/127.f;}
 void Snare_setLayerFreq(uint8_t value){snareVoice.layerFreqControl=value;}
-void Snare_setLayerMode(uint8_t value){snareVoice.layerMode=value>2?2:value;}
+void Snare_setLayerMode(uint8_t value){snareVoice.layerMode=value>SNARE_LAYER_MODE_MAX?SNARE_LAYER_MODE_MAX:value;}
 
 //---------------------------------------------------
 void Snare_setPan(const uint8_t pan)
@@ -136,6 +136,7 @@ void Snare_trigger(const uint8_t vel, const uint8_t note)
 	else
 		snareVoice.osc.phase = 0;
 	snareVoice.layerOsc.phase=0;
+	snareVoice.osc.pdKnee = 0.f; // a new note starts at its own PD shape
 	osc_setBaseNote(&snareVoice.layerOsc,note);
 
 	DecayEg_trigger(&snareVoice.oscPitchEg);
@@ -159,6 +160,8 @@ IN_ITCM_RAM void Snare_calcAsync()
 	//add modulation eg to osc freq (1 = no change. a+eg = original freq + modulation
 	const float egPitchVal = DecayEg_calc(&snareVoice.oscPitchEg);
 	const float pitchEgValue = egPitchVal*snareVoice.egPitchModAmount;
+	// like the Drum exp/pd modes, the depth follows the pitch EG
+	snareVoice.layerDepth = snareVoice.layerAmount*egPitchVal;
 	snareVoice.osc.pitchMod = 1+pitchEgValue;
 
 	//calc the osc  vol eg
@@ -216,10 +219,28 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 
 	//calc next osc sample
 	const float oscGain=snareVoice.noiseEnvelopeEnabled ? 1.f : (1.f-snareVoice.mix);
-	if(snareVoice.layerAmountControl && snareVoice.layerMode==1) {
+	if(snareVoice.layerAmountControl && snareVoice.layerMode>=SNARE_LAYER_EXP) {
+		/* exp: the layer osc bends the rate in octaves; pd: the snare osc warps
+		 * itself. fmMod carries the depth only for this call, FM keeps its own. */
+		const float fmMod=snareVoice.osc.fmMod;
+		snareVoice.osc.fmMod=snareVoice.layerDepth;
+		if(snareVoice.layerMode==SNARE_LAYER_EXP) {
+			int16_t layerBuf[size];
+			calcNextOscSampleBlock(&snareVoice.layerOsc,layerBuf,size,1.f,snareVoice.pwm);
+			calcExpoFmBlock(&snareVoice.osc,layerBuf,oscBuf,size,snareVoice.pwm);
+		} else {
+			calcPhaseDistBlock(&snareVoice.osc,oscBuf,size);
+		}
+		snareVoice.osc.fmMod=fmMod;
+		for(uint8_t i=0;i<size;i++)oscBuf[i]=(int16_t)(oscBuf[i]*oscGain);
+	} else if(snareVoice.layerAmountControl && snareVoice.layerMode==1) {
 		int16_t layerBuf[size];
 		calcNextOscSampleBlock(&snareVoice.layerOsc,layerBuf,size,snareVoice.layerAmount,snareVoice.pwm);
+		/* the layer level (sla) is the FM depth; fmMod stays 0 outside this call */
+		const float fmMod=snareVoice.osc.fmMod;
+		snareVoice.osc.fmMod=1.f;
 		calcNextOscSampleFmBlock(&snareVoice.osc,layerBuf,oscBuf,size,oscGain,snareVoice.pwm);
+		snareVoice.osc.fmMod=fmMod;
 	} else {
 	calcNextOscSampleBlock(&snareVoice.osc,oscBuf,size,oscGain,snareVoice.pwm);
 	if(snareVoice.layerAmountControl) {

@@ -13,6 +13,7 @@
 
 
 #include "stm32f7xx_hal.h"
+#include "Soundengine/saveDiag.h"
 #include "Soundengine/Sequencer/PerformanceSteps.h"
 #include "Soundengine/Sequencer/PerformanceDelay.h"
 #include "Soundengine/Sequencer/PerformanceGroove.h"
@@ -293,6 +294,8 @@ void seq_init()
 {
 	int i;
 
+	seq_flamResetPresets();
+
 	//give active song pointer a proper value
 	seq_activeSong = seq_songData[0];
 
@@ -393,6 +396,14 @@ void seq_setShuffle(float shuffle)
 	activeParameters[PAR_SHUFFLE]=(uint8_t)(shuffle*127.f+0.5f);
 	perf_grooveConfigure(&seq_groove,activeParameters[PAR_SHUFFLE],
 		activeParameters[PAR_GROOVE_SH2],activeParameters[PAR_GROOVE_SH3],activeParameters[PAR_GROOVE_SH4]);
+	perf_delaySetGroove(&seq_groove);
+	trigger_setGrooveClock(perf_grooveActive(&seq_groove));
+}
+// 0.2.55: humanize amount 0..127 for one groove lane (hm1..hm4)
+void seq_setHumanize(uint8_t lane,uint8_t amount)
+{
+	if(lane>3) return;
+	seq_groove.human[lane]=amount>127?127:amount;
 	perf_delaySetGroove(&seq_groove);
 	trigger_setGrooveClock(perf_grooveActive(&seq_groove));
 }
@@ -1012,35 +1023,128 @@ int8_t getShiftValue(uint8_t in)
 		break;
 	}
 }
+/* 0.2.61 flam presets of the project. The step keeps only the preset number. */
+FlamPreset seq_flamPresets[NUM_FLAM_PRESETS];
+static uint32_t seq_flamMask[NUM_FLAM_PRESETS];
+static const uint8_t seq_flamGridPulses[FLAM_NUM_GRIDS]={12,8,6,4,3,2};
+void seq_flamDefaultPreset(uint8_t preset,FlamPreset *out)
+{
+	/* repeats, grid, velo, pitch, +1, accel */
+	static const uint8_t defaults[NUM_FLAM_PRESETS][FLAM_PRESET_BYTES]={
+		{1,0,50,12,0,50},
+		{2,0,50,12,0,50},{3,1,50,12,0,50},{4,2,50,12,0,50},{6,3,50,12,0,50},{8,4,50,12,0,50},
+		{2,0,50,12,1,50},{3,1,50,12,1,50},{4,2,50,12,1,50},{6,3,50,12,1,50},{8,4,50,12,1,50},
+		{4,2,50,12,0,80},{4,2,50,12,0,20},{3,1,50,14,0,50},{8,4,0,12,0,50},{3,3,50,12,0,50}};
+	const uint8_t *d=defaults[preset<NUM_FLAM_PRESETS?preset:0];
+	out->repeats=d[0];out->grid=d[1];out->velo=d[2];out->pitch=d[3];out->plusOne=d[4];out->accel=d[5];
+}
+static uint32_t seq_flamCalcMask(const FlamPreset *p)
+{
+	const int32_t spacing=seq_flamGridPulses[p->grid];
+	int32_t hits=p->repeats;
+	if(hits>24/spacing)hits=24/spacing;
+	uint32_t mask=1UL<<23;
+	if(hits<2)return mask;
+	/* hit i of n sits at f+a*f*(1-f) of the even span, f=i/(n-1), a=-1..1 */
+	const int32_t last=hits-1,span=last*spacing,a=(int32_t)p->accel-FLAM_ACCEL_FLAT;
+	const int32_t den=last*last*FLAM_ACCEL_FLAT;
+	int32_t prev=0;
+	for(int32_t i=1;i<hits;i++) {
+		int32_t pos=(span*i*last*FLAM_ACCEL_FLAT+a*span*i*(last-i)+den/2)/den;
+		if(pos<=prev)pos=prev+1;
+		if(pos>23)pos=23;
+		mask|=1UL<<(23-pos);
+		prev=pos;
+	}
+	return mask;
+}
+void seq_flamPresetsChanged(void)
+{
+	seq_flamMask[0]=1UL<<23;
+	for(uint8_t i=1;i<NUM_FLAM_PRESETS;i++) {
+		FlamPreset *p=&seq_flamPresets[i];
+		if(p->grid>=FLAM_NUM_GRIDS)p->grid=0;
+		if(p->repeats<1)p->repeats=1;
+		if(p->repeats>FLAM_MAX_REPEATS)p->repeats=FLAM_MAX_REPEATS;
+		if(p->velo>100)p->velo=FLAM_VELO_FLAT;
+		if(p->pitch>2*FLAM_PITCH_ZERO)p->pitch=FLAM_PITCH_ZERO;
+		p->plusOne=p->plusOne?1:0;
+		if(p->accel>100)p->accel=FLAM_ACCEL_FLAT;
+		seq_flamMask[i]=seq_flamCalcMask(p);
+	}
+}
+void seq_flamResetPresets(void)
+{
+	for(uint8_t i=0;i<NUM_FLAM_PRESETS;i++)seq_flamDefaultPreset(i,&seq_flamPresets[i]);
+	seq_flamPresetsChanged();
+}
 uint32_t flamIdxToPattern(uint8_t flamIdx)
 {
-	switch(flamIdx)
-	{
-	default:
-	case 0: //off
-		return 0b100000000000000000000000;
-		break;
-
-	case 1: //x2
-		return 0b100000000000100000000000;
-		break;
-
-	case 2: //x3
-		return 0b100000001000000010000000;
-		break;
-
-	case 3: //x4
-		return 0b100000100000100000100000;
-		break;
-
-	case 4: //x6
-		return 0b100010001000100010001000;
-		break;
-
-	case 5: //x8
-		return 0b100100100100100100100100;
-		break;
+	if(!flamIdx || flamIdx>=NUM_FLAM_PRESETS)return 1UL<<23;
+	/* the main hit is always set, an empty mask means the table was not prepared */
+	return seq_flamMask[flamIdx] ? seq_flamMask[flamIdx] : (1UL<<23);
+}
+static uint8_t seq_flamHasPlusOne(uint8_t flam)
+{
+	return (uint8_t)(flam && flam<NUM_FLAM_PRESETS && seq_flamPresets[flam].plusOne);
+}
+/* 2+1..8+1 style: one more hit at the start of the following timeline step. Only when
+ * that step has no note (a note counts even if its chance mutes it), the source
+ * is not the last step of the track, and the fpr roll kept the flam repeats. */
+static uint8_t seq_flamPlusOne(uint8_t track,const PerfStep *source,const PerfStep *following,uint8_t length)
+{
+	if(!source || !following)return 0;
+	const uint8_t flam=seq_patternSet.seq_stepTiming[seq_activePattern][track][source->source].flam;
+	if(!seq_flamHasPlusOne(flam))return 0;
+	if(source->timeline+1u>=length)return 0;
+	if(source->flamRoll>seq_patternSet.flamProbability[seq_activePattern][track][source->source])return 0;
+	return (uint8_t)!seq_intIsMainStepActive(track,following->source,seq_activePattern);
+}
+/* Place of one hit in its flam: pulse is the hit's place in the unshifted 24-pulse
+ * flam of its source step (0 = main hit, 24 = the +1 hit). */
+static uint8_t seq_flamHitIndex(uint8_t flam,int16_t pulse,uint8_t *total)
+{
+	const uint32_t pattern=flamIdxToPattern(flam);
+	uint8_t count=seq_flamHasPlusOne(flam),index=0;
+	for(int16_t p=0;p<24;p++)if(pattern&(1UL<<(23-p))) {
+		count++;
+		if(p<pulse)index++;
 	}
+	if(pulse>=24)index=(uint8_t)(count-1u);
+	if(index>=count)index=(uint8_t)(count-1u);
+	*total=count;
+	return index;
+}
+/* velocity of one flam hit. fvl below 50 fades from the step velocity to
+ * (100-|fvl|) % at the last hit, above 50 rises from (100-fvl) % to the step
+ * velocity, like the MIDI delay's velocity target. */
+uint8_t seq_flamHitVolume(uint8_t track,uint8_t source,uint8_t volume,int16_t pulse)
+{
+	const uint8_t flam=seq_patternSet.seq_stepTiming[seq_activePattern][track][source&63u].flam;
+	if(!flam || flam>=NUM_FLAM_PRESETS)return volume;
+	const uint8_t stored=seq_flamPresets[flam].velo;
+	const int16_t amount=(int16_t)((stored>100?FLAM_VELO_FLAT:stored)-FLAM_VELO_FLAT)*2; /* -100..100 */
+	if(!amount)return volume;
+	uint8_t total;
+	const uint8_t index=seq_flamHitIndex(flam,pulse,&total);
+	if(total<2)return volume;
+	const int32_t last=(int32_t)total-1;
+	const int32_t percent=amount<0 ? 100+(int32_t)amount*index/last
+	                               : 100-(int32_t)amount*(last-index)/last;
+	return (uint8_t)(((int32_t)volume*percent+50)/100);
+}
+/* 0.2.61: each hit moves the note by the preset's pitch step */
+uint8_t seq_flamHitNote(uint8_t track,uint8_t source,uint8_t note,int16_t pulse)
+{
+	const uint8_t flam=seq_patternSet.seq_stepTiming[seq_activePattern][track][source&63u].flam;
+	if(!flam || flam>=NUM_FLAM_PRESETS)return note;
+	const int16_t step=(int16_t)seq_flamPresets[flam].pitch-FLAM_PITCH_ZERO;
+	if(!step)return note;
+	uint8_t total;
+	int16_t result=(int16_t)(note+step*seq_flamHitIndex(flam,pulse,&total));
+	if(result<0)result=0;
+	if(result>127)result=127;
+	return (uint8_t)result;
 }
 //return pattern as 8 bit binary value (steps 0-7)
 uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition stepPos)
@@ -1136,6 +1240,17 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 		//we have 24 pulses per step (96ppq) but only 8 possible shift values (0-7)
 		shiftCurrentStep *= 3;
 
+		/* The +1 hit sits 24 pulses after the source step, moved by the same shift:
+		 * from the previous step into this one, or with a negative shift into the
+		 * source step itself. */
+		uint8_t plusOne=0;
+		if(conditionTrack && stepPos!=STEP_NEXT) {
+			uint8_t length=seq_patternSet.length[seq_activePattern][track];
+			if(!length || length>64) length=16;
+			plusOne=seq_flamPlusOne(track,planned,
+				stepPos==STEP_PREV ? &conditionTrack->current : &conditionTrack->next,length);
+		}
+
 		//since we use this function to determine what to play at the current step, we have to look at different shifted sections depending of which step we calculate
 		//i.e. we only play the data from the previous step, that was shifted into the current(next) step
 		if(shiftCurrentStep == 0)
@@ -1143,7 +1258,8 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 			switch(stepPos)
 			{
 				case STEP_PREV:
-					return 0;	//nothing from prev step is shifted forward to this one
+					//nothing from prev step is shifted forward to this one, except the +1 hit
+					return plusOne ? (1UL<<23) : 0;
 					break;
 
 				default:
@@ -1162,7 +1278,8 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 			{
 				case STEP_PREV:
 					//data from prev step is shifted forward to this one
-					return (stepPattern << (24-shiftCurrentStep)) & 0xFFFFFF;
+					return ((stepPattern << (24-shiftCurrentStep)) & 0xFFFFFF) |
+						(plusOne ? (1UL<<(23-shiftCurrentStep)) : 0);
 					break;
 
 				default:
@@ -1190,7 +1307,8 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 				default:
 				case STEP_CURRENT:
 					//data is shifted backwards, but a rest remains in this step
-					return (stepPattern << shiftCurrentStep) & 0xFFFFFF;
+					return ((stepPattern << shiftCurrentStep) & 0xFFFFFF) |
+						(plusOne ? (1UL<<(shiftCurrentStep-1)) : 0);
 					break;
 
 				case STEP_NEXT:
@@ -1278,8 +1396,12 @@ void seq_processFlam(uint8_t idx)
 			{
 				lastWasNoteOn[track] = 1;
 				chokeNext = 1;
-				const uint8_t vol = seq_patternSet.seq_subStepPattern[seq_activePattern][track][nextStep].volume&STEP_VOLUME_MASK;
-				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][nextStep].note;
+				const uint8_t vol = seq_flamHitVolume(track,nextStep,
+					seq_patternSet.seq_subStepPattern[seq_activePattern][track][nextStep].volume&STEP_VOLUME_MASK,
+					(int16_t)((int16_t)idx-24-getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][nextStep].shift)*3));
+				const uint8_t note = seq_flamHitNote(track,nextStep,
+					seq_patternSet.seq_subStepPattern[seq_activePattern][track][nextStep].note,
+					(int16_t)((int16_t)idx-24-getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][nextStep].shift)*3));
 				if(perf_allowHit(seq_perfRandom)) {
 					delayCandidates |= (uint8_t)(1u<<track);
 					delaySources[track]=nextStep;
@@ -1295,8 +1417,12 @@ void seq_processFlam(uint8_t idx)
 			{
 				lastWasNoteOn[track] = 1;
 				chokeCurrent = 1;
-				const uint8_t vol = seq_patternSet.seq_subStepPattern[seq_activePattern][track][currentStep].volume&STEP_VOLUME_MASK;
-				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][currentStep].note;
+				const uint8_t vol = seq_flamHitVolume(track,currentStep,
+					seq_patternSet.seq_subStepPattern[seq_activePattern][track][currentStep].volume&STEP_VOLUME_MASK,
+					(int16_t)((int16_t)idx-getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][currentStep].shift)*3));
+				const uint8_t note = seq_flamHitNote(track,currentStep,
+					seq_patternSet.seq_subStepPattern[seq_activePattern][track][currentStep].note,
+					(int16_t)((int16_t)idx-getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][currentStep].shift)*3));
 				if(perf_allowHit(seq_perfRandom)) {
 					delayCandidates |= (uint8_t)(1u<<track);
 					delaySources[track]=currentStep;
@@ -1311,8 +1437,12 @@ void seq_processFlam(uint8_t idx)
 			else if((prevActive) && (chokeNext == 0) && (chokeCurrent == 0))
 			{
 				lastWasNoteOn[track] = 1;
-				const uint8_t vol = seq_patternSet.seq_subStepPattern[seq_activePattern][track][prevStep].volume&STEP_VOLUME_MASK;
-				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][prevStep].note;
+				const uint8_t vol = seq_flamHitVolume(track,prevStep,
+					seq_patternSet.seq_subStepPattern[seq_activePattern][track][prevStep].volume&STEP_VOLUME_MASK,
+					(int16_t)((int16_t)idx+24-getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][prevStep].shift)*3));
+				const uint8_t note = seq_flamHitNote(track,prevStep,
+					seq_patternSet.seq_subStepPattern[seq_activePattern][track][prevStep].note,
+					(int16_t)((int16_t)idx+24-getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][prevStep].shift)*3));
 				if(perf_allowHit(seq_perfRandom)) {
 					delayCandidates |= (uint8_t)(1u<<track);
 					delaySources[track]=prevStep;
@@ -1435,12 +1565,21 @@ static void seq_processGrooveFine(uint8_t frame)
             if(planned->flamRoll>seq_patternSet.flamProbability[seq_activePattern][track][source])
                 pattern &= (1UL<<23);
             int8_t shift=getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][source].shift);
-            if(!perf_grooveDue(&seq_groove,pattern,shift,planned->timeline,n,frame)) continue;
+            const int16_t human=perf_grooveHuman(&seq_groove,planned->timeline,planned->eventId);
+            uint8_t due=perf_grooveDue(&seq_groove,pattern,shift,planned->timeline,n,frame,human);
+            /* The +1 hit takes the groove of the following step, where it sits. */
+            int16_t hitPulse=(int16_t)(((int32_t)frame-(int32_t)n*48-seq_groove.offset[planned->timeline&3u]-(int32_t)shift*6-human)/2);
+            if(!due && n<2 && seq_flamPlusOne(track,planned,steps[n+3],length)) {
+                due=perf_grooveDue(&seq_groove,1UL<<23,shift,steps[n+3]->timeline,(int8_t)(n+1),frame,human);
+                hitPulse=24;
+            }
+            if(!due) continue;
 			if(!seq_conditionResolve(track,planned,n))continue;
             if(perf_allowHit(seq_perfRandom)) {
                 seq_triggerSourceStep[track]=source;
                 seq_triggerEventId=planned->eventId;
-                seq_triggerVoice(track,step->volume&STEP_VOLUME_MASK,step->note);
+                seq_triggerVoice(track,seq_flamHitVolume(track,source,step->volume&STEP_VOLUME_MASK,hitPulse),
+                    seq_flamHitNote(track,source,step->note,hitPulse));
                 seq_triggerEventId=0;
                 seq_triggerSourceStep[track]=255;
                 lastWasNoteOn[track]=1;
@@ -1941,6 +2080,7 @@ float seq_getElapsedStepTimePercent()
 
 /*IN_ITCM_RAM*/ void seq_tick()
 {
+	saveDiag_seq();
 	// Keep audio servicing during kit loading from advancing half-switched
 	// pattern state. Buffered UART clocks are dispatched by the outer drain.
 	if(seq_patternSwitchActive) return;
@@ -2171,6 +2311,16 @@ static uint8_t seq_intIsMainStepActive(uint8_t voice, uint8_t mainStepNr, uint8_
 	return (seq_patternSet.seq_mainSteps[bar][pattern][voice] & (1<<shift)) > 0;
 }
 // above is inlined below for ext linkage
+// 0.2.52: 1 when a pattern has a main step on any track and bar
+uint8_t seq_isPatternUsed(uint8_t pattern)
+{
+	if(pattern>=NUM_PATTERN)return 0;
+	for(uint8_t bar=0;bar<NUM_BARS;bar++)
+		for(uint8_t track=0;track<NUM_TRACKS;track++)
+			if(seq_patternSet.seq_mainSteps[bar][pattern][track])return 1;
+	return 0;
+}
+//------------------------------------------------------------------------------
 uint8_t seq_isMainStepActive(uint8_t voice, uint8_t mainStepNr, uint8_t pattern)
 {
 	return seq_intIsMainStepActive(voice, mainStepNr, pattern);

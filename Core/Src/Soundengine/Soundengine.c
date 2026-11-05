@@ -17,6 +17,9 @@
 #include <string.h>
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/MIDI/Uart.h"
+#include "Soundengine/saveDiag.h"
+
+volatile SaveDiag saveDiag;
 
 uint8_t soundengine_calcNextSampleBlock()
 {
@@ -30,6 +33,7 @@ uint8_t soundengine_calcNextSampleBlock()
 	#endif
 		audioCodec_endCpuMeter();
 		bCurrentSampleValid = SAMPLE_VALID;
+		saveDiag_block();
 
 		return 1;
 	}

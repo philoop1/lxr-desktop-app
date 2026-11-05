@@ -27,6 +27,7 @@
 #include "Soundengine/globals.h"
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Preset/PresetManager.h"
+#include "Soundengine/saveDiag.h"
 #include "Soundengine/FxBus.h"
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/Sequencer/PerformanceSteps.h"
@@ -70,12 +71,30 @@ volatile struct {
 
 } buttonHandler_stateMemory;
 
-static uint8_t buttonHandler_perfScaleArmed;
-static uint32_t buttonHandler_perfScaleDeadline;
+// 0.2.52: long PERF opens the pattern selection, long LOAD the pattern Scale (swapped)
+static uint8_t buttonHandler_perfLongArmed;
+static uint32_t buttonHandler_perfLongDeadline;
 #define LOAD_LONG_PRESS_TICKS (BUTTON_TIMEOUT*2) // 1 s, leaves time for LOAD + Step chords
 static uint8_t buttonHandler_loadLongArmed;
 static uint32_t buttonHandler_loadLongDeadline;
 static void buttonHandler_enterPatternShortcut(void);
+static void buttonHandler_openPatternScale(void);
+// 0.2.52: a held voice button shows the patterns of a bank that have steps on any track
+#define VOICE_LONG_NONE 0xffu
+static uint8_t buttonHandler_voiceLongVoice=VOICE_LONG_NONE;
+static uint8_t buttonHandler_voiceLongShown;
+static uint8_t buttonHandler_voiceLongBank;
+static uint32_t buttonHandler_voiceLongDeadline;
+static void buttonHandler_voiceLongTick(void);
+static void buttonHandler_voiceLongPress(uint8_t voice);
+static void buttonHandler_voiceLongRelease(uint8_t voice);
+static uint8_t buttonHandler_voiceLongOtherButton(uint8_t buttonNr);
+// 0.2.53: in step edit a short press selects a step, a long press sets or clears it
+#define STEP_LONG_NONE 0xffu
+static uint8_t buttonHandler_stepLongKey=STEP_LONG_NONE;
+static uint8_t buttonHandler_stepLongLed;
+static uint32_t buttonHandler_stepLongDeadline;
+static void buttonHandler_stepLongTick(void);
 static uint8_t buttonHandler_mutedVoices = 0;
 volatile static int8_t buttonHandler_armedAutomationStep = NO_STEP_SELECTED;
 
@@ -329,17 +348,16 @@ static void buttonHandler_setTimeraction(uint8_t buttonNr) {
 //periodically called handler for timed actions
 //-> hold a step button for a long time to select/rec automation
 void buttonHandler_tick() {
-    if(buttonHandler_perfScaleArmed && (int32_t)(systick_ticks-buttonHandler_perfScaleDeadline)>=0) {
-        buttonHandler_perfScaleArmed=0;
-        buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_VOICE;
-        menu_openPatternScale();
-        led_setMode2(SELECT_MODE_VOICE);
-        menu_repaintAll();
+    if(buttonHandler_perfLongArmed && (int32_t)(systick_ticks-buttonHandler_perfLongDeadline)>=0) {
+        buttonHandler_perfLongArmed=0;
+        buttonHandler_enterPatternShortcut();
     }
     if(buttonHandler_loadLongArmed && (int32_t)(systick_ticks-buttonHandler_loadLongDeadline)>=0) {
         buttonHandler_loadLongArmed=0;
-        buttonHandler_enterPatternShortcut();
+        buttonHandler_openPatternScale();
     }
+    buttonHandler_voiceLongTick();
+    buttonHandler_stepLongTick();
 	if ((systick_ticks > buttonHandler_buttonTimer)) {
 		if (buttonHandler_buttonTimerStepNr >= 0) //!=NO_STEP_SELECTED)
 		{
@@ -842,6 +860,18 @@ static void buttonHandler_setRemoveStep(uint8_t ledNr, uint8_t seqButtonPressed)
 	preset_touchTimer(PRESET_PAT_TIMER);
 
 }
+//--------------------------------------------------------
+// 0.2.53: a single held step button in step edit sets or clears its step after
+// BUTTON_TIMEOUT; the step stays selected, so its parameters can be edited at once
+static void buttonHandler_stepLongTick(void)
+{
+	if(buttonHandler_stepLongKey==STEP_LONG_NONE)return;
+	if((int32_t)(systick_ticks-buttonHandler_stepLongDeadline)<0)return;
+	const uint8_t key=buttonHandler_stepLongKey;
+	buttonHandler_stepLongKey=STEP_LONG_NONE;
+	if(buttonHandler_stateMemory.selectButtonMode!=SELECT_MODE_STEP)return;
+	buttonHandler_setRemoveStep(buttonHandler_stepLongLed,key);
+}
 
 //--------------------------------------------------------
 // **PATROT set track rotation to a value between 0 and 15
@@ -886,6 +916,14 @@ static uint8_t buttonHandler_selectPatternLoop(uint8_t key)
 	return pattern;
 }
 
+
+static void buttonHandler_openPatternScale(void)
+{
+    buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_VOICE;
+    menu_openPatternScale();
+    led_setMode2(SELECT_MODE_VOICE);
+    menu_repaintAll();
+}
 
 static void buttonHandler_enterPatternShortcut(void)
 {
@@ -1272,6 +1310,9 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				(uint8_t)(seqButtonPressed+menu_activeBar*16))) {
 				led_clearAllBlinkLeds();
 				buttonHandler_selectActiveStep(ledNr,seqButtonPressed);
+				buttonHandler_stepLongKey=seqButtonPressed;
+				buttonHandler_stepLongLed=ledNr;
+				buttonHandler_stepLongDeadline=systick_ticks+BUTTON_TIMEOUT;
 			} else {
 				led_setBlinkLed(ledNr,1);
 			}
@@ -1298,6 +1339,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 					activeParameters[PAR_PATTERN_MODE] = SKIP_NEXT_KIT_AUTOLOAD;
 				}
 
+				saveDiag_begin();
 				seq_patternSet.shuffle[seqButtonPressed + 16 * menu_activePatternBank] = activeParameters[PAR_SHUFFLE];
 
 
@@ -1319,6 +1361,8 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 
 
 				menu_selectedPresetNr[SAVE_TYPE_PATTERN] = seqButtonPressed + 16 * menu_activePatternBank;
+				preset_refreshTmpPat(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);
+				menu_showSaveDiag();
 				menu_activePage = PATTERN_SAVE_PAGE_OK;
 				sucessTimer = systick_ticks;
 				menu_repaint();
@@ -1442,6 +1486,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 {
 	stepEdit_release(seqButtonPressed);
+	if(seqButtonPressed==buttonHandler_stepLongKey)buttonHandler_stepLongKey=STEP_LONG_NONE;
 	buttonHandler_heldPatternKeys &= (uint16_t)~(1u<<seqButtonPressed);
 	if(buttonHandler_getCopy())return;
 
@@ -1615,6 +1660,68 @@ static void buttonHandler_partButtonReleased(uint8_t partNr)
 }
 
 //--------------------------------------------------------
+// 0.2.52: hold a voice button to see which patterns of a bank have steps on any track
+// (lit = used, dark = free, blinking = played); PAGE UP/DOWN change the bank while held
+static void buttonHandler_showUsedPatterns(void)
+{
+    const uint8_t bank=buttonHandler_voiceLongBank;
+    for(uint8_t i=0;i<16;i++) {
+        const uint8_t pattern=(uint8_t)(bank*16u+i);
+        led_setValue(seq_isPatternUsed(pattern),led_idx2StepLed(i));
+        led_setBlinkLed(led_idx2StepLed(i),(uint8_t)(pattern==menu_playedPattern));
+    }
+    led_setValue((uint8_t)(bank>>1),LED_PAGE_DOWN);
+    led_setValue((uint8_t)(bank&1u),LED_PAGE_UP);
+}
+static void buttonHandler_hideUsedPatterns(void)
+{
+    for(uint8_t i=0;i<16;i++)led_setBlinkLed(led_idx2StepLed(i),0);
+    const uint8_t mode=buttonHandler_stateMemory.selectButtonMode;
+    if(mode==SELECT_MODE_PATTERN||mode==SELECT_MODE_SONG)led_initPatternSelectLeds();
+    else led_updateSeqLeds();
+}
+static void buttonHandler_voiceLongCancel(void)
+{
+    const uint8_t shown=buttonHandler_voiceLongShown;
+    buttonHandler_voiceLongVoice=VOICE_LONG_NONE;
+    buttonHandler_voiceLongShown=0;
+    if(shown)buttonHandler_hideUsedPatterns();
+}
+static void buttonHandler_voiceLongPress(uint8_t voice)
+{
+    buttonHandler_voiceLongCancel();
+    // only a plain voice select: mute, copy and the MIDI delay keep their voice buttons
+    if(voice>=7 || copyClear_Mode>=MODE_COPY_PATTERN || buttonHandler_getShift() ||
+       menu_activePage==PERF_PAGE || buttonHandler_isMidiDelayPage())return;
+    buttonHandler_voiceLongVoice=voice;
+    buttonHandler_voiceLongDeadline=systick_ticks+BUTTON_TIMEOUT;
+}
+static void buttonHandler_voiceLongRelease(uint8_t voice)
+{
+    if(voice==buttonHandler_voiceLongVoice)buttonHandler_voiceLongCancel();
+}
+// returns 1 when the button was used by the display (PAGE UP/DOWN while shown)
+static uint8_t buttonHandler_voiceLongOtherButton(uint8_t buttonNr)
+{
+    if(buttonHandler_voiceLongVoice==VOICE_LONG_NONE)return 0;
+    if(buttonHandler_voiceLongShown && (buttonNr==BUT_PAGE_UP||buttonNr==BUT_PAGE_DOWN)) {
+        if(buttonNr==BUT_PAGE_UP && buttonHandler_voiceLongBank<3)buttonHandler_voiceLongBank++;
+        if(buttonNr==BUT_PAGE_DOWN && buttonHandler_voiceLongBank>0)buttonHandler_voiceLongBank--;
+        buttonHandler_showUsedPatterns();
+        return 1;
+    }
+    buttonHandler_voiceLongCancel();
+    return 0;
+}
+static void buttonHandler_voiceLongTick(void)
+{
+    if(buttonHandler_voiceLongVoice==VOICE_LONG_NONE || buttonHandler_voiceLongShown)return;
+    if((int32_t)(systick_ticks-buttonHandler_voiceLongDeadline)<0)return;
+    buttonHandler_voiceLongShown=1;
+    buttonHandler_voiceLongBank=(uint8_t)((menu_playedPattern/16u)&3u);
+    buttonHandler_showUsedPatterns();
+}
+//--------------------------------------------------------
 // one of the 7 voice buttons pressed
 static uint8_t buttonHandler_handleDelayVoice(uint8_t voice)
 {
@@ -1756,10 +1863,12 @@ static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 
 //--------------------------------------------------------
 void buttonHandler_buttonPressed(uint8_t buttonNr) {
-	if(buttonNr!=BUT_MODE2)buttonHandler_perfScaleArmed=0;
+	if(buttonNr!=BUT_MODE2)buttonHandler_perfLongArmed=0;
 	buttonHandler_loadLongArmed=0;
+	buttonHandler_stepLongKey=STEP_LONG_NONE; // a second button makes a chord, no long press
 
 	screensaver_touch();
+	if(buttonHandler_voiceLongOtherButton(buttonNr))return;
 
 
 	//------------------------------------------------------
@@ -1775,6 +1884,7 @@ void buttonHandler_buttonPressed(uint8_t buttonNr) {
 	case BUT_VOICE_6:
 	case BUT_VOICE_7:
 		buttonHandler_voiceButtonPressed(buttonNr-BUT_VOICE_1);
+		buttonHandler_voiceLongPress((uint8_t)(buttonNr-BUT_VOICE_1));
 		break;
 
 	case BUT_PAGE_UP:
@@ -1977,8 +2087,8 @@ void buttonHandler_buttonPressed(uint8_t buttonNr) {
 
 
     case BUT_MODE2:
-        buttonHandler_perfScaleArmed=1;
-        buttonHandler_perfScaleDeadline=systick_ticks+BUTTON_TIMEOUT;
+        buttonHandler_perfLongArmed=1;
+        buttonHandler_perfLongDeadline=systick_ticks+BUTTON_TIMEOUT;
         buttonHandler_handleModeButtons(SELECT_MODE_PERF);
         break;
     case BUT_MODE3:
@@ -2221,6 +2331,16 @@ void buttonHandler_buttonReleased(uint8_t buttonNr) {
 
 			break;
 
+	case BUT_VOICE_1:
+	case BUT_VOICE_2:
+	case BUT_VOICE_3:
+	case BUT_VOICE_4:
+	case BUT_VOICE_5:
+	case BUT_VOICE_6:
+	case BUT_VOICE_7:
+		buttonHandler_voiceLongRelease((uint8_t)(buttonNr-BUT_VOICE_1));
+		break;
+
 	case BUT_SELECT1:
 		buttonHandler_partButtonReleased(0);
 		break;
@@ -2296,7 +2416,7 @@ void buttonHandler_buttonReleased(uint8_t buttonNr) {
 		break;
 
 	case BUT_MODE2:
-        buttonHandler_perfScaleArmed=0;
+        buttonHandler_perfLongArmed=0;
         break;
 
 	case BUT_MODE3:

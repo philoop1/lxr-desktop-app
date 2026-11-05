@@ -8,7 +8,8 @@ import csv
 import hashlib
 from pathlib import Path
 
-from import_lxr1_patterns import convert, convert_kit, parameter_maps, source_offset
+from import_lxr1_patterns import (SampleMap, convert, convert_kit, enum_values, parameter_maps,
+                                  sample_bank, source_offset)
 
 
 def sha256(data: bytes) -> str:
@@ -21,18 +22,26 @@ def main() -> None:
     parser.add_argument("output", type=Path, help="new staging directory")
     parser.add_argument("--lxr1-source", type=Path,
                         default=Path(__file__).resolve().parents[2] / "mutador")
+    parser.add_argument("--samples", type=Path,
+                        help="SAMPLES.BIN whose rates set the pitch; default the LXR1 Mutador set")
+    parser.add_argument("--no-samples", action="store_true",
+                        help="keep the LXR1 waveform numbers as before 0.2.51")
     args = parser.parse_args()
+    enum = enum_values(Path(__file__).resolve().parents[1] / "Core/Inc/Parameters.h")
+    rates, crash = sample_bank(args.samples)
     if args.output.exists():
         parser.error("output already exists; choose a new directory")
     performances = sorted(args.source.glob("P[0-9][0-9][0-9].PRF"))
     if not performances:
         parser.error("no Pxxx.PRF files found")
     _, valid_automation, _ = parameter_maps(args.lxr1_source)
-    prepared: list[tuple[str, bytes, bytes, list[bytes], list[str], bool, int]] = []
+    prepared: list[tuple[str, bytes, bytes, list[bytes], list[str], bool, int, bytes]] = []
     for source in performances:
         data = source.read_bytes()
-        images, warnings = convert(data, ".prf", False, valid_automation, 0)
-        kit, kit_notes = convert_kit(data, ".prf", args.lxr1_source)
+        # the kit first: its sample oscillators set the pitch shift of the automation
+        sample_map = None if args.no_samples else SampleMap(enum, rates, crash)
+        kit, kit_notes = convert_kit(data, ".prf", args.lxr1_source, sample_map)
+        images, warnings = convert(data, ".prf", False, valid_automation, 0, sample_map)
         warnings.extend(kit_notes)
         snd_path = args.source / (source.stem + ".SND")
         existing = snd_path.is_file()
@@ -47,17 +56,17 @@ def main() -> None:
             warnings.append("Original SND missing; SND extracted from this PRF")
         if len(images) != 8 or any(len(image) != 4574 for image in images) or len(kit) != 328:
             raise ValueError(f"{source}: unexpected converted file size")
-        prepared.append((source.stem, data, snd, images, warnings, existing, data[8]))
+        prepared.append((source.stem, data, snd, images, warnings, existing, data[8], kit))
 
     args.output.mkdir(parents=True)
     rows = []
-    for stem, data, snd, images, warnings, existing, version in prepared:
+    for stem, data, snd, images, warnings, existing, version, kit in prepared:
         folder = args.output / stem
         converted = folder / "LXR2"
         converted.mkdir(parents=True)
         (folder / f"{stem}.PRF").write_bytes(data)
         (folder / f"{stem}.SND").write_bytes(snd)
-        (converted / "00-LXR1.SND").write_bytes(convert_kit(data, ".prf", args.lxr1_source)[0])
+        (converted / "00-LXR1.SND").write_bytes(kit)
         for slot, image in enumerate(images):
             (converted / f"{slot:02d}-LXR1{slot + 1}.PAT").write_bytes(image)
         (folder / "NOTES.TXT").write_text(

@@ -48,6 +48,13 @@ kept. Use LOAD + MORPH to choose a target and save the source kit/project to
 keep that association. These switches are global settings; older settings
 files load with `lsh=on`, `lmp=off` and `lsr=on`.
 
+From 0.2.58 SAVE + MORPH saves the kit you hear at the current Morph
+position as a kit file on the card, as on the LXR1. Mod targets, the LFO
+and rps extras, the audio outputs, the bank and the Morph-target slot come
+from the playing kit, as in the live Morph (0.2.59). The
+sound that plays does not change. If you save onto the current Morph-target
+slot, Morph then runs towards the saved mix.
+
 `lsr` (Load Sample Rate) controls whether a manual or automatic kit load
 loads the kit's master `srt`. With `lsr=off`, the current master sample rate
 is retained; with `on` (the default), the kit value is loaded. This switch

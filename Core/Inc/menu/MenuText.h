@@ -54,6 +54,10 @@
 #define MENU_SCALE_TRANSFORM 36
 #define MENU_WAVEFORM_WT 37 // Drum 1-3 osc and modulator: MENU_WAVEFORM plus the user wavetables
 #define MENU_AUDIO_OUT_FX	26
+#define MENU_FLAM_SLOT 38	// 0.2.61 flam preset page
+#define MENU_FLAM_REPEATS 39
+#define MENU_FLAM_GRID 40
+#define MENU_FLAM_PITCH 41
 
 //-----------------------------------------------------------------
 // Shared texts. Reduce mem usage by pooling common text
@@ -70,16 +74,50 @@ const char menuText_any[]  	= "any";
 //-----------------------------------------------------------------
 const char stepFlamNames[][4] =
 {
-	{6},		//number of entries
+	{16},		//number of entries
 	{"off"},
-	{"x2"},
-	{"x3"},
-	{"x4"},
-	{"x6"},
-	{"x8"}
-
-	//{"+8"},
-
+	// 0.2.61: flam presets of the project, F1..F10 start as x2..x8 and 2+1..8+1
+	{"F1"},{"F2"},{"F3"},{"F4"},{"F5"},{"F6"},{"F7"},{"F8"},
+	{"F9"},{"F10"},{"F11"},{"F12"},{"F13"},{"F14"},{"F15"}
+};
+const char flamRepeatNames[][4] =
+{
+	{12},
+	{"1"},{"2"},{"3"},{"4"},{"5"},{"6"},{"7"},{"8"},{"9"},{"10"},{"11"},{"12"}
+};
+const char flamGridNames[][4] =
+{
+	{6},
+	{"x2"},{"x3"},{"x4"},{"x6"},{"x8"},{"x12"}
+};
+const char flamPitchNames[][4] =
+{
+	{25},
+	{"-12"},
+	{"-11"},
+	{"-10"},
+	{"-9"},
+	{"-8"},
+	{"-7"},
+	{"-6"},
+	{"-5"},
+	{"-4"},
+	{"-3"},
+	{"-2"},
+	{"-1"},
+	{" 0"},
+	{"+1"},
+	{"+2"},
+	{"+3"},
+	{"+4"},
+	{"+5"},
+	{"+6"},
+	{"+7"},
+	{"+8"},
+	{"+9"},
+	{"+10"},
+	{"+11"},
+	{"+12"}
 };
 //-----------------------------------------------------------------
 const char stepShiftNames[][4] =
@@ -268,7 +306,7 @@ const char retriggerNames[][4]  =
 //-----------------------------------------------------------------
 const char lfoWaveNames[][4]  =
 {
-	{11},		//number of entries
+	{20},		//number of entries, see the LFO enum in lfo.h
 	{"sin"},
 	{"tri"},
 	{"sup"},
@@ -279,7 +317,16 @@ const char lfoWaveNames[][4]  =
 	{"xdn"},
 	{"str"},
 	{"gld"},
-	{"rps"},
+	{"xtr"},
+	{"si1"},
+	{"tr1"},
+	{"su1"},
+	{"sd1"},
+	{"sq1"},
+	{"rn1"},
+	{"xu1"},
+	{"xd1"},
+	{"xt1"},
 };
 const char lfoPolarityNames[][4]={{3},{"neg"},{"pos"},{"bi "}};
 //-----------------------------------------------------------------
@@ -395,7 +442,7 @@ const char mixFmNames[][6] =
 
 };
 const char patternScaleNames[][4]={{8},{"2"},{"4"},{"6"},{"8"},{"12"},{"16"},{"24"},{"32"}};
-const char snareLayerModeNames[][4]={{3},{"mix"},{"FM "},{"rng"}};
+const char snareLayerModeNames[][4]={{5},{"mix"},{"FM "},{"rng"},{"exp"},{"pd "}};
 //-----------------------------------------------------------------
 const char midiFilterNames[][16] =
 {
@@ -583,6 +630,12 @@ const char shortNames[][4]  =
 	{"cnd"},
 	{"fil"},
 	{"sct"},
+	{"hm1"},
+	{"hm2"},
+	{"hm3"},
+	{"hm4"},
+	{"fvl"},
+	{"fla"},{"rep"},{"res"},{"fpt"},{"+1"},{"bb"},
 
 
 
@@ -788,6 +841,17 @@ const char longNames[][16] =
 	{"Trig Condition"},
 	{"Fill Mode"},
 	{"Scale Transform"},
+	{"Humanize 1"},
+	{"Humanize 2"},
+	{"Humanize 3"},
+	{"Humanize 4"},
+	{"Flam Velocity"},
+	{"Flam Preset"},
+	{"Flam Repeats"},
+	{"Flam Resolution"},
+	{"Flam Pitch"},
+	{"Flam Plus One"},
+	{"Flam Accelerate"},
 
 
 

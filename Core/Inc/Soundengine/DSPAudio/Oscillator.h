@@ -128,6 +128,11 @@ void calcWaveBankFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t
 //-----------------------------------------------------------
 void calcWaveBankBlock(OscInfo* osc, int16_t* buf, const uint8_t size, const float gain, const float pwm);
 //-----------------------------------------------------------
+// user samples (waveform >= SAMPLEBANK_FIRST_WAVE), one shot from phase 0
+void calcSampleBankBlock(OscInfo* osc, int16_t* buf, const uint8_t size, const float gain);
+void calcSampleBankFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, const uint8_t size, const float gain);
+void osc_calcSampleBankFreq(OscInfo* osc);
+//-----------------------------------------------------------
 //int16_t calcSampleOsc(OscInfo* osc);
 //-----------------------------------------------------------
 /** set the played midi note.*/

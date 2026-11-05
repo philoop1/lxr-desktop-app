@@ -15,6 +15,7 @@
 #include "Soundengine/USB/usb_manager.h"
 #include <string.h>
 #include "usbd_cdc_if.h"
+#include "Soundengine/MIDI/MidiParser.h"
 
 
 
@@ -60,7 +61,21 @@ void usb_stop()
 //-------------------------------------------------------------------------------
 void usb_tick()
 {
+	static volatile uint8_t busy;
+	if(busy) return;
+	busy = 1;
 	usb_flushMidi();
+	busy = 0;
+}
+//-------------------------------------------------------------------------------
+void usb_processMidiIn(uint8_t max)
+{
+	static volatile uint8_t busy;
+	if(busy) return;
+	busy = 1;
+	MidiMsg msg;
+	while(max-- && usb_getMidi(&msg)) midiParser_parseMidiMessage(msg);
+	busy = 0;
 }
 //-------------------------------------------------------------------------------
 #if 0

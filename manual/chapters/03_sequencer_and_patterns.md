@@ -7,7 +7,8 @@ voice pages.
 
 Newly initialized or cleared steps default to velocity 100 from 0.1.24.
 Track length determines the stored slots used by a track. Pattern Scale sets
-how quickly those slots play. Hold PERFORMANCE to open Scale, turn the encoder
+how quickly those slots play. Hold LOAD for one second to open Scale (before
+0.2.52: PERFORMANCE), turn the encoder
 to preview and click to confirm. At 12, slots 1-12 of each 16-step page play;
 the other slots are retained. All other divisions play all enabled stored
 slots. See [Performance controls](07_performance.md) for divisions, bar
@@ -18,6 +19,13 @@ first PERF display (BPM, roll, Morph and sample rate). Release SHIFT,
 then use the step buttons to choose a pattern. **SHIFT + PATTERN** opens the
 dedicated pattern-selection display instead. The SHIFT + Step 1 shortcut is
 available from every mode in Mutador 0.1.23; device testing remains open.
+From 0.2.52 holding PERFORMANCE for half a second opens the same view.
+
+Hold a voice button for half a second to see which patterns are used: the
+step LEDs light each pattern of the played bank that has a step on any track,
+free patterns stay dark and the played pattern blinks. PAGE UP and PAGE DOWN
+show the other banks while the voice is held. Release it to return. A short
+press still selects the voice (0.2.52).
 
 ## Live performance variations (0.1.8)
 
@@ -79,11 +87,35 @@ ends an incomplete operation. Pattern bank selection addresses all 64 slots.
 
 The Step screen now has fpr next to the ordinary Step probability, Flam and Shift controls. The normal probability first decides whether the Step sounds. If it does, fpr decides whether its Flam repeats also sound. fpr=0 leaves only the main hit; fpr=100 keeps the full Flam. This decision is shared by all repeats of that Step. fpr is copied with Steps and saved in an FLP1 trailer after the existing pattern scale; older patterns load with fpr=100.
 
+## Flam 2+1 to 8+1 (0.2.48)
+
+After x8 the Flam control offers 2+1, 3+1, 4+1, 6+1 and 8+1. The Step rolls like x2 to x8, and one more hit follows at the start of the next Step, with the note and velocity of the flammed Step. The extra hit plays only when the next Step has no note; a note there plays alone, even when its chance mutes it. On the last Step of the track the Flam stays normal and does not reach Step 1. Shift and groove move the extra hit with the Step, and fpr drops it together with the other repeats. Older firmware plays these values as off.
+
+From 0.2.56 `fvl` after `shf` sets the velocity curve of the Flam, from -100 to +100 %. At 0 every hit has the Step velocity. Negative values fade the repeats: the first hit keeps the Step velocity and the last one plays at 100 % minus the amount, so -100 fades to silence. Positive values rise from 100 % minus the amount to the full Step velocity at the last hit. With 2+1 to 8+1 the extra hit is the last one of the curve. fvl is copied with Steps, can be set for a Step edit group and is saved in an FLV1 trailer; older patterns load with 0. From 0.2.61 fvl belongs to the Flam preset (see below).
+
+## Flam presets (0.2.61)
+
+The Flam control of a Step now picks one of 15 Flam presets of the project, `F1` to `F15`. F1 to F10 start as the former x2, x3, x4, x6, x8 and 2+1 to 8+1, so existing patterns sound the same. F11 to F15 start as examples: F11 speeds up, F12 slows down, F13 rises two semitones per hit, F14 fades out on the x8 grid, F15 plays three quick hits.
+
+Scroll the Step screen past the automation screen to the Flam preset screen. It edits the preset of the Step you selected last:
+
+| Control | Range | Function |
+|---|---|---|
+| fla | F1..F15 | Which preset the screen edits. Selecting a Step or changing its Flam jumps here. |
+| rep | 1..12 | Number of hits including the main hit. The hits always stay inside the Step, so a grid limits them (x4: at most 4). |
+| res | x2, x3, x4, x6, x8, x12 | Grid of the hits inside the Step. |
+| fvl | -100..+100 % | Velocity curve, as before, now for every Step using the preset. |
+| fpt | -12..+12 | Pitch step per hit in semitones; the notes stop at 0 and 127. The +1 hit continues the steps. |
+| +1 | off/on | One more hit at the start of the following empty Step, like 2+1 to 8+1. |
+| bb | -100..+100 % | Accelerate or brake. Positive values make the gaps shorter towards the end, negative values longer; 0 keeps them even. |
+
+Flam probability (`fpr`) stays per Step. Edits apply at once to every Step using the preset and are kept two seconds later in the tmp folder; SAVE Project stores the presets in the project (prj.nfo, after the name). Loading or creating a project starts from the factory presets, older projects keep them. Patterns saved by 0.2.56 to 0.2.60 still hold a velocity per Step: on loading, a Step with its own velocity points at a preset with the same Flam and that velocity, which takes a free place from F15 down to F11. When no place is free, the preset with the nearest velocity is used. The per-Step velocity table is gone, which frees about 28 KB of RAM. A pattern copied into another project uses the presets of that project.
+
 ## Trig Conditions (0.2.9)
 
 `cnd` follows `prob` on the first Step screen. A Step sounds only when its condition is true and its existing probability passes. Available conditions are `---` (always), `1st` (first track loop only), `n1s` (every loop except the first), `fil` (Fill on), `nfl` (Fill off), and every `A:B` combination from `1:1` through `8:8` where A is at most B. `1:2` plays on loops 1, 3, 5, ...; `2:4` on loops 2, 6, 10, ... . Each track counts its own loops and resets on transport restart or pattern change. Shifted Steps use their source position's loop. Flam repeats share the Step's condition.
 
-Fill is currently a latched `fil` on/off control on the second half of the SHIFT + Step 4 Groove page. It defaults to off and is not saved. A dedicated Fill button may be added later. Since 0.2.10, `pre`/`npr` follow the most recent evaluated condition on the same track, ignoring PRE variants as history sources. `nei`/`nne` follow the preceding track (track 1 has no neighbor). A failed Step probability counts as false. A result is retained for the whole Flam group. `lst`/`nls` test whether this pattern is due to leave at its next boundary, including a queued change, Song end/next entry or the performance pattern loop. A change queued after a Step has passed cannot affect that earlier Step.
+Fill is currently a latched `fil` on/off control on the first PERF page, after `spd` (on the SHIFT + Step 4 Groove page before 0.2.54). It defaults to off and is not saved. A dedicated Fill button may be added later. Since 0.2.10, `pre`/`npr` follow the most recent evaluated condition on the same track, ignoring PRE variants as history sources. `nei`/`nne` follow the preceding track (track 1 has no neighbor). A failed Step probability counts as false. A result is retained for the whole Flam group. `lst`/`nls` test whether this pattern is due to leave at its next boundary, including a queued change, Song end/next entry or the performance pattern loop. A change queued after a Step has passed cannot affect that earlier Step.
 
 Conditions are copied with Steps, tracks and patterns. New pattern saves append a `CND1` block after the Flam Probability data; older patterns load with `cnd=---` for every Step.
 

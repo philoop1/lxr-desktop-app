@@ -88,6 +88,11 @@ uint8_t waveBank_count(void)
 	return waveBank_tables;
 }
 
+uint32_t waveBank_flashBytes(void)
+{
+	return waveBank_tables ? WAVEBANK_HEADER_BYTES + WAVEBANK_HEADER->dataBytes : 0;
+}
+
 const char* waveBank_name(uint8_t table)
 {
 	return table < waveBank_tables ? WAVEBANK_HEADER->names[table] : "---";

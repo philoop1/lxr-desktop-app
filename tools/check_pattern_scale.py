@@ -37,7 +37,13 @@ uint8_t disk[65536];unsigned size,cursor;
 int f_write(FIL *f,const void *src,unsigned count,UINT *done){(void)f;if(cursor+count>sizeof(disk))abort();memcpy(disk+cursor,src,count);cursor+=count;if(cursor>size)size=cursor;*done=count;return 0;}
 int f_read(FIL *f,void *dst,unsigned count,UINT *done){(void)f;*done=size-cursor<count?size-cursor:count;memcpy(dst,disk+cursor,*done);cursor+=*done;return 0;}
 """
-for name in ['preset_writePatternScale','preset_readPatternScale','preset_writeFlamProbability','preset_readFlamProbability','preset_writeTrigConditions','preset_readTrigConditions','preset_writePatternData','preset_readPatternData']:
+# 0.2.61: flam presets; the per-step FLV1 block of older files converts to presets
+for line in ['FlamPreset seq_flamPresets[NUM_FLAM_PRESETS];','static uint32_t seq_flamMask[NUM_FLAM_PRESETS];','static const uint8_t seq_flamGridPulses[FLAM_NUM_GRIDS]={12,8,6,4,3,2};']:
+ assert line in seq,line;code+=line+'\n'
+for name in ['seq_flamDefaultPreset','seq_flamCalcMask','seq_flamPresetsChanged','seq_flamResetPresets']:
+ code+=function(seq,name)+'\n'
+code+='unsigned flamTouches;void preset_touchFlamTimer(void){flamTouches++;}\n'
+for name in ['preset_writePatternScale','preset_readPatternScale','preset_writeFlamProbability','preset_readFlamProbability','preset_writeTrigConditions','preset_readTrigConditions','preset_flamSlotUsed','preset_flamSameShape','preset_flamForVelocity','preset_readFlamVelocity','preset_writePatternData','preset_readPatternData']:
  code+=function(preset,name)+'\n'
 for name in ['seq_copyPatternToBackupBuffer','seq_copyBackupBufferToPattern','seq_copyPattern']:
  code+=function(seq,name)+'\n'
@@ -50,13 +56,16 @@ code+=r"""
 enum {BUT_MODE1=20,BUT_MODE2,BUT_MODE3,BUT_MODE4,BUT_SEQ8,SELECT_MODE_VOICE=0,SELECT_MODE_PERF=1,PATTERN_SETTINGS_PAGE=13,LED_MODE3=3};
 #define BUTTON_TIMEOUT 2000
 #define LOAD_LONG_PRESS_TICKS (BUTTON_TIMEOUT*2)
-uint32_t systick_ticks,buttonHandler_perfScaleDeadline,buttonHandler_buttonTimer;
-uint8_t buttonHandler_perfScaleArmed,seq_activePattern,activeParameters[NUM_PARAMS];
+uint32_t systick_ticks,buttonHandler_perfLongDeadline,buttonHandler_buttonTimer;
+uint8_t buttonHandler_perfLongArmed,seq_activePattern,activeParameters[NUM_PARAMS];
 uint8_t buttonHandler_loadLongArmed,transferActive;
 uint32_t buttonHandler_loadLongDeadline;
 unsigned shortcutCalls;
 uint8_t menu_isTransferActive(void){return transferActive;}
 void buttonHandler_enterPatternShortcut(void){shortcutCalls++;}
+unsigned voiceTicks;void buttonHandler_voiceLongTick(void){voiceTicks++;}
+void buttonHandler_stepLongTick(void){}
+void buttonHandler_openPatternScale(void);
 int8_t buttonHandler_buttonTimerStepNr=-1;
 struct {uint8_t selectButtonMode;} buttonHandler_stateMemory;
 unsigned opened,shortPerf,loadCalls,automationCalls;
@@ -70,12 +79,13 @@ void buttonHandler_armTimerActionStep(int8_t step){(void)step;automationCalls++;
 #define TIMER_ACTION_OCCURED -2
 void buttonHandler_handleModeButtons(uint8_t mode){if(mode==1)shortPerf++;if(mode==2)loadCalls++;}
 void pressButton(uint8_t buttonNr){
- if(buttonNr!=BUT_MODE2)buttonHandler_perfScaleArmed=0;
+ if(buttonNr!=BUT_MODE2)buttonHandler_perfLongArmed=0;
  buttonHandler_loadLongArmed=0;
  switch(buttonNr){
 """
 code+=press[a:b]+'}}\nvoid releaseButton(uint8_t buttonNr){switch(buttonNr){'+release[a2:b2]+'}}\n'
 code+=function(btn,'buttonHandler_tick')
+code+=function(btn,'buttonHandler_openPatternScale')
 menu=read('Core/Src/menu/menu.c')
 code+=function(menu,'menu_openPatternScale')
 code+=function(seq,'seq_setPatternScale')
@@ -117,12 +127,31 @@ int main(void){
   memset(&seq_patternSet,0,sizeof(seq_patternSet));
   seq_patternSet.scale[3]=divisions[mode];seq_patternSet.kitNr[3]=17;
   seq_patternSet.flamProbability[3][2][5]=37;
+  seq_flamResetPresets();flamTouches=0;
+  seq_patternSet.seq_stepTiming[3][2][5].flam=3;seq_patternSet.seq_stepTiming[3][2][6].flam=3;seq_patternSet.seq_stepTiming[3][2][7].flam=3;
   for(unsigned t=0;t<7;t++){seq_patternSet.length[3][t]=64;seq_patternSet.seq_mainSteps[3][3][t]=0xabcd;}
   size=cursor=0;preset_writePatternData(3);unsigned modernSize=size;
-  check(size>911&&memcmp(disk+size-911,"SCL2",4)==0&&memcmp(disk+size-905,"FLP1",4)==0&&memcmp(disk+size-453,"CND2",4)==0,"tagged pattern trailers");
+  check(size>911&&memcmp(disk+size-911,"SCL2",4)==0&&memcmp(disk+size-905,"FLP1",4)==0&&memcmp(disk+size-453,"CND2",4)==0,"tagged pattern trailers, no per-step flam velocity");
   cursor=0;check(preset_readPatternData(4,3),"modern pattern load succeeds");
   check(seq_patternSet.scale[4]==divisions[mode]&&seq_patternSet.kitNr[4]==17&&seq_patternSet.seq_mainSteps[3][4][0]==0xabcd,"scale and legacy pattern data roundtrip");
   check(seq_patternSet.flamProbability[4][2][5]==37,"flam probability roundtrip");
+  check(seq_patternSet.seq_stepTiming[4][2][5].flam==3&&!flamTouches,"flam preset number roundtrip");
+  /* a 0.2.56..0.2.60 file: FLV1 with 448 velocities after CND2 */
+  memcpy(disk+modernSize,"FLV1",4);memset(disk+modernSize+4,FLAM_VELO_FLAT,448);
+  disk[modernSize+4+2*64+5]=9;disk[modernSize+4+2*64+6]=9;disk[modernSize+4+1]=200;size=modernSize+452;
+  memset(seq_patternSet.seq_stepTiming[3],0,sizeof(seq_patternSet.seq_stepTiming[3]));
+  cursor=0;check(preset_readPatternData(4,3),"0.2.60 pattern load succeeds");
+  check(seq_patternSet.seq_stepTiming[4][2][5].flam==15&&seq_patternSet.seq_stepTiming[4][2][6].flam==15,"own flam velocity moves to a free preset");
+  check(seq_flamPresets[15].velo==9&&seq_flamPresets[15].repeats==4&&seq_flamPresets[15].grid==2&&!seq_flamPresets[15].plusOne,"the new preset keeps the flam shape");
+  check(seq_patternSet.seq_stepTiming[4][2][7].flam==3&&seq_flamPresets[3].velo==FLAM_VELO_FLAT&&flamTouches==1,"flat steps keep their preset");
+  check(seq_patternSet.seq_stepTiming[4][0][1].flam==0,"bad old velocity is ignored");
+  check(seq_patternSet.flamProbability[4][2][5]==37,"flam probability survives the conversion");
+  /* no free preset: the nearest velocity of the same shape */
+  for(uint8_t i=11;i<16;i++)seq_flamPresets[i].pitch=13;
+  seq_patternSet.seq_stepTiming[3][2][5].flam=0;seq_flamPresets[13].pitch=12;seq_flamPresets[13].repeats=4;seq_flamPresets[13].grid=2;seq_flamPresets[13].velo=20;
+  disk[modernSize+4+2*64+5]=15;cursor=0;
+  check(preset_readPatternData(4,3)&&seq_patternSet.seq_stepTiming[4][2][5].flam==13,"full presets use the nearest velocity");
+  size=modernSize;
   size=modernSize-911;cursor=0;seq_patternSet.scale[4]=32;
   check(preset_readPatternData(4,3)&&seq_patternSet.scale[4]==16&&seq_patternSet.flamProbability[4][2][5]==100,"legacy pattern defaults safely");
   size=modernSize;disk[size-906]^=1;cursor=0;
@@ -142,18 +171,24 @@ int main(void){
  seq_setPatternScale(3,5);memset(seq_patternSet.length[3],16,NUM_TRACKS);
  seq_activePattern=3;seq_patternSet.scale[3]=16;seq_copyPatternToBackupBuffer(3);seq_setPatternScale(3,4);seq_copyBackupBufferToPattern(3);check(seq_patternSet.scale[3]==12,"pattern rate survives leaving the pattern");
  seq_activePattern=3;seq_patternSet.scale[3]=12;
- systick_ticks=100;pressButton(BUT_MODE2);systick_ticks=2099;buttonHandler_tick();check(!opened,"short PERF does not open Scale");
- releaseButton(BUT_MODE2);systick_ticks=2200;buttonHandler_tick();check(!opened&&shortPerf==1,"release cancels hold");
+ /* 0.2.52: long PERF opens the pattern selection, long LOAD the pattern Scale */
+ systick_ticks=100;pressButton(BUT_MODE2);systick_ticks=2099;buttonHandler_tick();check(!shortcutCalls&&!opened,"short PERF does nothing more");
+ releaseButton(BUT_MODE2);systick_ticks=2200;buttonHandler_tick();check(!shortcutCalls&&shortPerf==1,"release cancels hold");
  pressButton(BUT_MODE2);systick_ticks+=BUTTON_TIMEOUT;buttonHandler_tick();
- check(opened==1&&activeParameters[PAR_PATTERN_SCALE]==4&&buttonHandler_stateMemory.selectButtonMode==SELECT_MODE_VOICE,"long PERF opens current pattern Scale");
- buttonHandler_tick();check(opened==1&&!automationCalls,"hold fires once without step-automation action");
- releaseButton(BUT_MODE2);pressButton(BUT_MODE3);systick_ticks+=BUTTON_TIMEOUT;buttonHandler_tick();check(opened==1&&loadCalls==1,"LOAD retains its behavior");
- pressButton(BUT_MODE2);pressButton(BUT_MODE3);systick_ticks+=BUTTON_TIMEOUT;buttonHandler_tick();check(opened==1,"another button cancels PERF hold");
- check(!shortcutCalls,"short LOAD hold keeps LOAD + Step chords");
- pressButton(BUT_MODE3);systick_ticks+=LOAD_LONG_PRESS_TICKS;buttonHandler_tick();check(shortcutCalls==1,"long LOAD opens pattern selection");
- buttonHandler_tick();check(shortcutCalls==1,"long LOAD fires once");
- pressButton(BUT_MODE3);pressButton(BUT_SEQ8);systick_ticks+=LOAD_LONG_PRESS_TICKS;buttonHandler_tick();check(shortcutCalls==1,"another button cancels long LOAD");
- transferActive=1;pressButton(BUT_MODE3);systick_ticks+=LOAD_LONG_PRESS_TICKS;buttonHandler_tick();check(shortcutCalls==1,"transfer dialog ignores long LOAD");transferActive=0;
+ check(shortcutCalls==1&&!opened,"long PERF opens the pattern selection");
+ buttonHandler_tick();check(shortcutCalls==1&&!automationCalls,"hold fires once without step-automation action");
+ releaseButton(BUT_MODE2);pressButton(BUT_MODE3);systick_ticks+=BUTTON_TIMEOUT;buttonHandler_tick();check(!opened&&loadCalls==1,"short LOAD hold keeps LOAD + Step chords");
+ releaseButton(BUT_MODE3);
+ pressButton(BUT_MODE2);pressButton(BUT_MODE3);systick_ticks+=BUTTON_TIMEOUT;buttonHandler_tick();check(shortcutCalls==1,"another button cancels PERF hold");
+ releaseButton(BUT_MODE3);
+ buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_PERF;
+ pressButton(BUT_MODE3);systick_ticks+=LOAD_LONG_PRESS_TICKS;buttonHandler_tick();
+ check(opened==1&&activeParameters[PAR_PATTERN_SCALE]==4&&buttonHandler_stateMemory.selectButtonMode==SELECT_MODE_VOICE&&shortcutCalls==1,"long LOAD opens current pattern Scale");
+ buttonHandler_tick();check(opened==1,"long LOAD fires once");
+ releaseButton(BUT_MODE3);
+ pressButton(BUT_MODE3);pressButton(BUT_SEQ8);systick_ticks+=LOAD_LONG_PRESS_TICKS;buttonHandler_tick();check(opened==1,"another button cancels long LOAD");
+ transferActive=1;pressButton(BUT_MODE3);systick_ticks+=LOAD_LONG_PRESS_TICKS;buttonHandler_tick();check(opened==1,"transfer dialog ignores long LOAD");transferActive=0;
+ check(voiceTicks>0,"the tick serves the voice hold");
  perf_scaleSetPattern(16,0);perf_speedSet(PERF_SPEED_NEUTRAL,0);seq_running=1;
  seq_activePattern=3;seq_patternSet.scale[3]=12;menu_openPatternScale();
  menu_parseEncoder(3,0);

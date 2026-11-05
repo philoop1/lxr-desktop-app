@@ -100,13 +100,65 @@ void lfo_init(Lfo *lfo)
 	lfo->stepValue=0.5f;
 	lfo->stepSlew=0;
 	lfo->stepPolarity=2;
+	lfo->shot=LFO_SHOT_DONE;
 	lfo->modNodeValue	= 1;
 
 	modNode_init(&lfo->modTarget);
 }
 //-------------------------------------------------------------
+static inline uint8_t lfo_isOneShot(uint8_t waveform)
+{
+	return (uint8_t)(waveform>=LFO_ONESHOT_FIRST && waveform<NUM_LFO_WAVEFORMS);
+}
+/* The looping shape at a phase, for the one-shots (they run from flash, the
+ * looping waves stay in lfo_calc in ITCM). The one-shot square is on first. */
+static float lfo_shapeAt(uint8_t base, uint32_t phase)
+{
+	const float x = phase/(float)0xffffffff;
+	switch(base)
+	{
+	case LFO_SINE:		return ((sine_table[phase>>20]/32767.f) + 1)/2.f;
+	case LFO_TRI:		return 1.f-fabsf(x*2-1);
+	case LFO_SAW_UP:	return x;
+	case LFO_SAW_DOWN:	return (0xffffffff-phase) / (float)0xffffffff;
+	case LFO_REC:		return phase > 0x7fffffff ? 0.f : 1.f;
+	case LFO_EXP_UP:	return x*x*x;
+	case LFO_EXP_DOWN:	{ const float y = (0xffffffff-phase) / (float)0xffffffff; return y*y*y; }
+	case LFO_EXP_TRI:	{ const float t = 1.f-fabsf(x*2-1); return t*t*t; }
+	default:			return 0.f;
+	}
+}
+// noinline: lfo_calc lives in ITCM, the one-shots stay in flash
+static __attribute__((noinline)) float lfo_calcOneShot(Lfo *lfo)
+{
+	const uint8_t shape = (uint8_t)(lfo->waveform-LFO_ONESHOT_FIRST);
+	const uint8_t base = shape<=LFO_EXP_DOWN ? shape : LFO_EXP_TRI;
+	const uint32_t inc = (uint32_t)(lfo->phaseInc*lfo->modNodeValue);
+	const uint32_t oldPhase = lfo->phase;
+	if(lfo->shot==LFO_SHOT_WAIT)
+	{
+		// the offset is the start delay; the phase counts it
+		lfo->phase += inc;
+		if(lfo->phase>=lfo->phaseOffset || lfo->phase<oldPhase)
+		{
+			lfo->phase = 0;
+			lfo->shot = LFO_SHOT_RUN;
+			if(base==LFO_NOISE) lfo_setRandomValue(lfo);
+		}
+		if(base==LFO_NOISE) return lfo->rnd;
+		return base==LFO_REC ? 0.f : lfo_shapeAt(base,0);
+	}
+	if(lfo->shot==LFO_SHOT_RUN)
+	{
+		lfo->phase += inc;
+		if(lfo->phase<oldPhase) lfo->shot = LFO_SHOT_DONE;
+	}
+	if(base==LFO_NOISE) return lfo->rnd;
+	return lfo_shapeAt(base, lfo->shot==LFO_SHOT_DONE ? 0xffffffff : lfo->phase);
+}
 IN_ITCM_RAM float lfo_calc(Lfo *lfo)
 {
+	if(lfo_isOneShot(lfo->waveform)) return lfo_calcOneShot(lfo);
 	uint32_t oldPhase 		= lfo->phase;
 	float inc = lfo->phaseInc*lfo->modNodeValue;
 	uint32_t incInt = inc;
@@ -159,6 +211,13 @@ IN_ITCM_RAM float lfo_calc(Lfo *lfo)
 			{
 				float x = (0xffffffff-(lfo->phase)) / (float)0xffffffff;
 				return x*x*x;//valueShaperF2F(x,-0.9f);
+			}
+			break;
+	//---
+		case LFO_EXP_TRI:
+			{
+				const float t = 1.f-fabsf( (lfo->phase/(float)0xffffffff)*2-1 );
+				return t*t*t;
 			}
 			break;
 	//---
@@ -284,7 +343,8 @@ IN_ITCM_RAM void lfo_setFreq(Lfo *lfo, float f)
 //-------------------------------------------------------------
 void lfo_setWaveform(Lfo *lfo, uint8_t waveform)
 {
-	if(waveform > LFO_RANDOM_STEP)
+	// rps is not an LFO wave any more; LFO_RANDOM_STEP is internal
+	if(waveform >= NUM_LFO_WAVEFORMS)
 		waveform = LFO_SINE;
 
 	if((waveform != lfo->waveform)
@@ -293,9 +353,11 @@ void lfo_setWaveform(Lfo *lfo, uint8_t waveform)
 		lfo->rnd = 0.5f;
 		lfo_setSmoothRandomTarget(lfo,waveform);
 	}
-	if(waveform!=lfo->waveform && waveform==LFO_RANDOM_STEP) {
-		lfo->stepValue=0.5f;
-		lfo->rndTarget=0.5f;
+	// a newly chosen one-shot runs once, also without a retrigger voice
+	if(waveform!=lfo->waveform && lfo_isOneShot(waveform)) {
+		lfo->phase=0;
+		lfo->shot=LFO_SHOT_RUN;
+		if(waveform==LFO_ONESHOT_NOISE) lfo_setRandomValue(lfo);
 	}
 
 	lfo->waveform = waveform;
@@ -337,6 +399,12 @@ void lfo_recalcSync()
 static inline void lfo_retriggerVoice(Lfo *lfo)
 {
 	if(lfo->waveform==LFO_RANDOM_STEP) return;
+	if(lfo_isOneShot(lfo->waveform)) {
+		lfo->phase = 0;
+		lfo->shot = lfo->phaseOffset ? LFO_SHOT_WAIT : LFO_SHOT_RUN;
+		if(lfo->shot==LFO_SHOT_RUN && lfo->waveform==LFO_ONESHOT_NOISE) lfo_setRandomValue(lfo);
+		return;
+	}
 	if((lfo->waveform == LFO_STRAY) || (lfo->waveform == LFO_GLIDE))
 		lfo->phase = 0; // phaseOffset is the bipolar bias for smooth random modes.
 	else
@@ -413,7 +481,7 @@ void lfo_initRandomSteps(void)
 {
     for(uint8_t voice=0;voice<6;voice++) {
         lfo_init(&randomStepLfos[voice]);
-        lfo_setWaveform(&randomStepLfos[voice],LFO_RANDOM_STEP);
+        randomStepLfos[voice].waveform=LFO_RANDOM_STEP; // internal wave, lfo_setWaveform refuses it
         randomStepLfos[voice].retrigger=voice+1u;
     }
 }

@@ -256,9 +256,9 @@ IN_ITCM_RAM void calcDrumVoiceSyncBlock(const uint8_t voiceNr, int16_t* buf, con
 
 	if(voiceArray[voiceNr].mixOscs == 4)
 	{
-		// a user wavetable has no sine to warp: it plays plain and keeps its PWM scan
+		// a user wavetable or sample has no sine to warp: it plays plain, a wavetable keeps its PWM scan
 		if(voiceArray[voiceNr].osc.waveform > PWM)
-			calcWaveBankBlock(&voiceArray[voiceNr].osc,buf,size,1.f,voiceArray[voiceNr].pwm);
+			calcNextOscSampleBlock(&voiceArray[voiceNr].osc,buf,size,1.f,voiceArray[voiceNr].pwm);
 		else
 			calcPhaseDistBlock(&voiceArray[voiceNr].osc,buf,size);
 	}

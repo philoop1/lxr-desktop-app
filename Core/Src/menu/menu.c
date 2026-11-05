@@ -38,6 +38,7 @@
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Sequencer/clockSync.h"
 #include "Soundengine/Soundengine.h"
+#include "Soundengine/saveDiag.h"
 #include "Soundengine/DSPAudio/lfo.h"
 #include "Soundengine/AudioCodecManager.h"
 #include "Soundengine/MIDI/MidiParser.h"
@@ -52,6 +53,7 @@ uint8_t saveScreenPots[4]; //hold absolute pot position for save page name editi
 
 #include "Soundengine/DSPAudio/modulationNode.h"
 #include "Soundengine/DSPAudio/WaveBank.h"
+#include "Soundengine/DSPAudio/SampleBank.h"
 
 // uppercase 3 letters in buf
 static void upr_three(char *buf);
@@ -60,6 +62,7 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 static uint8_t menu_formatTapeValue(uint16_t parNr, uint8_t value, char *buf);
 // given a menu id returns the number of entries
 static uint8_t getMaxEntriesForMenu(uint8_t menuId);
+static uint8_t menu_waveformSkip(uint8_t value, int8_t dir);
 // given a number, convert it to a note name
 static void setNoteName(uint8_t num, char *buf);
 
@@ -108,6 +111,28 @@ static struct {
 #define TRANSFER_LXR1 64 // project entry after PROJ63, import only
 #define TRANSFER_PERF 3  // transfer type: LXR1 performance
 
+/* 0.2.62: the transfer page reads and writes the SD card on every encoder step
+ * (names, kits, copies). Like a save, it keeps the sample interrupt running so
+ * the sound does not stop while the card is busy. Returns 1 if it was running. */
+static uint8_t menu_transferSdBegin(void)
+{
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+	const uint8_t timerWasOn = (htim2.Instance->CR1 & TIM_CR1_CEN) && (htim2.Instance->DIER & TIM_IT_UPDATE);
+	if(!timerWasOn) HAL_TIM_Base_Start_IT(&htim2);
+	return timerWasOn;
+#else
+	return 1;
+#endif
+}
+static void menu_transferSdEnd(uint8_t timerWasOn)
+{
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+	/* an inner save (tmp.pat) may already have stopped it */
+	if(!timerWasOn) HAL_TIM_Base_Stop_IT(&htim2);
+#else
+	(void)timerWasOn;
+#endif
+}
 static void menu_transferRefreshName(uint8_t target)
 {
     const uint8_t current=menu_loadedPresetNr[CURRENT_PROJECT];
@@ -151,7 +176,9 @@ void menu_transferSelectType(uint8_t pattern)
     if(!menu_isTransferActive() || menu_transfer.project==TRANSFER_LXR1)return;
     menu_transfer.pattern=pattern>2?0:pattern;
     menu_transfer.stage=2;
+    const uint8_t timerWasOn=menu_transferSdBegin();
     menu_transferRefreshName(0);
+    menu_transferSdEnd(timerWasOn);
     menu_repaintAll();
 }
 void menu_transferSelectProject(void)
@@ -160,7 +187,7 @@ void menu_transferSelectProject(void)
     menu_transfer.stage=0;
     menu_repaintAll();
 }
-static void menu_handleTransfer(int8_t inc,uint8_t clicked)
+static void menu_handleTransferSd(int8_t inc,uint8_t clicked)
 {
     if(inc) {
         uint8_t *value=NULL,maximum=63;
@@ -228,7 +255,9 @@ static void menu_handleTransfer(int8_t inc,uint8_t clicked)
         else if(menu_transfer.stage==4 || menu_transfer.stage==6) {
             const uint8_t current=menu_loadedPresetNr[CURRENT_PROJECT];
             const uint8_t overwrite=(uint8_t)(menu_transfer.stage==6);
-            if(seq_isRunning())menu_transfer.result=FR_LOCKED;
+            /* A Kit lands in a free or chosen slot and does not change the playing sound.
+               Patterns, P+K and LXR1 blocks may hit the running or next pattern. */
+            if(seq_isRunning() && menu_transfer.pattern!=0)menu_transfer.result=FR_LOCKED;
             else {
                 const uint8_t source=menu_transfer.exportMode?current:menu_transfer.project;
                 const uint8_t target=menu_transfer.exportMode?menu_transfer.project:current;
@@ -265,6 +294,12 @@ static void menu_handleTransfer(int8_t inc,uint8_t clicked)
         } else if(menu_transfer.stage==5){menu_transfer.stage=0;menu_transfer.noFreeKit=0;}
     }
     menu_repaintAll();
+}
+static void menu_handleTransfer(int8_t inc,uint8_t clicked)
+{
+    const uint8_t timerWasOn=menu_transferSdBegin();
+    menu_handleTransferSd(inc,clicked);
+    menu_transferSdEnd(timerWasOn);
 }
 
 
@@ -519,6 +554,17 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_STEP_CONDITION,CAT_STEP,LONG_STEP_CONDITION},
 		{SHORT_PERF_FILL,CAT_SEQUENCER,LONG_PERF_FILL},
 		{SHORT_SCALE_TRANSFORM,CAT_SEQUENCER,LONG_SCALE_TRANSFORM},
+		{SHORT_HUMANIZE1,CAT_SEQUENCER,LONG_HUMANIZE1},
+		{SHORT_HUMANIZE2,CAT_SEQUENCER,LONG_HUMANIZE2},
+		{SHORT_HUMANIZE3,CAT_SEQUENCER,LONG_HUMANIZE3},
+		{SHORT_HUMANIZE4,CAT_SEQUENCER,LONG_HUMANIZE4},
+		{SHORT_STEP_FLAM_VELO,CAT_STEP,LONG_STEP_FLAM_VELO},
+		{SHORT_FLAM_SLOT,CAT_STEP,LONG_FLAM_SLOT},
+		{SHORT_FLAM_REPEATS,CAT_STEP,LONG_FLAM_REPEATS},
+		{SHORT_FLAM_GRID,CAT_STEP,LONG_FLAM_GRID},
+		{SHORT_FLAM_PITCH,CAT_STEP,LONG_FLAM_PITCH},
+		{SHORT_FLAM_PLUS_ONE,CAT_STEP,LONG_FLAM_PLUS_ONE},
+		{SHORT_FLAM_ACCEL,CAT_STEP,LONG_FLAM_ACCEL},
 
 
 
@@ -534,10 +580,10 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_OSC_WAVE_DRUM1*/ 	DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
 	    /*PAR_OSC_WAVE_DRUM2*/ 	DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
 	    /*PAR_OSC_WAVE_DRUM3*/ 	DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
-	    /*PAR_OSC_WAVE_SNARE*/  DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_OSC_WAVE_SNARE*/  DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
 	    /*NRPN_DATA_ENTRY_COARSE*/ DTYPE_0B127,
-	    /*PAR_WAVE1_CYM*/  		DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_WAVE1_HH*/  		DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_WAVE1_CYM*/  		DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
+	    /*PAR_WAVE1_HH*/  		DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
 	    /*PAR_COARSE1*/ 		DTYPE_PM63,//DTYPE_0B127,
 	    /*PAR_FINE1*/ 			DTYPE_PM63,
 	    /*PAR_COARSE2*/			DTYPE_PM63,//DTYPE_0B127,,							// 10
@@ -553,10 +599,10 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_MOD_WAVE_DRUM1*/  DTYPE_MENU | (MENU_WAVEFORM_WT<<8),		//20
 	    /*PAR_MOD_WAVE_DRUM2*/  DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
 	    /*PAR_MOD_WAVE_DRUM3*/  DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
-	    /*PAR_WAVE2_CYM*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_WAVE3_CYM*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_WAVE2_HH*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_WAVE3_HH*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_WAVE2_CYM*/ 		DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
+	    /*PAR_WAVE3_CYM*/ 		DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
+	    /*PAR_WAVE2_HH*/ 		DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
+	    /*PAR_WAVE3_HH*/ 		DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
 	    /*PAR_NOISE_FREQ1*/ 	DTYPE_0B127,
 	    /*PAR_MIX1*/ 			DTYPE_0B127,
 	    /*PAR_MOD_OSC_F1_CYM*/ 	DTYPE_PM63,//DTYPE_0B127,,
@@ -784,7 +830,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 		/*PAR_SNARE_NOISE_ATTACK*/ DTYPE_0B127,
 		/*PAR_SNARE_NOISE_DECAY*/ DTYPE_0B127,
 		/*PAR_SNARE_NOISE_SLOPE*/ DTYPE_0B127,
-		/*PAR_SNARE_LAYER_WAVE*/ DTYPE_MENU | (MENU_WAVEFORM<<8),
+		/*PAR_SNARE_LAYER_WAVE*/ DTYPE_MENU | (MENU_WAVEFORM_WT<<8),
 		/*PAR_SNARE_LAYER_AMOUNT*/ DTYPE_0B127,
 		/*PAR_SNARE_LAYER_FREQ*/ DTYPE_0B127,
 		/*PAR_SNARE_LAYER_MODE*/ DTYPE_MENU | (MENU_SNARE_LAYER_MODE<<8),
@@ -923,6 +969,14 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	DTYPE_MENU | (MENU_TRIG_CONDITION<<8),
 	DTYPE_ON_OFF,
 	DTYPE_MENU | (MENU_SCALE_TRANSFORM<<8),
+	/*PAR_HUMANIZE1..4*/ DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,DTYPE_0B127,
+	/*PAR_STEP_FLAM_VELO*/ DTYPE_0B100,
+	/*PAR_FLAM_SLOT*/ DTYPE_MENU | (MENU_FLAM_SLOT<<8),
+	/*PAR_FLAM_REPEATS*/ DTYPE_MENU | (MENU_FLAM_REPEATS<<8),
+	/*PAR_FLAM_GRID*/ DTYPE_MENU | (MENU_FLAM_GRID<<8),
+	/*PAR_FLAM_PITCH*/ DTYPE_MENU | (MENU_FLAM_PITCH<<8),
+	/*PAR_FLAM_PLUS_ONE*/ DTYPE_ON_OFF,
+	/*PAR_FLAM_ACCEL*/ DTYPE_0B100,
 
 };
 
@@ -1513,12 +1567,15 @@ static void menu_repaintSimplePage()
             break;
         default:
             snprintf(&editDisplayBuffer[0][0],17,"%s %s",action,kind);
-            strcpy(&editDisplayBuffer[1][0],menu_transfer.result==FR_OK?"Copy OK":
+            /* Unnamed results show their FatFs code, e.g. 18 = too many open files. */
+            snprintf(&editDisplayBuffer[1][0],17,"%s",menu_transfer.result==FR_OK?"Copy OK":
                 menu_transfer.result==FR_EXIST?"Target occupied":
                 menu_transfer.result==FR_LOCKED?"Stop sequencer":
                 menu_transfer.noFreeKit?"No free KIT":
                 menu_transfer.result==FR_DENIED?"Slot ambiguous":
-                (menu_transfer.result==FR_NO_FILE || menu_transfer.result==FR_NO_PATH)?"Source missing":"Copy failed");
+                (menu_transfer.result==FR_NO_FILE || menu_transfer.result==FR_NO_PATH)?"Source missing":"");
+            if(!editDisplayBuffer[1][0])
+                snprintf(&editDisplayBuffer[1][0],17,"Copy failed %u",(unsigned)menu_transfer.result);
             break;
         }
 	}
@@ -2146,8 +2203,9 @@ void menu_repaintGeneric()
 			case DTYPE_VOICE_LFO:
 
 				if(menu_formatTapeValue(parNr,curParmVal,&editDisplayBuffer[1][13])) {}
-				else if(parNr==PAR_PERF_AVL) {
-                    perf_formatVelocityGain(&editDisplayBuffer[1][11],curParmVal);
+				else if(parNr==PAR_PERF_AVL||parNr==PAR_STEP_FLAM_VELO||parNr==PAR_FLAM_ACCEL) {
+                    perf_formatVelocityGain(&editDisplayBuffer[1][11],
+                        parNr!=PAR_PERF_AVL?(uint8_t)(curParmVal*2u):curParmVal);
                     editDisplayBuffer[1][15]='%';
                 }
                 else if(parNr == PAR_BPM)
@@ -2339,7 +2397,14 @@ void menu_repaintGeneric()
 			//write the text to the edit buffer
 			memcpy(&editDisplayBuffer[1][4*i],valueAsText,3);
 			editDisplayBuffer[1][4*i+3]=' ';
-            if(parNr==PAR_PERF_AVL)perf_formatVelocityGain(&editDisplayBuffer[1][4*i],curParmVal);
+            /* 0.2.54: the 4-character avl value starts in the gap before its slot, the
+               sct name moves one right, so the two neighbours stay apart */
+            if(parNr==PAR_PERF_AVL)perf_formatVelocityGain(&editDisplayBuffer[1][i?4*i-1:0],curParmVal);
+            if(parNr==PAR_STEP_FLAM_VELO||parNr==PAR_FLAM_ACCEL)perf_formatVelocityGain(&editDisplayBuffer[1][i?4*i-1:0],(uint8_t)(curParmVal*2u));
+            if(parNr==PAR_SCALE_TRANSFORM) {
+                char *slot=&editDisplayBuffer[1][4*i];
+                slot[3]=slot[2]?slot[2]:' ';slot[2]=slot[1]?slot[1]:' ';slot[1]=slot[0]?slot[0]:' ';slot[0]=' ';
+            }
 			if(parNr==PAR_PRESCALER_CLOCK_OUT1 && curParmVal==PRE_16SH_OUT)
 				memcpy(&editDisplayBuffer[1][4*i],"16sh",4);
 
@@ -2524,6 +2589,46 @@ void menu_showSdError(uint8_t res)
 	lcd_process_display_interrupt = 1;
 }
 //-----------------------------------------------------------------
+/* Measurement build: show what was late during the save (all in us).
+ * B = longest gap between audio blocks (normal ~726), O = longest gap between
+ * main output DMA restarts (normal ~726), L = late blocks,
+ * S = longest gap between sequencer ticks, C = longest MIDI clock delay. */
+static uint32_t menu_diag4(uint32_t cycles)
+{
+	const uint32_t us = saveDiag_us(cycles);
+	return us > 9999u ? 9999u : us;
+}
+static uint8_t menu_kitLoadDiag;
+/* main loop: show the kit load measurement after the last parameter was sent */
+void menu_kitLoadDiagTick(void)
+{
+	if(menu_kitLoadDiag && !preset_morphBusy())
+	{
+		menu_kitLoadDiag = 0;
+		menu_showSaveDiag();
+	}
+}
+void menu_showSaveDiag(void)
+{
+	saveDiag_end();
+	char line[32]; // values are capped so 16 characters show; extra room for the format checker
+	const uint8_t timerWasOn = (htim2.Instance->CR1 & TIM_CR1_CEN) && (htim2.Instance->DIER & TIM_IT_UPDATE);
+	if(!timerWasOn) HAL_TIM_Base_Start_IT(&htim2);	//keep audio running while the result is shown
+	lcd_process_display_interrupt = 0;
+	while(sendDisplayBuffer() != 0);
+	lcd_clear();
+	lcd_home();
+	snprintf(line, sizeof(line), "B%4lu O%4lu L%3u", (unsigned long)menu_diag4(saveDiag.maxBlock), (unsigned long)menu_diag4(saveDiag.maxOut), (unsigned)(saveDiag.late > 999 ? 999 : saveDiag.late));
+	lcd_string(line);
+	lcd_setcursor(0,2);
+	snprintf(line, sizeof(line), "S%5lu C%5lu", (unsigned long)saveDiag_us(saveDiag.maxSeq), (unsigned long)saveDiag_us(saveDiag.maxClock));
+	lcd_string(line);
+	HAL_Delay(2000);
+	if(!timerWasOn) HAL_TIM_Base_Stop_IT(&htim2);
+	lcd_process_display_interrupt = 1;
+	menu_repaintAll();
+}
+//-----------------------------------------------------------------
 void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 {
 	//this is a special case because the load/save page differs from all the other pages
@@ -2579,7 +2684,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 							break;
 						case SAVE_TYPE_PATTERN:
 
-
+							saveDiag_begin();
 
 							preset_savePatternRAM(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);
 
@@ -2595,11 +2700,13 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 										#else
 
 										#endif
+							preset_refreshTmpPat(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);
+							menu_showSaveDiag();
 							break;
 
 						case SAVE_TYPE_KIT:
 
-
+							saveDiag_begin();
 							preset_saveDrumsetRam(menu_selectedPresetNr[SAVE_TYPE_KIT],0);
 
 							//save to tmp folder
@@ -2614,7 +2721,8 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 							#else
 
 							#endif
-
+							preset_refreshTmpKit();
+							menu_showSaveDiag();
 							menu_loadedPresetNr[CURRENT_KIT] = menu_selectedPresetNr[SAVE_TYPE_KIT];
 							menu_activePage = KIT_SAVE_PAGE_OK;
 							sucessTimer = systick_ticks;
@@ -2623,7 +2731,20 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 							break;
 
 						case SAVE_TYPE_MORPH:
+							// as on the LXR1: the kit you hear at the current Morph position becomes a kit file
+							saveDiag_begin();
 							preset_saveDrumsetRam(menu_selectedPresetNr[SAVE_TYPE_MORPH],1);
+							#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+								HAL_TIM_Base_Start_IT(&htim2);	//calc sample interrupt - prio 1
+							#endif
+							preset_saveDrumsetSD(menu_selectedPresetNr[SAVE_TYPE_MORPH],0);
+							#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+								HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
+							#endif
+							menu_showSaveDiag();
+							menu_activePage = KIT_SAVE_PAGE_OK;
+							sucessTimer = systick_ticks;
+							menu_repaint();
 							break;
 
 						case SAVE_TYPE_GLO:
@@ -2637,6 +2758,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 						case SAVE_TYPE_PROJECT:
 						{
 							FRESULT res;
+							saveDiag_begin();
 							if(!seq_isRunning())
 							{
 								HAL_TIM_Base_Stop(&htim2);	//calc sample interrupt - prio 1
@@ -2649,6 +2771,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 							}
 
 							if(res != FR_OK) menu_showSdError(res);
+							else menu_showSaveDiag();
 						}
 							break;
 
@@ -2732,8 +2855,12 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 
 				case SAVE_TYPE_KIT:
 #if 1
-
+					// 0.2.60 measurement: is the kit change glitch a late audio block?
+					// The parameters reach the voices over the next main loop passes
+					// (preset_morph_tick), so the result shows once they all arrived.
+					saveDiag_begin();
 					preset_loadDrumsetRam(menu_selectedPresetNr[menu_saveOptions.category],0, 0);
+					menu_kitLoadDiag = 1;
 					menu_TargetVoiceGapIndex = getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1 + menu_activeVoice]);
 
 					menu_loadedPresetNr[CURRENT_KIT] = menu_selectedPresetNr[menu_saveOptions.category];
@@ -3082,6 +3209,14 @@ void menu_handleSongMenu(int8_t inc, uint8_t btnClicked)
 }
 
 // given a menu id returns the number of entries
+// The encoder and the knobs jump over the empty wavetable slots before the samples
+static uint8_t menu_waveformSkip(uint8_t value, int8_t dir)
+{
+	const uint8_t free = (uint8_t)(waveformNames[0][0] + waveBank_count());
+	if(value < free || value >= SAMPLEBANK_FIRST_WAVE) return value;
+	return (dir > 0 && sampleBank_count()) ? (uint8_t)SAMPLEBANK_FIRST_WAVE : (uint8_t)(free - 1u);
+}
+
 static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 {
 	switch(menuId) // clever GCC. no need to use pgm_read_byte
@@ -3116,7 +3251,9 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 	case MENU_WAVEFORM:
 		return (uint8_t)(waveformNames[0][0] + menu_numSamples);
 	case MENU_WAVEFORM_WT:
-		return (uint8_t)(waveformNames[0][0] + waveBank_count());
+		// samples have fixed numbers after the 32 wavetable slots
+		return sampleBank_count() ? (uint8_t)(SAMPLEBANK_FIRST_WAVE + sampleBank_count())
+			: (uint8_t)(waveformNames[0][0] + waveBank_count());
 	case MENU_REPEAT_SYNC:
 		return repeatSyncNames[0][0];
 	case MENU_DELAY_MODE:
@@ -3160,6 +3297,14 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 
 	case MENU_STEP_FLAM:
 		return stepFlamNames[0][0];
+	case MENU_FLAM_SLOT:
+		return (uint8_t)(stepFlamNames[0][0]-1);
+	case MENU_FLAM_REPEATS:
+		return flamRepeatNames[0][0];
+	case MENU_FLAM_GRID:
+		return flamGridNames[0][0];
+	case MENU_FLAM_PITCH:
+		return flamPitchNames[0][0];
 
 	case MENU_STEP_SHIFT:
 			return stepShiftNames[0][0];
@@ -3233,6 +3378,11 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 		p = filterTypes[curParmVal + 1];
 		break;
 	case MENU_WAVEFORM_WT:
+		if(curParmVal >= SAMPLEBANK_FIRST_WAVE)
+		{
+			memcpy(buf, sampleBank_name((uint8_t)(curParmVal - SAMPLEBANK_FIRST_WAVE)), 3);
+			return;
+		}
 		if(curParmVal >= waveformNames[0][0])
 		{
 			memcpy(buf, waveBank_name((uint8_t)(curParmVal - waveformNames[0][0])), 3);
@@ -3333,6 +3483,18 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 
 	case MENU_STEP_FLAM:
 		p=stepFlamNames[curParmVal+1];
+		break;
+	case MENU_FLAM_SLOT:
+		p=stepFlamNames[curParmVal+2];
+		break;
+	case MENU_FLAM_REPEATS:
+		p=flamRepeatNames[curParmVal+1];
+		break;
+	case MENU_FLAM_GRID:
+		p=flamGridNames[curParmVal+1];
+		break;
+	case MENU_FLAM_PITCH:
+		p=flamPitchNames[curParmVal+1];
 		break;
 
 	case MENU_STEP_SHIFT:
@@ -3638,6 +3800,7 @@ static void menu_encoderChangeParameter(int8_t inc)
 		uint8_t numEntries = getMaxEntriesForMenu(menuId);
 		if(*paramValue >= numEntries)
 			*paramValue = (uint8_t)(numEntries-1);
+		if(menuId == MENU_WAVEFORM_WT) *paramValue = menu_waveformSkip(*paramValue, inc);
 
 	} // parameter_dtypes[paramNr] & 0x0F case DTYPE_MENU
 		break;
@@ -4131,10 +4294,48 @@ void menu_sendAllGlobals()
 	uint16_t i;
 	for(i=PAR_BEGINNING_OF_GLOBALS;(i<NUM_PARAMS);i++)
 	{
-		if(i!=PAR_PATTERN_SCALE && i!=PAR_STEP_FLAM_PROB && i!=PAR_STEP_CONDITION && i!=PAR_PERF_FILL)
+		if(i!=PAR_PATTERN_SCALE && i!=PAR_STEP_FLAM_PROB && i!=PAR_STEP_CONDITION && i!=PAR_PERF_FILL && i!=PAR_STEP_FLAM_VELO &&
+		   (i<PAR_FLAM_SLOT || i>PAR_FLAM_ACCEL))
 			menu_parseGlobalParam(i,activeParameters[i]);
 	}
 };
+/* 0.2.61 flam preset page: the third Step page edits one flam preset of the
+ * project. Selecting a step or changing its flam shows that step's preset. */
+void menu_flamEditSelect(uint8_t preset)
+{
+	if(!preset || preset>=NUM_FLAM_PRESETS)return;
+	const FlamPreset *p=&seq_flamPresets[preset];
+	activeParameters[PAR_FLAM_SLOT]=(uint8_t)(preset-1u);
+	activeParameters[PAR_FLAM_REPEATS]=(uint8_t)(p->repeats-1u);
+	activeParameters[PAR_FLAM_GRID]=p->grid;
+	activeParameters[PAR_STEP_FLAM_VELO]=p->velo;
+	activeParameters[PAR_FLAM_PITCH]=p->pitch;
+	activeParameters[PAR_FLAM_PLUS_ONE]=p->plusOne;
+	activeParameters[PAR_FLAM_ACCEL]=p->accel;
+}
+static uint8_t menu_flamEditParam(uint16_t paramNr,uint8_t value)
+{
+	if(paramNr==PAR_FLAM_SLOT) {
+		menu_flamEditSelect((uint8_t)(value+1u));
+		return 1;
+	}
+	if(paramNr!=PAR_STEP_FLAM_VELO && (paramNr<PAR_FLAM_REPEATS || paramNr>PAR_FLAM_ACCEL))return 0;
+	uint8_t preset=(uint8_t)(activeParameters[PAR_FLAM_SLOT]+1u);
+	if(preset>=NUM_FLAM_PRESETS)preset=1;
+	FlamPreset *p=&seq_flamPresets[preset];
+	switch(paramNr) {
+	case PAR_FLAM_REPEATS:p->repeats=(uint8_t)(value+1u);break;
+	case PAR_FLAM_GRID:p->grid=value;break;
+	case PAR_STEP_FLAM_VELO:p->velo=value;break;
+	case PAR_FLAM_PITCH:p->pitch=value;break;
+	case PAR_FLAM_PLUS_ONE:p->plusOne=value;break;
+	default:p->accel=value;break;
+	}
+	seq_flamPresetsChanged();
+	menu_flamEditSelect(preset);
+	preset_touchFlamTimer();
+	return 1;
+}
 //-----------------------------------------------------------------
 // This is used to send a global (non voice specific) parameter to the back.
 // This includes values for the currently active step in the sequencer
@@ -4177,6 +4378,8 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
         activeParameters[PAR_PATTERN_SCALE]=value>7 ? 7 : value;
         return;
     }
+	if(paramNr==PAR_STEP_FLAM)menu_flamEditSelect(value);
+	if(menu_flamEditParam(paramNr,value))return;
 	if(performance_set(paramNr,value))return;
 	if(menu_getActivePage()==SEQ_PAGE && stepEdit_apply(menu_getViewedPattern(),menu_getActiveVoice(),paramNr,value)) {
 		preset_touchTimer(PRESET_PAT_TIMER);
@@ -4626,6 +4829,7 @@ static uint8_t limitPotValue(int8_t diff, uint16_t paramNr)
 		uint8_t numEntries=getMaxEntriesForMenu(menuId);
 		//return (uint8_t)(frac * (numEntries-1));
 		if(newValue > (numEntries-1)) newValue = (numEntries-1);
+		if(menuId == MENU_WAVEFORM_WT) newValue = menu_waveformSkip(newValue, diff);
 	}
 
 		break;

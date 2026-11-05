@@ -191,7 +191,7 @@ void modNode_updateValue(ModulationNode* vm, float val)
 	MidiMsg msg;
 	float originalValue = activeParameters[destination]/127.f;
 	if(destination==PAR_SNARE_LAYER_MODE)
-		originalValue=activeParameters[destination]/2.f;
+		originalValue=activeParameters[destination]/(float)SNARE_LAYER_MODE_MAX;
 	else if(destination>=PAR_MIX_MOD_1 && destination<=PAR_MIX_MOD_3)
 		originalValue=activeParameters[destination]/4.f;
 	else if(destination==PAR_SNARE_LAYER_WAVE)

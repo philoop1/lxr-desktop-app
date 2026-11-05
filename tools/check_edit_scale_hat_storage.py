@@ -30,13 +30,14 @@ static void check(int ok,const char *what){checks++;if(!ok){fprintf(stderr,"FAIL
 '''
 prelude+=read(ROOT/'Core/Inc/Preset/SeqStep.h')
 prelude+=r'''
-struct {Step seq_subStepPattern[64][7][64];StepTiming seq_stepTiming[64][7][64];uint8_t flamProbability[64][7][64];uint8_t trigCondition[64][7][64];struct{uint8_t scale;}seq_patternSettings[64];}seq_patternSet;
+struct {Step seq_subStepPattern[64][7][64];StepTiming seq_stepTiming[64][7][64];uint8_t flamProbability[64][7][64];uint8_t flamVelocity[64][7][64];uint8_t trigCondition[64][7][64];struct{uint8_t scale;}seq_patternSettings[64];}seq_patternSet;
 typedef struct {uint16_t param;} ModTarg;
 const ModTarg modTargets[3]={{0},{5},{130}};
 uint8_t getNumModTargets(void){return 3;}
 uint8_t activeParameters[NUM_PARAMS];
 static uint8_t isRunning,fxOutput,fxMode,sendValues[7],vcaValues[7],enabled,cutoff,reso,drive;
 uint8_t seq_isRunning(void){return isRunning;}
+uint8_t humanSet[4];void seq_setHumanize(uint8_t lane,uint8_t amount){if(lane<4)humanSet[lane]=amount;}
 uint8_t mixer_handleFxSendCc(uint8_t cc,uint8_t value){sendValues[cc-30]=value;return 1;}
 uint8_t mixer_handleVcaCc(uint8_t cc,uint8_t value){vcaValues[cc-20]=value;return 1;}
 void mixer_setFxSendMode(uint8_t v){fxMode=v;}
@@ -152,16 +153,21 @@ int main(void){
  for(unsigned i=1;i<PERFORMANCE_EXTRA_BYTES;i++)activeParameters[PAR_FX_OUTPUT_MODE+i]=(uint8_t)(i*7%128);
  activeParameters[PAR_CLOCK_OFFSET]=37;activeParameters[PAR_CLOCK_OFFSET_FINE]=4;
  uint8_t saved[PERFORMANCE_EXTRA_BYTES];memcpy(saved,&activeParameters[PAR_FX_OUTPUT_MODE],sizeof(saved));
- check(preset_savePerformanceExtension()==FR_OK&&fileLength==31,"versioned 31-byte sidecar saved");
+ for(unsigned i=0;i<4;i++)activeParameters[PAR_HUMANIZE1+i]=(uint8_t)(20+i*30);
+ check(preset_savePerformanceExtension()==FR_OK&&fileLength==35&&disk[7]=='5',"versioned 35-byte v5 sidecar saved");
+ for(unsigned i=0;i<4;i++)activeParameters[PAR_HUMANIZE1+i]=0;memset(humanSet,0,4);
+ preset_loadPerformanceExtension();
+ check(activeParameters[PAR_HUMANIZE1]==20&&activeParameters[PAR_HUMANIZE4]==110&&humanSet[1]==50&&humanSet[3]==110,"v5 humanize round trip reaches the sequencer");
  memset(&activeParameters[PAR_FX_OUTPUT_MODE],0,PERFORMANCE_EXTRA_BYTES);fxOutput=0;activeParameters[PAR_PERF_RANDOM_VELO]=activeParameters[PAR_PERF_AVL]=0;
  preset_loadPerformanceExtension();check(!memcmp(saved,&activeParameters[PAR_FX_OUTPUT_MODE],sizeof(saved)),"sidecar exact round trip");
  check(activeParameters[PAR_PERF_RANDOM_VELO]==37&&activeParameters[PAR_PERF_AVL]==163&&activeParameters[PAR_PATTERN_SCALE]==7,"v4 velocity round trip leaves pattern-preview byte untouched");
  for(unsigned i=0;i<PERFORMANCE_EXTRA_BYTES;i++)performance_set((uint16_t)(PAR_FX_OUTPUT_MODE+i),activeParameters[PAR_FX_OUTPUT_MODE+i]);
  for(unsigned i=0;i<7;i++)check(sendValues[i]==saved[4+i]&&vcaValues[i]==saved[11+i],"restored mode does not replace saved sends/VCAs");
  check(clockCoarse==37&&clockFine==4,"clock offset restored");
- disk[7]='3';fileLength=29;uint8_t v3sum=0;for(unsigned i=8;i<28;i++)v3sum=(uint8_t)(v3sum+disk[i]);disk[28]=v3sum;
+ disk[7]='3';fileLength=29;activeParameters[PAR_HUMANIZE2]=99;uint8_t v3sum=0;for(unsigned i=8;i<28;i++)v3sum=(uint8_t)(v3sum+disk[i]);disk[28]=v3sum;
  activeParameters[PAR_GLOBAL_SCALE]=6;
  preset_loadPerformanceExtension();check(activeParameters[PAR_PERF_RANDOM_VELO]==100&&activeParameters[PAR_PERF_AVL]==100&&activeParameters[PAR_GLOBAL_SCALE]==PERF_SPEED_NEUTRAL,"v3 resets spd and defaults both new velocity controls");
+ check(!activeParameters[PAR_HUMANIZE2]&&!humanSet[1],"old sidecar loads humanize off");
  disk[7]='4';fileLength=31;disk[28]=255;disk[29]=255;uint8_t v4sum=0;for(unsigned i=8;i<30;i++)v4sum=(uint8_t)(v4sum+disk[i]);disk[30]=v4sum;
  preset_loadPerformanceExtension();check(activeParameters[PAR_PERF_RANDOM_VELO]==100&&activeParameters[PAR_PERF_AVL]==100,"v4 invalid velocity fields default neutral");
  disk[7]='1';fileLength=27;uint8_t oldSum=0;for(unsigned i=8;i<26;i++)oldSum=(uint8_t)(oldSum+disk[i]);disk[26]=oldSum;

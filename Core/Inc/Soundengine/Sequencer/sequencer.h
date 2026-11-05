@@ -276,6 +276,16 @@ uint8_t seq_isRunning();
 uint8_t seq_isStepActive(uint8_t voice, uint8_t stepNr, uint8_t patternNr);
 //------------------------------------------------------------------------------
 uint8_t seq_isMainStepActive(uint8_t voice, uint8_t mainStepNr, uint8_t pattern);
+uint8_t seq_isPatternUsed(uint8_t pattern);
+void seq_setHumanize(uint8_t lane,uint8_t amount);
+uint8_t seq_flamHitVolume(uint8_t track,uint8_t source,uint8_t volume,int16_t pulse);
+/* 0.2.61 flam presets */
+extern FlamPreset seq_flamPresets[NUM_FLAM_PRESETS];
+void seq_flamDefaultPreset(uint8_t preset,FlamPreset *out);
+void seq_flamResetPresets(void);
+void seq_flamPresetsChanged(void);
+uint32_t flamIdxToPattern(uint8_t flamIdx);
+uint8_t seq_flamHitNote(uint8_t track,uint8_t source,uint8_t note,int16_t pulse);
 //------------------------------------------------------------------------------
 /** mutes and unmutes a track [0..maxTrack]*/
 void seq_setMute(uint8_t trackNr, uint8_t isMuted);

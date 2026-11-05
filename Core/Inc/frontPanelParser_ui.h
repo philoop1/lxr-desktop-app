@@ -114,6 +114,7 @@ extern uint8_t frontPanel_sysexMode;
 #define SEQ_SHIFT			0x1C
 #define SEQ_FLAM_PROB		0x3A
 #define SEQ_TRIG_CONDITION	0x3B
+#define SEQ_FLAM_VELO		0x3C
 //#define SEQ_REQUEST_PATTERN_PARAMS 0x1C /**< the sequencer sends back the data of the active pattern */
 //#define SEQ_SET_PAT_BEAT	0x1D		/**< on every Nth bar the pattern will change to the next pattern*/
 //#define SEQ_SET_PAT_NEXT	0x1E		/**< the next pattern that will be played when the current finishes*/

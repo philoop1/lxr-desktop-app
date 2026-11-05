@@ -5,14 +5,30 @@
 
 uint8_t perf_grooveActive(const PerfGroove *groove)
 {
-    return (uint8_t)(groove->offset[1] || groove->offset[2] || groove->offset[3]);
+    return (uint8_t)(groove->offset[1] || groove->offset[2] || groove->offset[3] ||
+        groove->human[0] || groove->human[1] || groove->human[2] || groove->human[3]);
+}
+
+/* Every hit has its own eventId (per track and step), so each voice on a step rolls
+ * its own offset; the hash keeps it fixed while the hit is waiting to be due. */
+int16_t perf_grooveHuman(const PerfGroove *groove,uint8_t lane,uint32_t eventId)
+{
+    const uint8_t amount=groove->human[lane&3u];
+    if(!amount || !eventId) return 0;
+    uint32_t h=eventId*2654435761u;
+    h^=h>>15; h*=2246822519u; h^=h>>13;
+    const int32_t range=((int32_t)amount*HUMANIZE_MAX_FRAMES+63)/127; /* 0..12 frames */
+    const int32_t steps=range/2;                         /* even offsets only */
+    if(!steps) return 0;
+    const int32_t roll=(int32_t)(h%(uint32_t)(2*steps+1))-steps;
+    return (int16_t)(roll*2);
 }
 
 uint8_t perf_grooveDue(const PerfGroove *groove,uint32_t pattern,
-                       int8_t shift,uint8_t lane,int8_t neighbor,uint8_t frame)
+                       int8_t shift,uint8_t lane,int8_t neighbor,uint8_t frame,int16_t human)
 {
     const int32_t position=(int32_t)frame-(int32_t)neighbor*48-
-        groove->offset[lane&3u]-(int32_t)shift*6;
+        groove->offset[lane&3u]-(int32_t)shift*6-human;
     if(position<0 || position>46 || (position&1)) return 0;
     return (uint8_t)((pattern>>(23-position/2))&1u);
 }

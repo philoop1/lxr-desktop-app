@@ -92,8 +92,41 @@ update can erase them; the next boot with the card copies them again. A kit
 that uses a table plays silence on that voice while no table is in that slot.
 From 0.2.45 the modulator of Drum Voices 1-3 offers the wavetables too, so
 a wavetable can drive FM, Mix, ring and expo FM; it scans with the same PWM
-as the main oscillator. Snare, Cymbal, Hihat and the snare layer keep the six
-built-in waveforms.
+as the main oscillator. From 0.2.49 the main waveform of Snare, Cymbal and
+Hihat offers the wavetables too; from 0.2.51 the snare layer and the Cymbal
+and Hihat modulators do as well.
+
+### User samples (0.2.51)
+
+After the wavetables the Wave menus list one-shot samples. Build the bank on
+a computer and copy it to the card:
+
+    python tools/make_samples.py F:/SAMPLES my_samples_folder
+    python tools/make_samples.py F:/SAMPLES --mutador ../mutador
+
+The first form takes WAV files (8, 16 or 24 bit, 32 bit float, mono or
+stereo, 8 to 96 kHz) in name order; `--list` takes `name|file` lines and
+`--crash` adds the LXR1 crash. The second builds the LXR1 Mutador set: its 16
+samples and the crash. `SAMPLES.TXT` beside the bank lists the samples.
+
+At boot the display shows "Loading samples". The firmware copies
+`SAMPLES/SAMPLES.BIN` into flash behind the wavetables, only when the file
+changed. A bank fills at most 1 MB behind one sector of wavetables; larger
+wavetables leave less ("No sample space").
+
+Waveform numbers stay fixed: 0 to 5 built-in, 6 to 37 wavetables, 38 and up
+samples. Empty wavetable slots are skipped when turning the encoder. A sample
+starts on each trigger and plays once. Coarse 0 (note 60) plays it at its own
+pitch; each semitone of coarse or note is a semitone, fine tunes within a
+semitone, and the pitch envelope and modulation work as for the
+oscillators. After the last frame the sample stays silent until the next
+trigger. FM moves the read point; exp and pd play a sample without
+modulation.
+
+LXR1 kits from the LXR1 folder use the sample numbers of the Mutador set.
+Their waveforms 6 and up become 38 and up, the crash 5 becomes 54, and
+coarse and fine move so each sample plays at its LXR1 pitch (about 31
+semitones up). The snare layer keeps its LXR2 pitch.
 
 In 0.1.16 the same Snare page adds `slw` (second oscillator waveform),
 `sla` (layer amount), `slf` (frequency ratio) and `slm` (Mix/FM/Ring).
@@ -111,11 +144,25 @@ also destinations for LFO, velocity and step automation. Select target voice
 targets in its target selector; existing target numbers remain unchanged.
 For example, select layer Mix as LFO destination and raise the LFO amount.
 Wave and Wave Mixer (`wmd`) modulation selects discrete valid values;
-`wmd` traverses mix, FM and rng; the Drum Voice mode traverses all five. At zero modulation depth the base selection
+`wmd` traverses mix, FM, rng, exp and pd; the Drum Voice mode traverses all five. At zero modulation depth the base selection
 is retained. Step automation uses the corresponding raw parameter values.
 With `sla=0` the second oscillator is silent. The layer is saved with the
 kit and interpolated by Morph. Old `SNE1` kits keep their noise envelope
 and start with the layer off; new kits use the `SNE2` extension marker.
+
+### Snare exp and pd (0.2.49)
+
+`wmd` adds `exp` and `pd`. With `exp` the layer oscillator bends the rate of
+the Snare oscillator in octaves, like the Drum mode `exp`; `slw` and `slf`
+choose its wave and ratio. With `pd` the Snare oscillator warps its own sine,
+from sine towards saw (Casio phase distortion); the layer oscillator is not
+used. In both modes the depth is the layer amount `sla` times the Snare pitch
+envelope, so the sound is brightest at the attack. `sla=0` keeps the plain
+Snare. Older firmware plays these two modes as rng.
+
+Up to 0.2.49 `wmd=FM` had no depth and sounded like the plain Snare. From
+0.2.50 the layer oscillator modulates the phase of the Snare oscillator, and
+the layer amount `sla` sets the depth.
 
 FX Dry/Wet is a destination for LFO, velocity and
 step automation on every voice; it comes last in each voice's list.
@@ -154,6 +201,22 @@ at Frequency 0, Offset sets the held random value and a configured retrigger
 chooses another random value. Existing waveform IDs and kit fields are
 unchanged; the new shapes are stored as IDs 8 and 9 in the existing field.
 
+## One-shot LFOs and xtr (0.2.49)
+
+After `gld` the LFO Wave menu has `xtr`, an exponential triangle: it rises
+like `xup` and falls like `xdn`. Then follow one-shot versions of the
+shapes: `si1`, `tr1`, `su1`, `sd1`, `sq1`, `rn1`, `xu1`, `xd1` and `xt1`.
+A one-shot starts when its retrigger voice (`rtg`) plays, runs one cycle at
+the set Frequency or Sync and then holds the end value: `su1` stays at the
+top, `sd1` at the bottom. Offset (`ofs`) is a start delay of up to one cycle
+for the one-shots, not the start phase. `sq1` is on first and off after half
+a cycle; during the delay it is off. `rn1` takes one new random value per
+trigger and holds it. Choosing a one-shot runs it once; without a retrigger
+voice it then stays still. `xtr` takes the slot of the former `rps`; kits
+that used `rps` now play `xtr`.
+
 ## Random per played Step LFO (0.2)
 
-Select the new LFO wave rps. Press the LFO parameter button repeatedly: the first two views are the existing controls; the third shows wave, rtg (source/trigger voice), voi (target voice) and dst; the fourth shows amount, ofs (value bias), slw (slew) and pol (neg, pos or bi). A random value is picked once when an active Step of rtg actually sounds. Empty, muted or probability-skipped Steps do not retrigger it. Open and closed hi-hat Steps both count as voice 6. slw=0 jumps immediately; higher values glide toward the new value. ofs=0 is neutral in rps mode. The LFO settings are saved with the kit. The new slew and polarity values do not morph between kits.
+From 0.2.49 rps is no longer an LFO wave (see One-shot LFOs below); the six
+Random per Step modulators on the third and fourth LFO views remain. The
+original 0.2 text follows. Select the new LFO wave rps. Press the LFO parameter button repeatedly: the first two views are the existing controls; the third shows wave, rtg (source/trigger voice), voi (target voice) and dst; the fourth shows amount, ofs (value bias), slw (slew) and pol (neg, pos or bi). A random value is picked once when an active Step of rtg actually sounds. Empty, muted or probability-skipped Steps do not retrigger it. Open and closed hi-hat Steps both count as voice 6. slw=0 jumps immediately; higher values glide toward the new value. ofs=0 is neutral in rps mode. The LFO settings are saved with the kit. The new slew and polarity values do not morph between kits.

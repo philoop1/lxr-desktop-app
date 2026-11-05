@@ -1263,7 +1263,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 			case PAR_SNARE_LAYER_AMOUNT-128: Snare_setLayerAmount(value.itg); break;
 			case PAR_SNARE_LAYER_FREQ-128: Snare_setLayerFreq(value.itg); break;
 			case PAR_SNARE_LAYER_MODE-128:
-				Snare_setLayerMode(isFloatModulator ? (uint8_t)(v*2.f+0.5f) : value.itg); break;
+				Snare_setLayerMode(isFloatModulator ? (uint8_t)(v*SNARE_LAYER_MODE_MAX+0.5f) : value.itg); break;
 
 			case CC2_VOLUME_MOD_ON_OFF1:
 			case CC2_VOLUME_MOD_ON_OFF2:

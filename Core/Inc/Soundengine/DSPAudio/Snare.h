@@ -29,6 +29,10 @@
 #include "Soundengine/DSPAudio/1PoleLp.h"
 
 #define USE_PEAK 0
+// wmd: 0 mix, 1 FM, 2 ring, 3 exp (expo FM from the layer osc), 4 pd (phase distortion)
+#define SNARE_LAYER_EXP 3
+#define SNARE_LAYER_PD 4
+#define SNARE_LAYER_MODE_MAX SNARE_LAYER_PD
 //------------------------------------------------------------------------
 typedef struct SnareStruct
 {
@@ -36,6 +40,7 @@ typedef struct SnareStruct
 	OscInfo 	noiseOsc;	// the noise osc
 	OscInfo layerOsc;
 	float layerAmount;
+	float layerDepth;		// exp/pd depth: layer amount times the pitch EG, once a block
 	uint8_t layerMode;
 	uint8_t layerAmountControl;
 	uint8_t layerFreqControl;

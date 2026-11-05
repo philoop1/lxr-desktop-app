@@ -178,3 +178,35 @@ Mutador 0.2.44: `LXR_V2_V1.7_Mutador0.2.44.img`, 349748 bytes, SHA256 `A449FC4EE
 Mutador 0.2.45: `LXR_V2_V1.7_Mutador0.2.45.img`, 349748 bytes, SHA256 `D39C5B0003F8A4467A55D8E0600A1F1C89EC435FBC3AD65F03D96D12BA2DE6F4`. Wavetables as drum modulator; hardware test pending.
 
 Mutador 0.2.46: `LXR_V2_V1.7_Mutador0.2.46.img`, 349868 bytes, SHA256 `7DBF15829541485DC1AAAE65A02808E46D8D04D9D8B581936A7455690746B023`. PD click fix, pitch slope 127 fix; hardware test pending.
+
+Mutador 0.2.47: `LXR_V2_V1.7_Mutador0.2.47.img`, 350124 bytes, SHA256 `A25C86C9782C397D265BD2BF719432D9DF389B96C989A25D6CB51A3AE792E2FE`. Project transfer "Copy failed" fix (_FS_LOCK 2); hardware test pending.
+
+Mutador 0.2.48: `LXR_V2_V1.7_Mutador0.2.48.img`, 350748 bytes, SHA256 `62EC3D90AD1F6F3B4B37EEA771F8FFD19FA08D664A7ECCEEA7E8B0B81A582F6D`. Flam 2+1..8+1, Kit transfer while playing; hardware test pending.
+
+Mutador 0.2.49: `LXR_V2_V1.7_Mutador0.2.49.img`, 351964 bytes, SHA256 `6CDE5D36453ACC5B95DCBE22AD382BB50EFCEDF5453CDCC3A1C69629764061EB`. LFO one-shots/xtr, Snare exp/pd, wavetables on Snare/Cymbal/Hihat; hardware test pending.
+
+Mutador 0.2.50: `LXR_V2_V1.7_Mutador0.2.50.img`, 351980 bytes, SHA256 `DFF9586236A2C5A96EEF96D797F232B273699D222BD661CACED7D5791279828F`. Snare wmd=FM fix; hardware test pending.
+
+Mutador 0.2.51: `LXR_V2_V1.7_Mutador0.2.51.img`, 354796 bytes, SHA256 `992369571D83E643426E6E318986F137478994A374245B7094CBC667AD0508E9`. User samples (SAMPLES/SAMPLES.BIN); hardware test pending.
+
+Mutador 0.2.52: `LXR_V2_V1.7_Mutador0.2.52.img`, 355808 bytes, SHA256 `B40CF56E00D52CE084BBAE555FDDD09646BD7FC06BE01F363F09F02C8A95610B`. Long-press swap, used-pattern view; hardware test pending.
+
+Mutador 0.2.53: `LXR_V2_V1.7_Mutador0.2.53.img`, 355944 bytes, SHA256 `8ACF3439D8CDF37F74204491768FC13323FC7F3F3C5BFFDEB7724AD63C8A6946`. Step edit long press; hardware test pending.
+
+Mutador 0.2.54: `LXR_V2_V1.7_Mutador0.2.54.img`, 357144 bytes, SHA256 `0D1CDA8FB8FAC99D6FFE87AA151E39F630B48DE736841CB5A9B4CBF49B5026D0`. fil moved, avl/sct spacing; hardware test pending.
+
+Mutador 0.2.55: `LXR_V2_V1.7_Mutador0.2.55.img`, 357656 bytes, SHA256 `CBCE7F886B80F6F98408BF369315305696159E40B87FBA0EB0804AB4CF179B32`. Humanize hm1..hm4; hardware test pending.
+
+Mutador 0.2.56: `LXR_V2_V1.7_Mutador0.2.56.img`, 359304 bytes, SHA256 `931C2A1D04EA4BFEEB99C5C8932062106796CCE371E5EB550DB4FDC0F13F7A30`. Flam velocity fvl; hardware test pending.
+
+Mutador 0.2.57: `LXR_V2_V1.7_Mutador0.2.57.img`, 360504 bytes, SHA256 `5419EB5BF3DE16AB8F5E1649ABFD41AFBCB922847DFD3A28244907E5829123AE`. Measurement build for save timing, USB MIDI during saves; hardware test pending.
+
+Mutador 0.2.58: `LXR_V2_V1.7_Mutador0.2.58.img`, 360664 bytes, SHA256 `2F68CC239569EF8C511EDE1D1E4E9DDF8A3ACEAF024EE521E0A6E7206B353545`. MorphKit save to SD, save timing display; hardware test pending.
+
+Mutador 0.2.59: `LXR_V2_V1.7_Mutador0.2.59.img`, 360800 bytes, SHA256 `A68D62FCAA79F12B2372352E8DBA8B446A08CE8CDE481E35A917636644073728`. Save glitch and autosave fixes, MorphKit routing; hardware test pending.
+
+Mutador 0.2.60: `LXR_V2_V1.7_Mutador0.2.60.img`, 360928 bytes, SHA256 `008D3471B6636E2775E046213F2FFBDC4046B036BAE55788D75BA3A4C142D1EA`. Project save glitch fix, kit load measurement; hardware test pending.
+
+Mutador 0.2.61: `LXR_V2_V1.7_Mutador0.2.61.img`, 364128 bytes, SHA256 `B930C1FF309255CCDCBE667DE7C9C637DC63663F1DF5864CC59397276103D78C`. Flam presets (repeats, resolution, velocity, pitch, +1, accelerate/brake) per project; hardware test pending.
+
+Mutador 0.2.62: `LXR_V2_V1.7_Mutador0.2.62.img`, 364360 bytes, SHA256 `B981B0339ED541A55D827BA09FCD17117A50F9DAC99C1DD5C6E042D54E351B0A`. Import page click fix (SD access inside the sample interrupt window); hardware test pending.

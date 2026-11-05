@@ -4,8 +4,8 @@ The main PERF page shows BPM, roll, Morph, master sample rate,
 global pitch (`gpt`), global decay (`gdc`) and speed (`spd`).
 `spd` offers /8, /4, /2, 1, *2 and *4 relative to the stored pattern rate. It starts at 1 and tops out at 64 steps a bar, or 48 on ternary rates. Pch CC 79-84 select it.
 A pattern stores its own rate: 2/4/6/8/12/16/24/32 steps per 4/4 bar.
-`pat` follows the scale saved with the current pattern. Hold PERFORMANCE to
-open its Scale window. Turn the encoder to preview, then click to confirm.
+`pat` follows the scale saved with the current pattern. Hold LOAD for one
+second to open its Scale window (PERFORMANCE before 0.2.52). Turn the encoder to preview, then click to confirm.
 While running, the new division begins at
 Step 1 on the next transport bar downbeat; while stopped it applies at once.
 The window shows `click=OK` for an unconfirmed preview and `next 1` while a
@@ -37,7 +37,13 @@ v1/v2 sidecars still load, translating old 16 to 16 and 12a/b/c to 12.
 SHIFT + Step 1 enters pattern selection from every mode and shows the first
 PERF display. It cancels pending step-automation selection and COPY/CLEAR
 selection before entering pattern selection.
-SHIFT + Step 4 opens the Groove page: `shf`, `sh2`, `sh3`, `sh4`. Its second half has `fil`, a temporary on/off Fill latch for Step conditions.
+SHIFT + Step 4 opens the Groove page: `shf`, `sh2`, `sh3`, `sh4`. From 0.2.54 `fil`, a temporary on/off Fill latch for Step conditions, sits on the first PERF page after `spd`.
+The second half of the Groove page holds humanize (0.2.55): `hm1` to `hm4`
+belong to the four steps of each group that `shf` to `sh4` shape. At 0 a step
+plays on time; turning up moves every hit by a random amount, up to a quarter
+step early or late at 127. Each voice on a step gets its own amount and every
+pass is new, so a kick and a hat on the same step drift apart. Humanize also
+works with `shf` at 0.
 `shf` is the same master amount shown on the main PERF page. In each repeating
 group of four steps, the first stays fixed. The other three controls move
 their steps earlier (negative) or later (positive). Their displayed default
@@ -135,10 +141,12 @@ In Step edit, hold the first step and press further step buttons to select a
 group; release to keep it selected. The next unheld press starts a new group.
 Edits to note, velocity, chance, flam, shift and automation apply to the
 selected steps, including steps across visible bars.
+From 0.2.53 holding a single step button for half a second sets or clears
+that step; it stays selected for editing. A short press only selects.
 
 The three new global switches use the remaining bytes of the existing
 64-byte globals file. The 18 extra performance values, two Clock Offset digits and rvl/avl
-are saved in a checked 31-byte `MUTA.CFG` v4 in the project folder.
+are saved in a checked `MUTA.CFG` in the project folder (v4, 31 bytes; v5 with hm1..hm4, 35 bytes, from 0.2.55).
 Version 1 (27 bytes) still loads with default Clock Offset. Save Globals or Project explicitly
 and back up this file with the project. Older projects default safely.
 The saved controls use the existing globals space. Older project globals

@@ -66,6 +66,8 @@ static inline uint16_t waveBank_levelOffset(uint8_t level)
 // Checks the flash copy and makes its wavetables available; 0 if invalid
 void waveBank_init(void);
 uint8_t waveBank_count(void);
+// header and data in flash, 0 without valid wavetables
+uint32_t waveBank_flashBytes(void);
 // Three letters, or "---" past the count
 const char* waveBank_name(uint8_t table);
 // Frames of one wavetable, 0 past the count

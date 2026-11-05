@@ -13,6 +13,7 @@ def function(src,name):
 cc=read('Core/Src/menu/Cc2Text.c')
 texts=sorted(set(re.findall(r'TEXT_\w+',cc)))
 code='#include <stdint.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include "Parameters.h"\n'
+code+='\n'.join(re.findall(r'#define SNARE_LAYER_\w+ \w+',(ROOT/'Core/Inc/Soundengine/DSPAudio/Snare.h').read_text()))+'\n'  # wmd range (0.2.49: exp, pd)
 code+='enum {'+','.join(texts)+'};\n'
 code+=r"""
 #define pgm_read_byte(p) (*(const uint8_t*)(p))
@@ -38,7 +39,7 @@ void Snare_setNoiseSlope(uint8_t v){applied=v;}
 void Snare_setLayerWave(uint8_t v){applied=v;}
 void Snare_setLayerAmount(uint8_t v){applied=v;}
 void Snare_setLayerFreq(uint8_t v){applied=v;}
-void Snare_setLayerMode(uint8_t v){applied=v>2?2:v;}
+void Snare_setLayerMode(uint8_t v){applied=v>SNARE_LAYER_MODE_MAX?SNARE_LAYER_MODE_MAX:v;}
 void midiParser_ccHandler(MidiMsg msg,uint8_t update,uint8_t isFloatModulator,float v){
  struct {uint8_t itg;float flt;} value;
  value.itg=isFloatModulator?(uint8_t)(v*127):msg.data2;
@@ -100,7 +101,7 @@ int main(void){
   ModulationNode node={0};node.destination=id;node.amount=1;
   modNode_updateValue(&node,0);check(applied==0,"LFO minimum reaches setter");
   modNode_updateValue(&node,1);
-  check(applied==((id==PAR_SNARE_LAYER_MODE)?2:(id==PAR_SNARE_LAYER_WAVE)?5:127),"LFO maximum reaches setter");
+  check(applied==((id==PAR_SNARE_LAYER_MODE)?SNARE_LAYER_MODE_MAX:(id==PAR_SNARE_LAYER_WAVE)?5:127),"LFO maximum reaches setter");
   node.amount=0;modNode_updateValue(&node,0.75f);
   check(applied==activeParameters[id],"zero depth preserves selected base value");
  }

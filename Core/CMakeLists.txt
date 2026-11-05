@@ -82,6 +82,7 @@ add_library(lxr_dsp OBJECT
     Src/Soundengine/DSPAudio/Oscillator.c
     Src/Soundengine/DSPAudio/random.c
     Src/Soundengine/DSPAudio/ResonantFilter.c
+    Src/Soundengine/DSPAudio/SampleBank.c
     Src/Soundengine/DSPAudio/Samples.c
     Src/Soundengine/DSPAudio/SlopeEg2.c
     Src/Soundengine/DSPAudio/snapEg.c

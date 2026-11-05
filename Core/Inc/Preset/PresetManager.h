@@ -61,6 +61,8 @@ void preset_touchTimer(PresetTimer type);
 void preset_processTimer();
 FRESULT preset_clearTmpFolder();
 void preset_resetAllSaveTimers();
+void preset_refreshTmpPat(uint8_t presetNr);
+void preset_refreshTmpKit(void);
 //load all manually saved kits and patterns found in the tmp folder
 FRESULT loadTmpFolderFiles();
 
@@ -136,6 +138,8 @@ void preset_morph(uint8_t morph);
 void preset_setMorphTarget(uint8_t target);
 void preset_morph_tick(); //handler for non blocking morph
 uint8_t preset_getMorphValue(uint16_t index, uint8_t morph);
+uint8_t preset_morphBusy(void);
+void preset_touchFlamTimer(void);
 void preset_sendDrumsetParameters();
 void preset_sendDrumsetParametersImmediate();
 

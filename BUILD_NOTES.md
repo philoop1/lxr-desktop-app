@@ -21,12 +21,12 @@ cmake --preset release
 cmake --build --preset release
 ```
 
-The current archived build is Mutador 0.2.46; see the last entry of this
+The current archived build is Mutador 0.2.62; see the last entry of this
 file for its hash and test state. Physical-device validation of the 0.2
 series remains open.
 
 The update image is written under `build/release/` as
-`LXR_V2_V1.7_Mutador0.2.46.img`. The base version comes from
+`LXR_V2_V1.7_Mutador0.2.62.img`. The base version comes from
 `project(VERSION ...)` in `CMakeLists.txt`; the fork suffix is set separately
 there as `LXR_MUTADOR_VERSION`, which also sets the startup line. For a debug build, use the `debug` preset in both commands.
 
@@ -460,3 +460,35 @@ Mutador 0.2.44: amp and pitch EG stop at 0 (click fix). ARM GCC 14.3 release pas
 Mutador 0.2.45: user wavetables for the drum modulator. ARM GCC 14.3 release passed with no warnings. ITCM 93.70%, DTCM 82.22%. Image 349748 bytes, SHA256 `D39C5B0003F8A4467A55D8E0600A1F1C89EC435FBC3AD65F03D96D12BA2DE6F4`. See session 035.
 
 Mutador 0.2.46: PD knee glides within a block, pitch slope 127 fix. ARM GCC 14.3 release passed with no warnings. ITCM 94.43%, DTCM 82.28%. Image 349868 bytes, SHA256 `7DBF15829541485DC1AAAE65A02808E46D8D04D9D8B581936A7455690746B023`. See session 035.
+
+Mutador 0.2.47: FatFs _FS_LOCK 2 for project transfer, transfer error code on screen. ARM GCC 14.3 release passed with no warnings. ITCM 94.43%, DTCM 82.28%. Image 350124 bytes, SHA256 `A25C86C9782C397D265BD2BF719432D9DF389B96C989A25D6CB51A3AE792E2FE`. See session 035.
+
+Mutador 0.2.48: Flam 2+1..8+1, Kit transfer while playing. ARM GCC 14.3 release passed with no warnings. ITCM 94.43%, DTCM 82.28%. Image 350748 bytes, SHA256 `62EC3D90AD1F6F3B4B37EEA771F8FFD19FA08D664A7ECCEEA7E8B0B81A582F6D`. See session 035.
+
+Mutador 0.2.49: LFO one-shots and xtr (rps removed from the wave list), Snare wmd exp/pd, wavetables on the Snare/Cymbal/Hihat main wave. ARM GCC 14.3 release passed with no warnings. ITCM 94.92%, DTCM 82.28%. Image 351964 bytes, SHA256 `6CDE5D36453ACC5B95DCBE22AD382BB50EFCEDF5453CDCC3A1C69629764061EB`. See session 035.
+
+Mutador 0.2.50: Snare wmd=FM gets its depth (fmMod was 0). ARM GCC 14.3 release passed with no warnings. ITCM 94.92%, DTCM 82.28%. Image 351980 bytes, SHA256 `DFF9586236A2C5A96EEF96D797F232B273699D222BD661CACED7D5791279828F`. See session 035.
+
+Mutador 0.2.51: user samples behind the wavetables (SampleBank, waveforms 38+), new sample pitch, LXR1 sample offsets in the converter. ARM GCC 14.3 release passed with no warnings. ITCM 95.31%, DTCM 82.28%. Image 354796 bytes, SHA256 `992369571D83E643426E6E318986F137478994A374245B7094CBC667AD0508E9`. See session 035.
+
+Mutador 0.2.52: long PERF opens pattern selection, long LOAD the pattern Scale, held voice shows used patterns; LXR1 step notes -3 in the converter. ARM GCC 14.3 release passed with no warnings. ITCM 95.31%, DTCM 82.28%. Image 355808 bytes, SHA256 `B40CF56E00D52CE084BBAE555FDDD09646BD7FC06BE01F363F09F02C8A95610B`. See session 035.
+
+Mutador 0.2.53: step edit long press sets/clears, short press selects. ARM GCC 14.3 release passed with no warnings. ITCM 95.31%, DTCM 82.28%. Image 355944 bytes, SHA256 `8ACF3439D8CDF37F74204491768FC13323FC7F3F3C5BFFDEB7724AD63C8A6946`. See session 035.
+
+Mutador 0.2.54: fil after spd on PERF, avl/sct display spacing. ARM GCC 14.3 release passed with no warnings. ITCM 95.31%, DTCM 82.28%. Image 357144 bytes, SHA256 `0D1CDA8FB8FAC99D6FFE87AA151E39F630B48DE736841CB5A9B4CBF49B5026D0`. See session 035.
+
+Mutador 0.2.55: humanize hm1..hm4 per groove lane, each voice its own roll, MUTA.CFG v5. ARM GCC 14.3 release passed with no warnings. ITCM 95.31%, DTCM 82.28%. Image 357656 bytes, SHA256 `CBCE7F886B80F6F98408BF369315305696159E40B87FBA0EB0804AB4CF179B32`. See session 035.
+
+Mutador 0.2.56: per-step flam velocity fvl, FLV1 pattern trailer, RAM 93.72%. ARM GCC 14.3 release passed with no warnings. ITCM 95.31%, DTCM 82.28%. Image 359304 bytes, SHA256 `931C2A1D04EA4BFEEB99C5C8932062106796CCE371E5EB550DB4FDC0F13F7A30`. See session 035.
+
+Mutador 0.2.57: USB MIDI during saves, save timing measurement display. ARM GCC 14.3 release passed with no warnings. RAM 93.73%, ITCM 95.56%, DTCM 82.28%. Image 360504 bytes, SHA256 `5419EB5BF3DE16AB8F5E1649ABFD41AFBCB922847DFD3A28244907E5829123AE`. See session 035.
+
+Mutador 0.2.58: MorphKit save to SD. ARM GCC 14.3 release passed with no warnings. RAM 93.73%, ITCM 95.56%, DTCM 82.28%. Image 360664 bytes, SHA256 `2F68CC239569EF8C511EDE1D1E4E9DDF8A3ACEAF024EE521E0A6E7206B353545`. See session 035.
+
+Mutador 0.2.59: audio DMA above TIM2, tmp copies rewritten after saves, MorphKit routing, measurement on the pattern save page. ARM GCC 14.3 release passed with no warnings. RAM 93.73%, ITCM 95.70%, DTCM 82.28%. Image 360800 bytes, SHA256 `A68D62FCAA79F12B2372352E8DBA8B446A08CE8CDE481E35A917636644073728`. See session 035.
+
+Mutador 0.2.60: project save keeps audio while the tmp folder is deleted, kit load measurement. ARM GCC 14.3 release passed with no warnings. RAM 93.73%, ITCM 95.70%, DTCM 82.28%. Image 360928 bytes, SHA256 `008D3471B6636E2775E046213F2FFBDC4046B036BAE55788D75BA3A4C142D1EA`. See session 035.
+
+Mutador 0.2.61: flam presets per project. ARM GCC 14.3 release passed with no warnings. RAM 86.37%, ITCM 95.70%, DTCM 82.28%, FLASH 41.32%. Image 364128 bytes, SHA256 `B930C1FF309255CCDCBE667DE7C9C637DC63663F1DF5864CC59397276103D78C`. See session 035.
+
+Mutador 0.2.62: import page keeps audio during SD access. ARM GCC 14.3 release passed with no warnings. RAM 86.37%, ITCM 95.70%, DTCM 82.28%, FLASH 41.35%. Image 364360 bytes, SHA256 `B981B0339ED541A55D827BA09FCD17117A50F9DAC99C1DD5C6E042D54E351B0A`. See session 035.

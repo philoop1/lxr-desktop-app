@@ -471,6 +471,7 @@ extern Param2EnumsDefinition Param2Enums;
 #define FRONT_SEQ_SHIFT					0x1C
 #define FRONT_SEQ_FLAM_PROB			0x3A
 #define FRONT_SEQ_TRIG_CONDITION		0x3B
+#define FRONT_SEQ_FLAM_VELO			0x3C
 //#define FRONT_SEQ_SET_PAT_BEAT			0x1D	/**< on every Nth bar the pattern will change to the next pattern*/
 //#define FRONT_SEQ_SET_PAT_NEXT			0x1E	/**< the next pattern that will be played when the current finishes*/
 #define FRONT_SEQ_CLEAR_TRACK			0x1f
