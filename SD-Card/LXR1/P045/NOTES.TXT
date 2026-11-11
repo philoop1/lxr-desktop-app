@@ -1,0 +1,31 @@
+P045.PRF: version 2; SHA256 D99E99CF736A7C7F0684A02B741F4D439FFEDCFFDC051977318718F666F8AD63
+P045.SND: extracted from PRF; SHA256 1FD1B1533CAD7E15AEF9A9997000934D03B2A52E2CA29ABEFAC184F85D005766
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 2, step 13: irregular substeps (0, 4, 6); kept first hit
+pattern 1, voice 2, step 13: differing substep values; kept first
+pattern 1, voice 6, step 16: irregular substeps (0, 3); kept first hit
+pattern 1, voice 6, step 16: differing substep values; kept first
+pattern 2, voice 2, step 13: irregular substeps (0, 4, 6); kept first hit
+pattern 2, voice 2, step 13: differing substep values; kept first
+pattern 2, voice 4, step 9: irregular substeps (0, 2, 4); kept first hit
+pattern 2, voice 4, step 9: differing substep values; kept first
+pattern 2, voice 6, step 16: irregular substeps (0, 3); kept first hit
+pattern 2, voice 6, step 16: differing substep values; kept first
+pattern 3, voice 6, step 15: irregular substeps (0, 3, 6); kept first hit
+pattern 4, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 4, voice 4, step 9: differing substep values; kept first
+pattern 5, voice 4, step 9: irregular substeps (0, 4, 6); kept first hit
+pattern 5, voice 4, step 9: differing substep values; kept first
+pattern 6, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 6, voice 4, step 9: differing substep values; kept first
+pattern 7, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 7, voice 4, step 9: differing substep values; kept first
+pattern 7, voice 6, step 5: differing substep values; kept first
+pattern 7, voice 6, step 6: irregular substeps (0, 3, 5); kept first hit
+pattern 8, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 8, voice 4, step 9: differing substep values; kept first
+pattern 8, voice 6, step 5: differing substep values; kept first
+pattern 8, voice 6, step 6: irregular substeps (0, 3, 5); kept first hit
+older performance snare extension not mapped; using safe defaults
+Original SND missing; SND extracted from this PRF

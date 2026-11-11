@@ -1,0 +1,27 @@
+P036.PRF: version 10; SHA256 F8565F469DA8EDA81002539988E3FBF089C51D821FA4EA5BAAD50E95647E1476
+P036.SND: original file; SHA256 0B341578917F43745FAB6DE553AA0BA25D8C9A4215609680C196D23E6DDA4362
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 2, step 6: unsupported automation target 165
+pattern 1, voice 2, step 14: unsupported automation target 227
+pattern 1, voice 4, step 12: differing substep values; kept first
+pattern 1, voice 6, step 16: irregular substeps (0, 3, 5, 7); kept first hit
+pattern 1, voice 6, step 16: differing substep values; kept first
+pattern 2, voice 2, step 6: unsupported automation target 165
+pattern 2, voice 2, step 14: unsupported automation target 227
+pattern 2, voice 4, step 12: differing substep values; kept first
+pattern 2, voice 6, step 16: irregular substeps (0, 3, 5, 7); kept first hit
+pattern 2, voice 6, step 16: differing substep values; kept first
+pattern 3, voice 3, step 6: differing substep values; kept first
+pattern 3, voice 4, step 4: differing substep values; kept first
+pattern 3, voice 4, step 13: differing substep values; kept first
+pattern 3, voice 5, step 4: unsupported automation target 227
+pattern 3, voice 5, step 7: differing substep values; kept first
+pattern 3, voice 5, step 7: unsupported automation target 227
+pattern 3, voice 5, step 10: differing substep values; kept first
+pattern 4, voice 2, step 14: unsupported automation target 227
+pattern 4, voice 3, step 6: differing substep values; kept first
+pattern 4, voice 7, step 5: unsupported automation target 227
+pattern 5, voice 1, step 5: unsupported automation target 227
+pattern 5, voice 2, step 1: unsupported automation target 223
+LXR1 membrane parameters have no LXR2 equivalent

@@ -1,0 +1,6 @@
+P039.PRF: version 10; SHA256 AD80DEDA1622F4614FFB673C3D600528B10079842EEB475132FE08000FBBF381
+P039.SND: original file; SHA256 4CE33F23D768F14B67FA020804E50D5F132957B48A32E9F5A1EF3327B11244EF
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 7, voice 1, step 1: irregular substeps (0, 5); kept first hit
+pattern 7, voice 1, step 1: differing substep values; kept first

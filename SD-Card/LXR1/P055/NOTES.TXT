@@ -1,0 +1,7 @@
+P055.PRF: version 12; SHA256 48D2339F286D5BCB7A6E94D3BA7AB096846E0249D405D4A1C4C2F0485330BA85
+P055.SND: extracted from PRF; SHA256 A9A424150ABE165BD811920CF82BE0295E029C46B64A235A2F15FD0331476A49
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 2, voice 6, step 16: irregular substeps (0, 2, 4, 6, 7); kept first hit
+Original SND missing; SND extracted from this PRF
+Samples (0.2.51): PAR_MOD_OSC_F2_CYM: the sample pitch is out of range; coarse clamped

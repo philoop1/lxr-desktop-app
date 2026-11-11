@@ -1,0 +1,13 @@
+P018.PRF: version 12; SHA256 8F9C5C7E9EBC8D0BB6ABA2A8F56B145AA5530A282D2290CFB173510F35642DC3
+P018.SND: original file; SHA256 DA3B0D90CD0974E7B3B3043624A20447F5E60930A342C623A51BE70EC5AA010D
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 2, voice 1, step 1: irregular substeps (0, 2); kept first hit
+pattern 4, voice 4, step 5: irregular substeps (0, 3); kept first hit
+pattern 5, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 6, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 7, voice 4, step 13: irregular substeps (0, 3, 6); kept first hit
+pattern 8, voice 4, step 7: irregular substeps (0, 3); kept first hit
+pattern 8, voice 4, step 7: differing substep values; kept first
+pattern 8, voice 4, step 14: irregular substeps (0, 4, 6); kept first hit
+pattern 8, voice 4, step 14: differing substep values; kept first

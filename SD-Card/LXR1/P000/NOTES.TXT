@@ -1,0 +1,6 @@
+P000.PRF: version 2; SHA256 4E95DFD5D83CE4A35E264A200BCFAD9607F2707DC0402CCD36E584330753CA5B
+P000.SND: original file; SHA256 31F9535C208E6CA42D459FA0FF907EF3594E2143BC94D114B7A12A97389556E8
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 2, voice 6, step 16: irregular substeps (0, 2, 4, 6, 7); kept first hit
+older performance snare extension not mapped; using safe defaults

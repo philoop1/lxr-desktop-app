@@ -1,0 +1,7 @@
+P047.PRF: version 2; SHA256 110D058F09843169459E704E1BB729494E539ECDCA03D4FF7F8100B0C02B7E48
+P047.SND: extracted from PRF; SHA256 4F8FE4C5D22B5F63134721E83C0938813DE3E254F09E9443993BE43E8593C9F5
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 1, step 7: irregular substeps (0, 1); kept first hit
+older performance snare extension not mapped; using safe defaults
+Original SND missing; SND extracted from this PRF

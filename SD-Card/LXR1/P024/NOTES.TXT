@@ -1,0 +1,13 @@
+P024.PRF: version 2; SHA256 12669441C6C777A648423E455D6946141B799F94266296F342A85F357E1F900C
+P024.SND: original file; SHA256 C07C8BD7A220EEA252C39D7E96FFC9956A38D7CDBDA6CD9A9AAFADFB9FC39384
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 4, step 16: irregular substeps (0, 4, 6, 7); kept first hit
+pattern 1, voice 4, step 16: differing substep values; kept first
+pattern 5, voice 4, step 16: irregular substeps (0, 4, 6, 7); kept first hit
+pattern 5, voice 4, step 16: differing substep values; kept first
+pattern 6, voice 4, step 16: irregular substeps (0, 4, 6, 7); kept first hit
+pattern 6, voice 4, step 16: differing substep values; kept first
+pattern 7, voice 4, step 16: irregular substeps (0, 4, 6, 7); kept first hit
+pattern 7, voice 4, step 16: differing substep values; kept first
+older performance snare extension not mapped; using safe defaults

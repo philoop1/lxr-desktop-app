@@ -1,0 +1,9 @@
+P049.PRF: version 10; SHA256 E2F162CD4EDE22B4554EFF7E3D790C251B1F906BE44904DC2D78BA07F8E885F0
+P049.SND: extracted from PRF; SHA256 B26071BEAED7C4BBF03CF4041F13FDF312CBBF6D96FB178C37AA0DFEE538E869
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 3, step 6: differing substep values; kept first
+pattern 1, voice 3, step 7: differing substep values; kept first
+pattern 1, voice 3, step 8: differing substep values; kept first
+pattern 1, voice 3, step 14: differing substep values; kept first
+Original SND missing; SND extracted from this PRF

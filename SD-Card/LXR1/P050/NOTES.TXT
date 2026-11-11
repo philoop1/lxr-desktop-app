@@ -1,0 +1,12 @@
+P050.PRF: version 10; SHA256 8EBBFF21A212AB877DF98CADC800A943F4E443180860FCC53D5B999EE4B1BA6C
+P050.SND: extracted from PRF; SHA256 A877E7B3A3838BBA7389441F64200E66D7751726EFADB3BC4714E57577CD34FC
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 2, voice 3, step 6: differing substep values; kept first
+pattern 2, voice 3, step 7: differing substep values; kept first
+pattern 2, voice 3, step 8: differing substep values; kept first
+pattern 2, voice 3, step 14: differing substep values; kept first
+pattern 3, voice 3, step 11: differing substep values; kept first
+pattern 4, voice 2, step 10: differing substep values; kept first
+voice 3: unsupported modulation target 103
+Original SND missing; SND extracted from this PRF

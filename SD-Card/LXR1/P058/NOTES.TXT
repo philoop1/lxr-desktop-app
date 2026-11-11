@@ -1,0 +1,13 @@
+P058.PRF: version 10; SHA256 C4E13146659100A031D795723BBB569034C5F3965E8380F6A2123E9E8A4534A0
+P058.SND: extracted from PRF; SHA256 BD8F7D0713CDCC2E297CF7D6D4A9721CAFB4714555FB3E80E5D33BB8273F192D
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 2, voice 1, step 1: irregular substeps (0, 2); kept first hit
+pattern 4, voice 3, step 12: irregular substeps (0, 3, 5); kept first hit
+pattern 4, voice 4, step 5: irregular substeps (0, 3); kept first hit
+pattern 5, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 6, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 6, voice 6, step 8: irregular substeps (0, 4, 7); kept first hit
+pattern 7, voice 4, step 13: irregular substeps (0, 3, 6); kept first hit
+LXR1 membrane parameters have no LXR2 equivalent
+Original SND missing; SND extracted from this PRF

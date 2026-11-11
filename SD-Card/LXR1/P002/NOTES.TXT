@@ -1,0 +1,5 @@
+P002.PRF: version 2; SHA256 51E577A4EB5109866AC392C9D57AD1F919636A970FAB3035CD82B60BDE90B769
+P002.SND: original file; SHA256 0982615D618250854E7E738833ADBF231805BF815E44F4D92C226C5B0C30B77B
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+older performance snare extension not mapped; using safe defaults

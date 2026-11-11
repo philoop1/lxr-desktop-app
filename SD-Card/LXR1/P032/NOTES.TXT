@@ -1,0 +1,6 @@
+P032.PRF: version 10; SHA256 72CB958085265A2CBBA7FE852186EEA3C4DF68497CC9E60E9AD7625B16EC6153
+P032.SND: original file; SHA256 39CD9A451B03518A2DDE93EA323ABF7F0E24935EA7789A0ABC1FDDBD3AD0EDD2
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 3, voice 2, step 15: differing substep values; kept first
+LXR1 membrane parameters have no LXR2 equivalent

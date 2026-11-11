@@ -1,0 +1,7 @@
+P005.PRF: version 2; SHA256 EAD029AD01AD38B4959064F035281579FC110E5563C9B2EBDEEFC2642293A4F0
+P005.SND: original file; SHA256 FB00D973C87D61CF6510D6B67D2C2C901C3FA5C8ACBAFB0C1F736FA714F2E80F
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 1, step 5: unsupported automation target 227
+pattern 2, voice 6, step 16: irregular substeps (0, 2, 4, 6, 7); kept first hit
+older performance snare extension not mapped; using safe defaults

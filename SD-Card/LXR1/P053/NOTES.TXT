@@ -1,0 +1,101 @@
+P053.PRF: version 2; SHA256 3886D1C51CEE1BDA5A39F83D5DAFFEBE0DF79B2995AAC3F57580411E4F65D8D2
+P053.SND: extracted from PRF; SHA256 39737A6DD197A1780FAC0BA1B543E7214CF3A6A8F121D0EA0C0CFDF7C38D4FF8
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 2, step 3: irregular substeps (6, 7); kept first hit
+pattern 1, voice 2, step 3: differing substep values; kept first
+pattern 1, voice 2, step 3: unsupported automation target 228
+pattern 1, voice 3, step 5: irregular substeps (4, 6, 7); kept first hit
+pattern 1, voice 3, step 5: differing substep values; kept first
+pattern 1, voice 3, step 5: unsupported automation target 168
+pattern 1, voice 3, step 13: differing substep values; kept first
+pattern 1, voice 3, step 13: unsupported automation target 228
+pattern 1, voice 3, step 15: irregular substeps (0, 5); kept first hit
+pattern 1, voice 3, step 15: differing substep values; kept first
+pattern 1, voice 3, step 15: unsupported automation target 168
+pattern 1, voice 4, step 7: differing substep values; kept first
+pattern 1, voice 4, step 7: unsupported automation target 168
+pattern 2, voice 1, step 3: differing substep values; kept first
+pattern 2, voice 1, step 3: unsupported automation target 168
+pattern 2, voice 2, step 3: differing substep values; kept first
+pattern 2, voice 2, step 3: unsupported automation target 169
+pattern 2, voice 2, step 12: differing substep values; kept first
+pattern 2, voice 3, step 5: irregular substeps (4, 5, 6, 7); kept first hit
+pattern 2, voice 3, step 5: differing substep values; kept first
+pattern 2, voice 3, step 13: irregular substeps (0, 3, 4, 5, 6, 7); kept first hit
+pattern 2, voice 3, step 13: differing substep values; kept first
+pattern 2, voice 3, step 15: irregular substeps (0, 3, 4, 6, 7); kept first hit
+pattern 2, voice 3, step 15: differing substep values; kept first
+pattern 2, voice 3, step 15: unsupported automation target 168
+pattern 2, voice 4, step 7: irregular substeps (4, 7); kept first hit
+pattern 2, voice 4, step 7: differing substep values; kept first
+pattern 3, voice 1, step 1: irregular substeps (1, 2, 3, 4, 5, 6, 7); kept first hit
+pattern 3, voice 1, step 1: differing substep values; kept first
+pattern 3, voice 1, step 1: unsupported automation target 168
+pattern 3, voice 1, step 4: irregular substeps (2, 3, 4); kept first hit
+pattern 3, voice 1, step 4: differing substep values; kept first
+pattern 3, voice 1, step 4: unsupported automation target 228
+pattern 3, voice 1, step 7: irregular substeps (0, 4, 5, 6, 7); kept first hit
+pattern 3, voice 1, step 7: differing substep values; kept first
+pattern 3, voice 1, step 7: unsupported automation target 168
+pattern 3, voice 1, step 11: irregular substeps (5, 6); kept first hit
+pattern 3, voice 1, step 13: irregular substeps (2, 7); kept first hit
+pattern 3, voice 1, step 13: differing substep values; kept first
+pattern 3, voice 2, step 7: irregular substeps (1, 2, 3, 4, 5, 6, 7); kept first hit
+pattern 3, voice 2, step 7: differing substep values; kept first
+pattern 3, voice 2, step 15: irregular substeps (0, 7); kept first hit
+pattern 3, voice 2, step 15: differing substep values; kept first
+pattern 3, voice 3, step 5: unsupported automation target 168
+pattern 4, voice 1, step 4: differing substep values; kept first
+pattern 4, voice 1, step 4: unsupported automation target 168
+pattern 4, voice 1, step 7: irregular substeps (0, 1, 2, 4); kept first hit
+pattern 4, voice 1, step 7: differing substep values; kept first
+pattern 4, voice 1, step 7: unsupported automation target 228
+pattern 4, voice 1, step 11: irregular substeps (0, 3, 6); kept first hit
+pattern 4, voice 1, step 11: differing substep values; kept first
+pattern 4, voice 1, step 13: differing substep values; kept first
+pattern 4, voice 1, step 13: unsupported automation target 168
+pattern 4, voice 2, step 15: irregular substeps (0, 1, 2); kept first hit
+pattern 4, voice 2, step 15: differing substep values; kept first
+pattern 4, voice 2, step 15: unsupported automation target 228
+pattern 4, voice 3, step 5: irregular substeps (0, 1, 2, 3, 6); kept first hit
+pattern 4, voice 3, step 5: differing substep values; kept first
+pattern 4, voice 3, step 5: unsupported automation target 168
+pattern 4, voice 4, step 15: irregular substeps (1, 2, 3, 4, 5, 6, 7); kept first hit
+pattern 4, voice 4, step 15: differing substep values; kept first
+pattern 5, voice 1, step 1: unsupported automation target 228
+pattern 5, voice 1, step 4: irregular substeps (0, 1, 2); kept first hit
+pattern 5, voice 1, step 4: unsupported automation target 228
+pattern 5, voice 1, step 7: irregular substeps (0, 1); kept first hit
+pattern 5, voice 1, step 7: differing substep values; kept first
+pattern 5, voice 1, step 11: irregular substeps (0, 2, 4, 5); kept first hit
+pattern 5, voice 1, step 11: differing substep values; kept first
+pattern 5, voice 1, step 11: unsupported automation target 228
+pattern 5, voice 1, step 13: irregular substeps (0, 1, 2, 3, 4, 5, 7); kept first hit
+pattern 5, voice 1, step 13: differing substep values; kept first
+pattern 5, voice 1, step 13: unsupported automation target 228
+pattern 5, voice 2, step 7: irregular substeps (0, 1, 2, 3, 4, 5, 6); kept first hit
+pattern 5, voice 2, step 7: differing substep values; kept first
+pattern 5, voice 3, step 5: irregular substeps (6, 7); kept first hit
+pattern 5, voice 3, step 5: differing substep values; kept first
+pattern 5, voice 3, step 15: differing substep values; kept first
+pattern 5, voice 4, step 15: unsupported automation target 168
+pattern 6, voice 1, step 3: differing substep values; kept first
+pattern 6, voice 1, step 3: unsupported automation target 169
+pattern 6, voice 1, step 9: irregular substeps (0, 1, 2, 3, 5, 6, 7); kept first hit
+pattern 6, voice 1, step 9: differing substep values; kept first
+pattern 6, voice 1, step 9: unsupported automation target 228
+pattern 6, voice 1, step 16: irregular substeps (0, 3); kept first hit
+pattern 6, voice 1, step 16: differing substep values; kept first
+pattern 6, voice 1, step 16: unsupported automation target 228
+pattern 6, voice 2, step 15: irregular substeps (0, 1, 2, 5, 6); kept first hit
+pattern 6, voice 2, step 15: differing substep values; kept first
+pattern 6, voice 2, step 15: unsupported automation target 168
+pattern 6, voice 3, step 5: irregular substeps (0, 3); kept first hit
+pattern 6, voice 3, step 5: differing substep values; kept first
+pattern 6, voice 3, step 5: unsupported automation target 228
+pattern 6, voice 3, step 15: irregular substeps (0, 1, 2, 3, 4); kept first hit
+pattern 6, voice 3, step 15: differing substep values; kept first
+pattern 6, voice 3, step 15: unsupported automation target 168
+older performance snare extension not mapped; using safe defaults
+Original SND missing; SND extracted from this PRF

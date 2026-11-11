@@ -1,0 +1,6 @@
+P043.PRF: version 10; SHA256 9AD1CC87BFC18497EF429F1F2E3232E65D91D68C5A962DF469E395D399D44224
+P043.SND: original file; SHA256 EFA200FAECFB99C47B1F26DCC02E60B9EF196268E793869B62F7D49836BDBB7B
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 4, voice 1, step 15: irregular substeps (0, 4, 6); kept first hit
+pattern 4, voice 1, step 15: differing substep values; kept first

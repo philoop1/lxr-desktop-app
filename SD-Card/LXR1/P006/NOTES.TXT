@@ -1,0 +1,7 @@
+P006.PRF: version 2; SHA256 DD9FCA40AE93D8B257FFFAAFC6A155A4616C98EF9CEE44896745132FF436F089
+P006.SND: original file; SHA256 EDE4636C85C5E93043EBD986614D417796DCDE52F06CE6B7B2BE47BCE4967BA5
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 1, step 5: unsupported automation target 227
+pattern 2, voice 6, step 16: irregular substeps (0, 2, 4, 6, 7); kept first hit
+older performance snare extension not mapped; using safe defaults

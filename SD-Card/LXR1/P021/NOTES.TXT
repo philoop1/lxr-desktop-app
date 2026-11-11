@@ -1,0 +1,24 @@
+P021.PRF: version 12; SHA256 A4ECD270F3BA81CBC533A881F08F0BAB4BB6E568FBBBCFCDF9388475F67796FA
+P021.SND: original file; SHA256 191560EE33AE5CD9AAA82F1CA6869356C00677EFC0666107F5AD156B0F5C29BE
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 1, step 4: unsupported automation target 227
+pattern 1, voice 1, step 11: unsupported automation target 227
+pattern 1, voice 1, step 14: unsupported automation target 227
+pattern 2, voice 1, step 1: unsupported automation target 167
+pattern 2, voice 1, step 13: unsupported automation target 227
+pattern 2, voice 6, step 16: irregular substeps (0, 3, 5, 7); kept first hit
+pattern 2, voice 6, step 16: differing substep values; kept first
+pattern 3, voice 3, step 6: differing substep values; kept first
+pattern 3, voice 4, step 5: differing substep values; kept first
+pattern 3, voice 4, step 13: differing substep values; kept first
+pattern 3, voice 4, step 15: differing substep values; kept first
+pattern 3, voice 5, step 5: differing substep values; kept first
+pattern 3, voice 5, step 14: unsupported automation target 223
+pattern 4, voice 2, step 14: unsupported automation target 227
+pattern 4, voice 3, step 6: differing substep values; kept first
+pattern 4, voice 7, step 5: unsupported automation target 227
+pattern 5, voice 1, step 5: unsupported automation target 227
+pattern 5, voice 2, step 1: unsupported automation target 223
+pattern 5, voice 4, step 10: differing substep values; kept first
+pattern 6, voice 7, step 13: unsupported automation target 215

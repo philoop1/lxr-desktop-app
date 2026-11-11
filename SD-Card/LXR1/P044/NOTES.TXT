@@ -1,0 +1,7 @@
+P044.PRF: version 10; SHA256 10320AE6E38A348960641CDEFB7535D8DCC7ECA358A9127C8C5F50C08E8EEB9E
+P044.SND: extracted from PRF; SHA256 25C1AF3B33CEBC4781BF6B3053FFEE26C48530863EA37156D2B387E18ABA5801
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 1, step 5: unsupported automation target 227
+pattern 2, voice 6, step 16: irregular substeps (0, 2, 4, 6, 7); kept first hit
+Original SND missing; SND extracted from this PRF

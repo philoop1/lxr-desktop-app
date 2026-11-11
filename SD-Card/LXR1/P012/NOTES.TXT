@@ -1,0 +1,32 @@
+P012.PRF: version 2; SHA256 0ADA506B131DA0F4472664C50C18AA390A66105F9A96E05D2CE6879CE8AF6FCA
+P012.SND: original file; SHA256 9665669C003F15430FA949C2B69636A555F6D56C7B7089A9253F5D6126BCF3E0
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 2, step 13: irregular substeps (0, 4, 6); kept first hit
+pattern 1, voice 2, step 13: differing substep values; kept first
+pattern 1, voice 4, step 9: irregular substeps (0, 2, 4); kept first hit
+pattern 1, voice 4, step 9: differing substep values; kept first
+pattern 1, voice 6, step 16: irregular substeps (0, 3); kept first hit
+pattern 1, voice 6, step 16: differing substep values; kept first
+pattern 2, voice 2, step 13: irregular substeps (0, 4, 6); kept first hit
+pattern 2, voice 2, step 13: differing substep values; kept first
+pattern 2, voice 4, step 9: irregular substeps (0, 2, 4); kept first hit
+pattern 2, voice 4, step 9: differing substep values; kept first
+pattern 2, voice 6, step 16: irregular substeps (0, 3); kept first hit
+pattern 2, voice 6, step 16: differing substep values; kept first
+pattern 3, voice 6, step 15: irregular substeps (0, 3, 6); kept first hit
+pattern 4, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 4, voice 4, step 9: differing substep values; kept first
+pattern 5, voice 4, step 9: irregular substeps (0, 4, 6); kept first hit
+pattern 5, voice 4, step 9: differing substep values; kept first
+pattern 6, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 6, voice 4, step 9: differing substep values; kept first
+pattern 7, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 7, voice 4, step 9: differing substep values; kept first
+pattern 7, voice 6, step 5: differing substep values; kept first
+pattern 7, voice 6, step 6: irregular substeps (0, 3, 5); kept first hit
+pattern 8, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 8, voice 4, step 9: differing substep values; kept first
+pattern 8, voice 6, step 5: differing substep values; kept first
+pattern 8, voice 6, step 6: irregular substeps (0, 3, 5); kept first hit
+older performance snare extension not mapped; using safe defaults

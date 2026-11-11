@@ -1,0 +1,9 @@
+P057.PRF: version 10; SHA256 8DED78EF6FC4BE5077471768335F78DE132F12F9939F7C040C0DB18657169F4E
+P057.SND: extracted from PRF; SHA256 84840EF637679259A78861434EED75EAB6253B3CB2627AF3177C9E9A9523E530
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 3, step 9: irregular substeps (0, 1, 2); kept first hit
+pattern 1, voice 4, step 10: irregular substeps (0, 1, 2); kept first hit
+pattern 1, voice 4, step 10: differing substep values; kept first
+LXR1 membrane parameters have no LXR2 equivalent
+Original SND missing; SND extracted from this PRF

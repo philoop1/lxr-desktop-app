@@ -1,0 +1,1 @@
+LXR1 Mutador library. Pxxx/ contains the original PRF and matching SND; Pxxx/LXR2/ contains eight converted one-bar LXR2 patterns and one kit. An SND marked 'extracted' was reconstructed from its PRF because no separate SND existed. Read NOTES.TXT for approximations. These folders are a library; firmware 0.2.12 cannot browse them directly yet.

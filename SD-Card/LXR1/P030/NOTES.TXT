@@ -1,0 +1,6 @@
+P030.PRF: version 12; SHA256 EAC5D3FFE8B242CC3ACB27EFE9675B0B2D3CFEBA7B9000E551E18E093F9A7D91
+P030.SND: original file; SHA256 8863C49623399C7F9FC8D17260B49CECAA4027CFFE512E8BE96465A20DFD6351
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+LXR1 membrane parameters have no LXR2 equivalent
+Samples (0.2.51): PAR_SNARE_LAYER_WAVE: the snare layer sample keeps the LXR2 layer pitch

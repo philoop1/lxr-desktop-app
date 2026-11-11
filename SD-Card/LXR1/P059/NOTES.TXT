@@ -1,0 +1,6 @@
+P059.PRF: version 12; SHA256 3723CE6C676E7741C1615795D05D741CEB5DC54E45368FCB37D180B5B7360006
+P059.SND: extracted from PRF; SHA256 2AFAD0B9ED7574F416898602935EFC03CA89C494370DBD949BB22AA576E2C697
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+LXR1 membrane parameters have no LXR2 equivalent
+Original SND missing; SND extracted from this PRF

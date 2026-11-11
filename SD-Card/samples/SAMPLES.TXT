@@ -1,0 +1,18 @@
+wave  name  frames  rate   LXR1 shift  source
+  38  cfl   11003  44100  +31.234    conga lflam.wav
+  39  clo   16023  44100  +31.234    conga low.wav
+  40  cmd   26886  44100  +31.234    conga mid.wav
+  41  dhl   10464  44100  +31.234    dholhi.wav
+  42  frm   14976  44100  +31.234    frame.wav
+  43  tk1   12154  44100  +31.234    htalkdrum.wav
+  44  tk2    8772  44100  +31.234    htalkdrum2.wav
+  45  ltm   21631  44100  +31.234    lotom.wav
+  46  rim    4873  44100  +31.234    rim.wav
+  47  sf2   21962  44100  +31.234    snare flam2.wav
+  48  sna    6935  44100  +31.234    snare.wav
+  49  sfl   16708  44100  +31.234    snareflam.wav
+  50  tmi   10208  44100  +31.234    tamindia.wav
+  51  tms    3852  44100  +31.234    tamsch.wav
+  52  bel   16430  44100  +31.234    upaistebell.wav
+  53  rid   34839  44100  +31.234    upaisteride.wav
+  54  crs   32768  32000  +36.787    crash (Samples.c)

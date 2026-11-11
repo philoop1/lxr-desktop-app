@@ -1,0 +1,11 @@
+P022.PRF: version 10; SHA256 44E0FD4E1E12ECB2D306EE5736EA2B9B5884BABDF152066E2275841AC188EF32
+P022.SND: original file; SHA256 0DA1F16974D5CED685F39D434BE87D9684ECC223C0EBE47ABCF41FCBF960BF2F
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 2, voice 6, step 16: irregular substeps (0, 3, 5); kept first hit
+pattern 4, voice 3, step 1: irregular substeps (0, 3, 5); kept first hit
+pattern 4, voice 3, step 7: irregular substeps (0, 2, 4, 5); kept first hit
+pattern 4, voice 3, step 7: differing substep values; kept first
+pattern 4, voice 6, step 16: irregular substeps (0, 3, 5); kept first hit
+pattern 5, voice 5, step 15: differing substep values; kept first
+LXR1 membrane parameters have no LXR2 equivalent

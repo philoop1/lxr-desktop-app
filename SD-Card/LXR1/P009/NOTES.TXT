@@ -1,0 +1,30 @@
+P009.PRF: version 2; SHA256 3D840F2BC5088945EC4C560A407529565BB19224FDC00AF94F6F7BC74C8EB91A
+P009.SND: original file; SHA256 51559235BB882567D4ED586A9A0CEE4B3B6E3C9860FA5E606F7DEC69206C7364
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 2, step 13: irregular substeps (0, 4, 6); kept first hit
+pattern 1, voice 2, step 13: differing substep values; kept first
+pattern 1, voice 6, step 16: irregular substeps (0, 3); kept first hit
+pattern 1, voice 6, step 16: differing substep values; kept first
+pattern 2, voice 2, step 13: irregular substeps (0, 4, 6); kept first hit
+pattern 2, voice 2, step 13: differing substep values; kept first
+pattern 2, voice 4, step 9: irregular substeps (0, 2, 4); kept first hit
+pattern 2, voice 4, step 9: differing substep values; kept first
+pattern 2, voice 6, step 16: irregular substeps (0, 3); kept first hit
+pattern 2, voice 6, step 16: differing substep values; kept first
+pattern 3, voice 6, step 15: irregular substeps (0, 3, 6); kept first hit
+pattern 4, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 4, voice 4, step 9: differing substep values; kept first
+pattern 5, voice 4, step 9: irregular substeps (0, 4, 6); kept first hit
+pattern 5, voice 4, step 9: differing substep values; kept first
+pattern 6, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 6, voice 4, step 9: differing substep values; kept first
+pattern 7, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 7, voice 4, step 9: differing substep values; kept first
+pattern 7, voice 6, step 5: differing substep values; kept first
+pattern 7, voice 6, step 6: irregular substeps (0, 3, 5); kept first hit
+pattern 8, voice 4, step 9: irregular substeps (0, 3, 6); kept first hit
+pattern 8, voice 4, step 9: differing substep values; kept first
+pattern 8, voice 6, step 5: differing substep values; kept first
+pattern 8, voice 6, step 6: irregular substeps (0, 3, 5); kept first hit
+older performance snare extension not mapped; using safe defaults

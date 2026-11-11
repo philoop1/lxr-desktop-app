@@ -1,0 +1,30 @@
+P013.PRF: version 2; SHA256 E5995E097276A22EDF88B1F4AC737C0C96D43571556A043D58561D0246BBE281
+P013.SND: original file; SHA256 4614DF91D233D028D3E01CDB9EBE2C7951973AF779398A37EFB387FB182AE784
+LXR2: eight one-bar patterns, kit slot 00.
+Conversion notes:
+pattern 1, voice 2, step 6: unsupported automation target 165
+pattern 1, voice 2, step 14: unsupported automation target 227
+pattern 1, voice 4, step 13: differing substep values; kept first
+pattern 1, voice 4, step 15: differing substep values; kept first
+pattern 1, voice 6, step 16: irregular substeps (0, 3, 5, 7); kept first hit
+pattern 1, voice 6, step 16: differing substep values; kept first
+pattern 2, voice 1, step 1: unsupported automation target 167
+pattern 2, voice 1, step 13: unsupported automation target 227
+pattern 2, voice 6, step 16: irregular substeps (0, 3, 5, 7); kept first hit
+pattern 2, voice 6, step 16: differing substep values; kept first
+pattern 3, voice 3, step 6: differing substep values; kept first
+pattern 3, voice 4, step 5: differing substep values; kept first
+pattern 3, voice 4, step 10: differing substep values; kept first
+pattern 3, voice 4, step 13: differing substep values; kept first
+pattern 3, voice 5, step 7: differing substep values; kept first
+pattern 3, voice 5, step 7: unsupported automation target 227
+pattern 3, voice 5, step 8: differing substep values; kept first
+pattern 3, voice 5, step 8: unsupported automation target 227
+pattern 3, voice 5, step 9: differing substep values; kept first
+pattern 3, voice 5, step 10: differing substep values; kept first
+pattern 4, voice 2, step 14: unsupported automation target 227
+pattern 4, voice 3, step 6: differing substep values; kept first
+pattern 4, voice 7, step 5: unsupported automation target 227
+pattern 5, voice 1, step 5: unsupported automation target 227
+pattern 5, voice 2, step 1: unsupported automation target 223
+older performance snare extension not mapped; using safe defaults
