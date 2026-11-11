@@ -55,6 +55,7 @@ typedef enum
 
 
 FRESULT preset_LoadTmpKit();
+void preset_loadTmpCfg(void); // 0.2.88 autosaved MUTA.CFG values
 FRESULT preset_LoadTmpPat();
 void preset_initTmpFolder();
 void preset_touchTimer(PresetTimer type);
@@ -100,6 +101,7 @@ if isMorph==1 the sound will be loaded into the morph buffer
 FRESULT preset_saveDrumsetSD(uint8_t presetNr, uint8_t isMorph);
 FRESULT preset_loadDrumsetSD(uint8_t presetNr, uint8_t isMorph);
 //copy drumset to/from edit buffer
+extern uint8_t preset_activeKitNr;
 void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmediate);
 void preset_saveDrumsetRam(uint8_t presetNr, uint8_t isMorph);
 

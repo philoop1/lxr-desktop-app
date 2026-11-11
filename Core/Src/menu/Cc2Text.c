@@ -41,7 +41,7 @@ const ModTarg modTargets[] ={
 {TEXT_EG_SLOPE, PAR_VOL_SLOPE1},
 //  3 Modulation
 {TEXT_PITCH_DECAY,PAR_MOD_EG1},
-{TEXT_EG_SLOPE,PAR_PITCH_SLOPE1},					//10
+{TEXT_PITCH_SLOPE,PAR_PITCH_SLOPE1},					//10
 {TEXT_MOD_AMOUNT,PAR_MODAMNT1},						//11
 {TEXT_VEL_DEST,PAR_VEL_DEST_1},
 {TEXT_VEL_AMT,PAR_VELO_MOD_AMT_1},
@@ -93,7 +93,7 @@ const ModTarg modTargets[] ={
 {TEXT_EG_SLOPE,PAR_VOL_SLOPE2},
 //  3 Modulation
 {TEXT_PITCH_DECAY,PAR_MOD_EG2},
-{TEXT_EG_SLOPE,PAR_PITCH_SLOPE2},
+{TEXT_PITCH_SLOPE,PAR_PITCH_SLOPE2},
 {TEXT_MOD_AMOUNT,PAR_MODAMNT2},
 {TEXT_VEL_DEST,PAR_VEL_DEST_2},						//50
 {TEXT_VEL_AMT,PAR_VELO_MOD_AMT_2},
@@ -145,7 +145,7 @@ const ModTarg modTargets[] ={
 {TEXT_EG_SLOPE,PAR_VOL_SLOPE3},
 //  3 Modulation
 {TEXT_PITCH_DECAY,PAR_MOD_EG3},
-{TEXT_EG_SLOPE,PAR_PITCH_SLOPE3},
+{TEXT_PITCH_SLOPE,PAR_PITCH_SLOPE3},
 {TEXT_MOD_AMOUNT,PAR_MODAMNT3},
 {TEXT_VEL_DEST,PAR_VEL_DEST_3},
 {TEXT_VEL_AMT,PAR_VELO_MOD_AMT_3},
@@ -200,7 +200,7 @@ const ModTarg modTargets[] ={
 {TEXT_EG_SLOPE,PAR_VOL_SLOPE4},
 //  3 Modulation
 {TEXT_PITCH_DECAY,PAR_MOD_EG4},
-{TEXT_EG_SLOPE,PAR_PITCH_SLOPE4},
+{TEXT_PITCH_SLOPE,PAR_PITCH_SLOPE4},
 {TEXT_MOD_AMOUNT,PAR_MODAMNT4},
 {TEXT_VEL_DEST,PAR_VEL_DEST_4},
 {TEXT_VEL_AMT,PAR_VELO_MOD_AMT_4},					//130
@@ -340,20 +340,29 @@ const ModTarg modTargets[] ={
 {TEXT_FX_P4,PAR_FX_P4},						//228
 
 // Append only: target indices already stored in kits/patterns stay valid.
-{TEXT_ATTACK,PAR_SNARE_NOISE_ATTACK},              //229
-{TEXT_DECAY,PAR_SNARE_NOISE_DECAY},
-{TEXT_EG_SLOPE,PAR_SNARE_NOISE_SLOPE},
-{TEXT_WAVEFORM,PAR_SNARE_LAYER_WAVE},
-{TEXT_MIX,PAR_SNARE_LAYER_AMOUNT},
-{TEXT_FREQ_LFO,PAR_SNARE_LAYER_FREQ},
+{TEXT_SNARE_NOISE_ATTACK,PAR_SNARE_NOISE_ATTACK},              //229
+{TEXT_SNARE_NOISE_DECAY,PAR_SNARE_NOISE_DECAY},
+{TEXT_SNARE_NOISE_SLOPE,PAR_SNARE_NOISE_SLOPE},
+{TEXT_SNARE_LAYER_WAVE,PAR_SNARE_LAYER_WAVE},
+{TEXT_SNARE_LAYER_AMOUNT,PAR_SNARE_LAYER_AMOUNT},
+{TEXT_SNARE_LAYER_FREQ,PAR_SNARE_LAYER_FREQ},
 {TEXT_SNARE_LAYER_MODE,PAR_SNARE_LAYER_MODE},      //235
 // One per voice, in voice order: the index gives the voice like the rest of the list.
-{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},                  //236
-{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},
-{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},
-{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},
-{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},
-{TEXT_FX_DRY_WET,PAR_FX_DRY_WET},                  //241
+// 0.2.107 was the global FX d/w (send FX are always wet), now the voice's send
+// into the internal FX bus (mixer_intSend). The names are drawn by the menu.
+{TEXT_FX_SEND1,PAR_MODX_SND},                  //236
+{TEXT_FX_SEND1,PAR_MODX_SND},
+{TEXT_FX_SEND1,PAR_MODX_SND},
+{TEXT_FX_SEND1,PAR_MODX_SND},
+{TEXT_FX_SEND1,PAR_MODX_SND},
+{TEXT_FX_SEND1,PAR_MODX_SND},                  //241
+// 0.2.107 the voice's insert: shared by all voices, the node's target voice
+// picks the voice. The menu names I1..I4 after the routed insert type.
+{TEXT_FX_DRY_WET,PAR_MODX_IMIX},               //242
+{TEXT_FX_DRY_WET,PAR_MODX_I1},
+{TEXT_FX_DRY_WET,PAR_MODX_I2},
+{TEXT_FX_DRY_WET,PAR_MODX_I3},
+{TEXT_FX_DRY_WET,PAR_MODX_I4},                 //246
 
 };
 
@@ -381,7 +390,8 @@ const uint8_t modTargetGapMap[] = {
 };
 
 #define NUM_TOT_TARGETS sizeof(modTargetGapMap)
-#define MOD_TARGET_DRY_WET 236
+/* 0.2.107 the insert targets end the list (compile time check, -1 = error) */
+typedef char modTargets_insertTargetsEndTheList[(MOD_TARGET_INSERT + MOD_TARGET_INSERT_SLOTS == sizeof(modTargets)/sizeof(ModTarg)) ? 1 : -1];
 
 //**AUTOM paramToModTarget definition
 // see menu.h for more info
@@ -393,7 +403,8 @@ uint8_t paramToModTarget[END_OF_SOUND_PARAMETERS] ={};
 // remains the same logical value (where possible) for the new voice.
 uint8_t getModTargetGapIndex(uint8_t modTargetIdx)
 {
-	if(modTargetIdx>=MOD_TARGET_DRY_WET)return (uint8_t)(NUM_TOT_TARGETS+7);
+	if(modTargetIdx>=MOD_TARGET_INSERT)return (uint8_t)(NUM_TOT_TARGETS+8+modTargetIdx-MOD_TARGET_INSERT);
+	if(modTargetIdx>=MOD_TARGET_SND)return (uint8_t)(NUM_TOT_TARGETS+7);
 	if(modTargetIdx>=229 && modTargetIdx<=235)return (uint8_t)(NUM_TOT_TARGETS+modTargetIdx-229);
 	// determine which voice is being targeted (1 based)
 	uint8_t voice=voiceFromModTargValue(modTargetIdx);
@@ -431,8 +442,10 @@ uint8_t getModTargetGapIndex(uint8_t modTargetIdx)
 */
 uint8_t getModTargetIdxFromGapIdx(uint8_t v, uint8_t gapidx)
 {
+	if(gapidx>=NUM_TOT_TARGETS+8 && gapidx<NUM_TOT_TARGETS+8+MOD_TARGET_INSERT_SLOTS)
+		return (uint8_t)(MOD_TARGET_INSERT+gapidx-(NUM_TOT_TARGETS+8));	// 0.2.107 the same for every voice
 	if(gapidx==NUM_TOT_TARGETS+7)
-		return (uint8_t)(MOD_TARGET_DRY_WET+v);
+		return v<6 ? (uint8_t)(MOD_TARGET_SND+v) : 0;
 	if(gapidx>=NUM_TOT_TARGETS && gapidx<NUM_TOT_TARGETS+7)
 		return v==3 ? (uint8_t)(229+gapidx-NUM_TOT_TARGETS) : 0;
 	uint8_t i, val, bitoffset, ctr=0;
@@ -472,16 +485,29 @@ void paramToModTargetInit()
 	// populate this array with indices into modTargets so we can do reverse lookup
 	uint8_t i;
 	for(i=0;i<(sizeof(modTargets)/sizeof(ModTarg));i++){
-		paramToModTarget[pgm_read_word(&modTargets[i].param)]=i;
+		const uint16_t par=pgm_read_word(&modTargets[i].param);
+		if(par>=PAR_MODX_FIRST && par<=PAR_MODX_LAST)continue;	// 0.2.107 voice dependent: modTargetFromParam
+		paramToModTarget[par]=i;
 	}
 } 
+
+/* 0.2.107 the reverse of modTargets[].param: param numbers come back from the
+ * MIDI and front panel side. The send targets need the voice (0 based) of the
+ * node, the insert targets are shared. Automation has no send/insert targets. */
+uint8_t modTargetFromParam(uint8_t param,uint8_t voice)
+{
+	if(param==PAR_MODX_SND)return voice<6 ? (uint8_t)(MOD_TARGET_SND+voice) : 0;
+	if(param>PAR_MODX_SND && param<=PAR_MODX_LAST)return (uint8_t)(MOD_TARGET_INSERT+param-PAR_MODX_IMIX);
+	return paramToModTarget[param];
+}
 
 
 // val is index into modTargets
 // returns 1 based index or 0 for invalid
 uint8_t voiceFromModTargValue(uint8_t val)
 {
-	if(val>=MOD_TARGET_DRY_WET)return val<getNumModTargets() ? (uint8_t)(val-MOD_TARGET_DRY_WET+1) : 0;
+	if(val>=MOD_TARGET_INSERT)return 0;	// 0.2.107 shared by all voices
+	if(val>=MOD_TARGET_SND)return (uint8_t)(val-MOD_TARGET_SND+1);
 	if(val>=229 && val<=235)return 4;
 	if(pgm_read_byte(&modTargetVoiceOffsets[3].start) <= val) {
 		// lower half
@@ -521,8 +547,10 @@ uint8_t modTargetClampVoice(uint8_t voice,uint8_t target,int8_t direction)
 	if(voice>=6)return 0;
 	uint8_t start=modTargetVoiceOffsets[voice].start;
 	uint8_t end=modTargetVoiceOffsets[voice].end;
-	const uint8_t dryWet=(uint8_t)(MOD_TARGET_DRY_WET+voice);
-	if(target>=dryWet)return dryWet;
+	const uint8_t dryWet=(uint8_t)(MOD_TARGET_SND+voice);	// 0.2.107 snd, then the insert targets
+	if(target>=MOD_TARGET_INSERT)return target<MOD_TARGET_INSERT+MOD_TARGET_INSERT_SLOTS ? target : (uint8_t)(MOD_TARGET_INSERT+MOD_TARGET_INSERT_SLOTS-1);
+	if(target>dryWet)return direction>0 ? (uint8_t)MOD_TARGET_INSERT : dryWet;
+	if(target==dryWet)return dryWet;
 	if(voice==3) {
 		if(target>=229 && target<=235)return target;
 		if(target>235)return direction>0 ? dryWet : 235;
@@ -533,15 +561,53 @@ uint8_t modTargetClampVoice(uint8_t voice,uint8_t target,int8_t direction)
 	return target;
 }
 
+/* 0.2.85: scroll order of a voice's targets. Stored indices stay as they are;
+ * the snare shows its appended layer and noise targets inside their sections:
+ * coarse fine wave pwm, layer wave/mix/freq/mode, noise freq, mix,
+ * noise attack/decay/slope, then the rest, then snd, imix, i1..i4 (0.2.107). */
+static const uint8_t modTargetSnareOrder[]={116,117,120,121,232,233,234,235,118,119,229,230,231,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,MOD_TARGET_SND+3,
+	MOD_TARGET_INSERT,MOD_TARGET_INSERT+1,MOD_TARGET_INSERT+2,MOD_TARGET_INSERT+3,MOD_TARGET_INSERT+4};
+static uint8_t modTargetOrderCount(uint8_t voice)
+{
+	if(voice==3)return (uint8_t)sizeof(modTargetSnareOrder);
+	return (uint8_t)(modTargetVoiceOffsets[voice].end-modTargetVoiceOffsets[voice].start+2+MOD_TARGET_INSERT_SLOTS);
+}
+static uint8_t modTargetOrderAt(uint8_t voice,uint8_t pos)
+{
+	if(!pos)return 0;
+	if(voice==3)return modTargetSnareOrder[pos-1];
+	const uint8_t n=(uint8_t)(modTargetVoiceOffsets[voice].end-modTargetVoiceOffsets[voice].start+1);
+	if(pos<=n)return (uint8_t)(modTargetVoiceOffsets[voice].start+pos-1);
+	if(pos==n+1)return (uint8_t)(MOD_TARGET_SND+voice);
+	return (uint8_t)(MOD_TARGET_INSERT+pos-n-2);
+}
+uint8_t modTargetStepVoice(uint8_t voice,uint8_t target,int8_t inc)
+{
+	if(voice>=6)return 0;
+	const uint8_t count=modTargetOrderCount(voice);
+	int16_t pos=-1;
+	if(!target)pos=0;
+	else for(uint8_t p=1;p<=count;p++)if(modTargetOrderAt(voice,p)==target){pos=p;break;}
+	if(pos<0) { // not one of this voice's targets: old behaviour
+		int16_t t=(int16_t)target+inc;
+		if(t<0)t=0; else if(t>255)t=255;
+		return modTargetClampVoice(voice,(uint8_t)t,inc);
+	}
+	pos=(int16_t)(pos+inc);
+	if(pos<0)pos=0; else if(pos>count)pos=count;
+	return modTargetOrderAt(voice,(uint8_t)pos);
+}
+
 uint8_t modTargetFromFraction(uint8_t voice,float fraction)
 {
 	if(voice>=6)return 0;
 	uint8_t start=modTargetVoiceOffsets[voice].start;
-	uint8_t count=(uint8_t)(modTargetVoiceOffsets[voice].end-start+1+(voice==3 ? 7 : 0)+1);
+	uint8_t count=(uint8_t)(modTargetVoiceOffsets[voice].end-start+1+(voice==3 ? 7 : 0)+1+MOD_TARGET_INSERT_SLOTS);
 	unsigned ordinal=(unsigned)(fraction*(count+1));
 	if(ordinal>count)ordinal=count;
 	if(!ordinal)return 0;
-	if(ordinal==count)return (uint8_t)(MOD_TARGET_DRY_WET+voice);
+	if(ordinal>count-MOD_TARGET_INSERT_SLOTS)return (uint8_t)(MOD_TARGET_INSERT+ordinal-(count-MOD_TARGET_INSERT_SLOTS+1));
+	if(ordinal==count-MOD_TARGET_INSERT_SLOTS)return (uint8_t)(MOD_TARGET_SND+voice);
 	if(voice==3 && ordinal>37)return (uint8_t)(229+ordinal-38);
 	return (uint8_t)(start+ordinal-1);
 }

@@ -188,3 +188,86 @@ void Compressor_process(Compressor *c, int16_t *fxBuffer,int16_t* outL, int16_t*
 	}
 }
 
+//-----------------------------------------------------------------------
+/* 0.2.71 master compressor. Same detector, ratio, attack/release and gain
+ * mapping as the FX compressor, in float and with the gain computed once
+ * per 4 frames (stereo-linked peak of the 4 frames, coefficients raised to the 4th power,
+ * gain interpolated in between). Mix and the on/off switch fade per frame. */
+#define MCOMP_HOP 4
+static Compressor masterComp;
+static float masterComp_attack4 = 0.f, masterComp_release4 = 0.f;
+static float masterComp_env = 0.f, masterComp_gain = 1.f;
+static float masterComp_wet = 0.f, masterComp_wetTarget = 0.f;
+static uint8_t masterComp_on = 0, masterComp_mix = 100, masterComp_ready = 0;
+
+static void masterComp_initOnce(void)
+{
+	if(masterComp_ready) return;
+	Compressor_init(&masterComp);
+	Compressor_setRatio(&masterComp, RATIO_4);
+	Compressor_setAttack(&masterComp, 10/127.f);
+	Compressor_setRelease(&masterComp, 40/127.f);
+	Compressor_setTreshold(&masterComp, 90/127.f);
+	Compressor_setGain(&masterComp, 0.f);
+	masterComp_attack4 = powf(masterComp.attack, MCOMP_HOP);
+	masterComp_release4 = powf(masterComp.release, MCOMP_HOP);
+	masterComp_ready = 1;
+}
+
+void masterComp_set(uint8_t idx, uint8_t value)
+{
+	masterComp_initOnce();
+	const float v = (value > 127 ? 127 : value) / 127.f;
+	switch(idx)
+	{
+	case 0: masterComp_on = value ? 1 : 0; break;
+	case 1: Compressor_setRatio(&masterComp, value <= RATIO_8 ? value : RATIO_4); break;
+	case 2: Compressor_setAttack(&masterComp, v); masterComp_attack4 = powf(masterComp.attack, MCOMP_HOP); break;
+	case 3: Compressor_setRelease(&masterComp, v); masterComp_release4 = powf(masterComp.release, MCOMP_HOP); break;
+	case 4: Compressor_setTreshold(&masterComp, v); break;
+	case 5: Compressor_setGain(&masterComp, v); break;
+	case 6: masterComp_mix = value > 100 ? 100 : value; break;
+	default: break;
+	}
+	masterComp_wetTarget = masterComp_on ? masterComp_mix / 100.f : 0.f;
+}
+
+__attribute__((noinline)) void masterComp_process(int16_t *stereo, uint32_t frames)
+{
+	if(!masterComp_ready || (masterComp_wet <= 0.f && masterComp_wetTarget <= 0.f)) {
+		masterComp_env = 0.f; masterComp_gain = 1.f; masterComp_wet = 0.f;
+		return;
+	}
+	const float wetStep = 1.f / 256.f;	// about 6 ms fade for on/off and mix
+	const float makeup = masterComp.markupGain;
+	for(uint32_t f = 0; f + MCOMP_HOP <= frames; f += MCOMP_HOP)
+	{
+		int16_t *s = &stereo[f * 2];
+		float peak = 0.f;
+		for(uint32_t k = 0; k < MCOMP_HOP; k++) {
+			/* stereo-linked peak: louder channel, so anti-phase content is seen too */
+			const float l = fabsf(s[2*k] / 32768.f), r = fabsf(s[2*k+1] / 32768.f);
+			const float in = l > r ? l : r;
+			if(in > peak) peak = in;
+		}
+		float over = logf(peak + 1.0e-25f) * 8.6858896f - masterComp.tresh;
+		if(over < 0.f) over = 0.f;
+		const float coeff = over > masterComp_env ? masterComp_attack4 : masterComp_release4;
+		masterComp_env = over + coeff * (masterComp_env - over);
+		const float target = expf(masterComp_env * (masterComp.ratio - 1.f) * 0.11512925f) * makeup;
+		const float startGain = masterComp_gain;
+		const float gainStep = (target - startGain) / MCOMP_HOP;
+		for(uint32_t k = 0; k < MCOMP_HOP; k++) {
+			const float g = startGain + gainStep * (k + 1);
+			if(masterComp_wet < masterComp_wetTarget) {
+				masterComp_wet += wetStep; if(masterComp_wet > masterComp_wetTarget) masterComp_wet = masterComp_wetTarget;
+			} else if(masterComp_wet > masterComp_wetTarget) {
+				masterComp_wet -= wetStep; if(masterComp_wet < masterComp_wetTarget) masterComp_wet = masterComp_wetTarget;
+			}
+			const float mixGain = 1.f + (g - 1.f) * masterComp_wet;
+			s[2*k]   = (int16_t)__SSAT((int32_t)(s[2*k]   * mixGain), 16);
+			s[2*k+1] = (int16_t)__SSAT((int32_t)(s[2*k+1] * mixGain), 16);
+		}
+		masterComp_gain = target;
+	}
+}

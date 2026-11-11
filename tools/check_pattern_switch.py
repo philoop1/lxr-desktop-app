@@ -24,8 +24,11 @@ uint8_t menu_playedPattern,menu_songMenuPosition,seq_songPositionPointer,menu_ac
 struct {uint8_t kitNr[64],scale[64],shuffle[64];}seq_patternSet;
 struct {uint8_t fxType;}fxBus;
 unsigned restores,backups,loads,repaints,resets,leadChecks,tickBody,checks;
-uint8_t restored,backedUp,loaded;
+uint8_t restored,backedUp,loaded,preset_activeKitNr,seq_revertActiveOnSwitch;
+unsigned intApplied;void seq_applyIntSends(uint8_t p){(void)p;intApplied++;}
+unsigned lockResets;void seq_resetLocks(void){lockResets++;}
 void seq_setPendingPatternActive(void);void seq_tick(void);static void saveDiag_seq(void){}
+unsigned flamCancels;static void seq_longFlamCancel(void){flamCancels++;}
 void check(int ok,const char *msg){checks++;if(!ok){puts(msg);exit(1);}}
 void seq_setStepIndexToStart(void){resets++;}
 void seq_copyBackupBufferToPattern(uint8_t p){restores++;restored=p;}
@@ -33,7 +36,7 @@ void seq_copyPatternToBackupBuffer(uint8_t p){backups++;backedUp=p;}
 void perf_scaleSetPattern(uint8_t a,uint8_t b){(void)a;(void)b;}
 void seq_setShuffle(float v){(void)v;}
 void preset_loadDrumsetRam(uint8_t kit,uint8_t morph,uint8_t now){
- (void)morph;(void)now;loads++;loaded=kit;
+ (void)morph;(void)now;loads++;loaded=kit;preset_activeKitNr=kit;
  /* Mimic soundengine_process while a kit is being applied. */
  seq_tick();seq_setPendingPatternActive();
 }
@@ -42,7 +45,7 @@ uint8_t led_idx2StepLed(uint8_t p){return p%16;}
 void led_setBlinkLed(uint8_t a,uint8_t b){(void)a;(void)b;}
 void seq_sendProgChg(uint8_t p){(void)p;}
 void voiceControl_noteOff(uint8_t p){(void)p;}
-void menu_setShownPattern(uint8_t p){menu_shownPattern=p;}
+void menu_setShownPattern(uint8_t p){menu_shownPattern=p;}void menu_followPattern(uint8_t p){menu_shownPattern=p;}
 void led_clearSequencerLeds(void){}
 uint8_t menu_getActiveVoice(void){return 0;}
 void led_updateSeqLeds(void){}
@@ -63,9 +66,16 @@ int main(void){
   seq_activePattern=old;seq_pendingPattern=next;seq_loadPendigFlag=1;
   seq_patternSet.kitNr[next]=(next*3)%64;seq_patternSet.scale[next]=16;
   activeParameters[PAR_PATTERN_MODE]=1;restores=backups=loads=repaints=resets=leadChecks=tickBody=0;
+  flamCancels=0;
+  const unsigned saveAs=(old*7+next)%4==0;seq_revertActiveOnSwitch=(uint8_t)saveAs;
+  const unsigned same=(old+next)%3==0;const uint8_t kit=(next*3)%64;preset_activeKitNr=same?kit:(uint8_t)(kit^1);
   seq_setPendingPatternActive();
-  check(restores==1&&restored==old&&backups==1&&backedUp==next,"backup transaction exactly once for all bank transitions");
-  check(loads==1&&loaded==(next*3)%64&&seq_activePattern==next,"correct kit and active slot");
+  check(flamCancels==1,"a pattern change ends running long flams");
+  if(saveAs)check(restores==1&&restored==old&&!seq_revertActiveOnSwitch,"save as reverts the source slot once");
+  else check(restores==0,"a pattern change keeps unsaved edits");
+  check(backups==1&&backedUp==next,"backup of the new pattern exactly once for all bank transitions");
+  if(same)check(loads==0&&preset_activeKitNr==kit&&seq_activePattern==next,"same kit as the playing one is not reloaded");
+  else check(loads==1&&loaded==kit&&preset_activeKitNr==kit&&seq_activePattern==next,"correct kit and active slot");
   check(resets==1&&repaints==2,"recursive kit callback must not repeat switch or repaint");
   check(!tickBody&&!leadChecks,"audio servicing cannot advance half-switched pattern state");
   check(!seq_patternSwitchActive&&!midi_process_block,"switch guard released");

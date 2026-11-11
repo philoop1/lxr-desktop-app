@@ -15,6 +15,7 @@
 #include <frontPanelParser_ui.h>
 #include "buttonHandler.h"
 #include "menu/StepSelection.h"
+#include "menu/CcNr2Text.h"
 #include "menu/menu.h"
 #include "ledHandler.h"
 #include "lcd.h"
@@ -27,10 +28,10 @@
 #include "Soundengine/globals.h"
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Preset/PresetManager.h"
-#include "Soundengine/saveDiag.h"
 #include "Soundengine/FxBus.h"
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/Sequencer/PerformanceSteps.h"
+#include "Soundengine/DSPAudio/mixer.h"	// 0.2.83 gater
 
 uint8_t buttonHandler_isMidiDelayPage(void)
 {
@@ -57,11 +58,8 @@ static uint32_t buttonHandler_buttonTimer = 0;
 
 #define TIMER_ACTION_OCCURED -2
 static int8_t buttonHandler_buttonTimerStepNr = NO_STEP_SELECTED;
-volatile uint16_t buttonHandler_originalParameter[2];//saves parameter number for step automation reset (stgep assign)
-uint8_t buttonHandler_originalValue[2];//saves the parameter value for reset
-uint8_t buttonHandler_resetLock1 = 0;
-uint8_t buttonHandler_resetLock2 = 0;
-// uint8_t buttonHandler_resetLock[NUM_AUTOMATION_PAR];
+/* The renderer reads locks directly; kit values are never used as scratch. */
+static uint8_t lockPattern, lockVoice, lockStep, lockFull;
 
 volatile struct {
 	unsigned selectButtonMode :4; // 0-3 for unshifted, 4-7 for shifted + extra modes (like pattern select)
@@ -102,209 +100,61 @@ volatile static int8_t buttonHandler_armedAutomationStep = NO_STEP_SELECTED;
 #define DISARM_AUTOMATION	0x00
 
 //--------------------------------------------------------
-static void buttonHandler_armTimerActionStep(int8_t stepNr) {
-#if 0
-	//check if sub or main step
-	const uint8_t isMainStep = ((stepNr % 8) == 0);
-	buttonHandler_armedAutomationStep = stepNr;
-
-	if (isMainStep) {
-		const uint8_t mainStepNr = (uint8_t) (stepNr / 8);
-		led_setBlinkLed( led_idx2StepLed(mainStepNr), 1);
-	} else {
-		const uint8_t selectButtonNr = (uint8_t) (stepNr % 8);
-		led_setBlinkLed(led_idx2SelectLed(selectButtonNr), 1);
-	}
-
-	frontPanel_sendData(ARM_AUTOMATION_STEP, (uint8_t) (stepNr),
-			menu_getActiveVoice() | ARM_AUTOMATION);
-#else
-	buttonHandler_armedAutomationStep = stepNr;
-	led_setBlinkLed( led_idx2StepLed(stepNr%16), 1);
-
-	frontPanel_sendData(ARM_AUTOMATION_STEP, (uint8_t) (stepNr),
-		menu_getActiveVoice() | ARM_AUTOMATION);
-
-#endif
-
-  //////////////////////
-  // PatternSet* patSet = get_seq_patternSet_p();
-  // uint8_t parNr;
-  // for (int i = 0; i < NUM_AUTOMATION_PAR; i++)
-  // {
-  //   parNr = patSet->seq_subStepPattern[seq_activePattern][0][stepNr].paramNr[i] - 1;
-  //   if (parNr != 254)
-  //   {
-  //     buttonHandler_originalValue[i] = activeParameters[parNr];
-  //     activeParameters[parNr] = patSet->seq_subStepPattern[seq_activePattern][0][stepNr].paramVal[i];
-
-  //     buttonHandler_originalParameter[i] = parNr;
-  //     buttonHandler_resetLock[i] = 1;
-  //   }
-  // }
-
-  /////////////////////
-
-  PatternSet* patSet = get_seq_patternSet_p();
-  uint8_t parNr = patSet->seq_subStepPattern[seq_activePattern][0][stepNr].param1Nr - 1;
-
-  if (parNr != 254)
-  {
-    buttonHandler_originalValue[0] = activeParameters[parNr];
-    activeParameters[parNr] = patSet->seq_subStepPattern[seq_activePattern][0][stepNr].param1Val;
-
-    buttonHandler_originalParameter[0] = parNr;
-    buttonHandler_resetLock1 = 1;
-  }
-
-  parNr = patSet->seq_subStepPattern[seq_activePattern][0][stepNr].param2Nr - 1;
-
-  if (parNr != 254)
-  {
-    buttonHandler_originalValue[1] = activeParameters[parNr];
-    activeParameters[parNr] = patSet->seq_subStepPattern[seq_activePattern][0][stepNr].param2Val;
-  
-    buttonHandler_originalParameter[1] = parNr;
-    buttonHandler_resetLock2 = 1;
-  }
-  ///////////////
-
-  menu_repaintAll();
-
+static void buttonHandler_armTimerActionStep(int8_t stepNr)
+{
+    if(stepNr<0 || stepNr>=NUM_STEPS)return;
+    lockPattern=menu_getViewedPattern(); lockVoice=menu_getActiveVoice(); lockStep=(uint8_t)stepNr;
+    if(lockPattern>=NUM_PATTERN || lockVoice>=NUM_TRACKS)return;
+    buttonHandler_armedAutomationStep=stepNr; lockFull=0;
+    led_setBlinkLed(led_idx2StepLed(stepNr%16),1);
+    frontPanel_sendData(ARM_AUTOMATION_STEP,(uint8_t)stepNr,lockVoice|ARM_AUTOMATION);
+    menu_repaintAll();
 }
+uint8_t buttonHandler_lockValue(uint16_t parameter,uint8_t fallback)
+{
+    if(buttonHandler_armedAutomationStep==NO_STEP_SELECTED || parameter==127 || parameter>=255)return fallback;
+    uint8_t d=(uint8_t)(parameter<128?parameter+1:parameter);
+    StepLock locks[PLOCK_MAX];
+    uint8_t n=plock_read(&seq_patternSet.seq_subStepPattern[lockPattern][lockVoice][lockStep],locks);
+    for(uint8_t i=0;i<n;i++)if(locks[i].destination==d)return locks[i].value;
+    return fallback;
+}
+uint8_t buttonHandler_lockParameter(uint16_t parameter,uint8_t value,uint8_t remove)
+{
+    if(buttonHandler_armedAutomationStep==NO_STEP_SELECTED)return 0;
+    lockFull=0;
+    /* The existing automation target table defines supported sound controls.
+     * Globals, routing and destinations with a different wire format are not locks. */
+    uint8_t supported=0;
+    for(uint8_t i=1;i<getNumModTargets();i++)
+        if(modTargets[i].param==parameter) { supported=1; break; }
+    /* 0.2.107 the FX d/w left the target list but stays lockable; the
+     * send/insert targets have no stored value to lock */
+    if(parameter==PAR_FX_DRY_WET)supported=1;
+    if(parameter>=PAR_MODX_FIRST && parameter<=PAR_MODX_LAST)supported=0;
+    if(!supported || parameter==127 || parameter>=255 || value>127)return 1;
+    uint8_t d=(uint8_t)(parameter<128?parameter+1:parameter);
+    Step *s=&seq_patternSet.seq_subStepPattern[lockPattern][lockVoice][lockStep];
+    uint8_t ok=remove?plock_remove(s,d):plock_set(s,d,value);
+    /* 1: pool full, 2: this step already has PLOCK_MAX locks */
+    if(!ok)lockFull=(uint8_t)(plock_count(s)>=PLOCK_MAX?2:1);
+    else preset_touchTimer(PRESET_PAT_TIMER);
+    menu_repaintAll(); return 1;
+}
+uint8_t buttonHandler_lockMemoryFull(void) { return lockFull; }
+
 //--------------------------------------------------------
-static void buttonHandler_disarmTimerActionStep() {
-  ///////
-  // buttonHandler_armedAutomationStep != NO_STEP_SELECTED;
-  ///////
-	if (buttonHandler_armedAutomationStep != NO_STEP_SELECTED)
-  {
-
-    led_setBlinkLed(led_idx2StepLed(buttonHandler_armedAutomationStep%16), 0);
-    
-    /////////
-    // for (int i = 0; i < NUM_AUTOMATION_PAR; i++)
-    // {
-    //   if (buttonHandler_resetLock[i] == 1)
-    //   {
-    //     activeParameters[buttonHandler_originalParameter[i]] = buttonHandler_originalValue[i];
-    //     break;
-    //   }
-    // }
-    ///////
-		//revert to original sound
-		//make changes temporary while an automation step is armed - revert to original value
-		if (buttonHandler_resetLock1 == 1) {
-			activeParameters[buttonHandler_originalParameter[0]] =
-					buttonHandler_originalValue[0];
-      // memcpy(activeParameters, buttonHandler_originalValue, NUM_PARAMS);
-		}
-    if (buttonHandler_resetLock2 == 1) {
-      activeParameters[buttonHandler_originalParameter[1]] =
-          buttonHandler_originalValue[1];
-      // memcpy(activeParameters, buttonHandler_originalValue, NUM_PARAMS);
-		}
-    /////////
-
-		buttonHandler_armedAutomationStep = NO_STEP_SELECTED;
-		frontPanel_sendData(ARM_AUTOMATION_STEP, 0, DISARM_AUTOMATION);
-
-    /////////
-    // for (int i = 0; i < NUM_AUTOMATION_PAR; i++)
-    // {
-    //   if (buttonHandler_resetLock[i] == 1)
-    //   {
-    //     buttonHandler_resetLock[i] = 0;
-
-    //     if (buttonHandler_originalParameter[i] != 0)
-    //     {
-    //       //&revert to original value
-    //       if (buttonHandler_originalParameter[i] < 128) // => Sound Parameter
-    //       {
-    //         frontPanel_sendData(MIDI_CC,
-    //             (uint8_t) (buttonHandler_originalParameter[i]),
-    //             buttonHandler_originalValue[i]);
-    //       } 
-    //       else if (buttonHandler_originalParameter[i] >= 128 && (buttonHandler_originalParameter[i] < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 127
-    //       {
-    //         frontPanel_sendData(CC_2,
-    //         (uint8_t) (buttonHandler_originalParameter[i] - 128),
-    //         buttonHandler_originalValue[i]);
-    //       } 
-    //       else
-    //       {
-    //         menu_parseGlobalParam(buttonHandler_originalParameter[i],
-    //         activeParameters[buttonHandler_originalParameter[i]]);
-    //       }
-    //       menu_repaintAll();
-    //     }
-    //   }
-    // }
-
-    /////////
-    if (buttonHandler_resetLock1 == 1)
-    {
-      buttonHandler_resetLock1 = 0;
-
-      if (buttonHandler_originalParameter[0] != 0)
-      {
-        //&revert to original value
-        if (buttonHandler_originalParameter[0] < 128) // => Sound Parameter
-        {
-          frontPanel_sendData(MIDI_CC,
-              (uint8_t) (buttonHandler_originalParameter[0]),
-              buttonHandler_originalValue[0]);
-        } 
-        else if (buttonHandler_originalParameter[0] >= 128 && (buttonHandler_originalParameter[0] < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 127
-        {
-          frontPanel_sendData(CC_2,
-          (uint8_t) (buttonHandler_originalParameter[0] - 128),
-          buttonHandler_originalValue[0]);
-        } 
-        else
-        {
-          menu_parseGlobalParam(buttonHandler_originalParameter[0],
-          activeParameters[buttonHandler_originalParameter[0]]);
-        }
+static void buttonHandler_disarmTimerActionStep(void)
+{
+    if(buttonHandler_armedAutomationStep!=NO_STEP_SELECTED) {
+        led_setBlinkLed(led_idx2StepLed(buttonHandler_armedAutomationStep%16),0);
         menu_repaintAll();
-      }
     }
-
-    if (buttonHandler_resetLock2 == 1)
-    {
-      buttonHandler_resetLock2 = 0;
-
-      if (buttonHandler_originalParameter[1] != 0)
-      {
-        if (buttonHandler_originalParameter[1] < 128) // => Sound Parameter
-        {
-          frontPanel_sendData(MIDI_CC,
-          (uint8_t) (buttonHandler_originalParameter[1]),
-          buttonHandler_originalValue[1]);
-        }
-        else if (buttonHandler_originalParameter[1] >= 128 && (buttonHandler_originalParameter[1] < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 127
-        {
-          frontPanel_sendData(CC_2,
-          (uint8_t) (buttonHandler_originalParameter[1] - 128),
-          buttonHandler_originalValue[1]);
-        }
-        else
-        {
-          menu_parseGlobalParam(buttonHandler_originalParameter[1],
-          activeParameters[buttonHandler_originalParameter[1]]);
-        }
-        menu_repaintAll();
-      }
-		}
-		return;
-	}
-
-  /////////
-
-	buttonHandler_armedAutomationStep = NO_STEP_SELECTED;
-	frontPanel_sendData(ARM_AUTOMATION_STEP, 0, DISARM_AUTOMATION);
-
+    lockFull=0;
+    buttonHandler_armedAutomationStep=NO_STEP_SELECTED;
+    frontPanel_sendData(ARM_AUTOMATION_STEP,0,DISARM_AUTOMATION);
 }
+
 
 //--------------------------------------------------------
 int8_t buttonHandler_getArmedAutomationStep() {
@@ -932,7 +782,7 @@ static void buttonHandler_enterPatternShortcut(void)
     copyClear_reset();
     menu_openPerformanceLayer(0);
     buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_PATTERN;
-    led_setMode2(SELECT_MODE_PERF);
+    led_setMode2(SELECT_MODE_PATTERN); // 0.2.92 perf blinks
     led_initPatternSelectLeds();
 }
 
@@ -948,7 +798,8 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
         return;
     }
     if(seqButtonPressed==SEQ_DRUM1 && buttonHandler_getShift()) {
-        buttonHandler_enterPatternShortcut();
+        /* 0.2.71: master compressor. Pattern select stays on a long PERF press. */
+        menu_openGlobalLayer(GLOBAL_MCOMP_SUBPAGE);
         return;
     }
 	if(copyClear_Mode>=MODE_COPY_PATTERN && !buttonHandler_getShift()) {
@@ -988,19 +839,21 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 		switch(seqButtonPressed)
 		{
 
-		case SEQ_DRUM2:
-			buttonHandler_openPerformanceLayer(PERF_ACCENT_SUBPAGE);
+		case SEQ_DRUM2: // SHIFT + Step 2: four-point Groove (0.2.68, was Step 4)
+			buttonHandler_openPerformanceLayer(PERF_GROOVE_SUBPAGE);
 			break;
 		case SEQ_DRUM3:
 			buttonHandler_openPerformanceLayer(PERF_DELAY_SUBPAGE);
 			break;
-		case SEQ_SNARE: // SHIFT + Step 4: four-point Groove
-			buttonHandler_openPerformanceLayer(PERF_GROOVE_SUBPAGE);
+		case SEQ_SNARE: // SHIFT + Step 4: velocity accent (0.2.68, was Step 2)
+			buttonHandler_openPerformanceLayer(PERF_ACCENT_SUBPAGE);
 			break;
 		case SEQ_CLP: // SHIFT + Step 5: external sends
 			buttonHandler_openPerformanceLayer(PERF_SEND_SUBPAGE);
 			break;
-		case SEQ_CL_HH:
+		case SEQ_CL_HH: // SHIFT + Step 6: internal FX sends (0.2.68)
+			buttonHandler_openPerformanceLayer(PERF_INT_SEND_SUBPAGE);
+			break;
 		case SEQ_OP_HH:
 			//single instrument buttons
 			break;
@@ -1015,12 +868,17 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			led_clearAllBlinkLeds();
 			led_setBlinkLed(LED_STEP15,1);
 			menu_switchPage(FX_MODE_PAGE);
-			menu_switchSubPage(fxBus.fxType, 1 );
-
-
-			//change visible parameters to selected FX type
-			if(menu_getSubPage() != fxBus.fxType)
-				menu_switchSubPage(fxBus.fxType, 1);
+			{
+				/* 0.2.97 open the insert of the active voice (its out), else the send effect */
+				const uint8_t voice = menu_getActiveVoice();
+				const uint8_t routing = mixer_audioRouting[voice<6 ? voice : 5];
+				activeParameters[PAR_FX_PAGE] = (routing>=MIXER_ROUTING_INSERT_FIRST && routing<=MIXER_ROUTING_INSERT_LAST)
+					? (uint8_t)(routing-MIXER_ROUTING_INSERT_FIRST+1u) : 0;
+			}
+			/* 0.2.81: open the browsed effect (send or insert); again toggles the screens */
+			menu_switchSubPage(menu_fxPageRow(activeParameters[PAR_FX_PAGE]), 1 );
+			if(menu_getSubPage() != menu_fxPageRow(activeParameters[PAR_FX_PAGE]))
+				menu_switchSubPage(menu_fxPageRow(activeParameters[PAR_FX_PAGE]), 1);
 			break;
 
 		case SEQ_SONG:
@@ -1306,6 +1164,23 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			buttonHandler_setTimeraction((uint8_t) (seqButtonPressed + menu_activeBar*16));
 			break;
 		case SELECT_MODE_STEP:
+			if(menu_isSlideCursor()) {
+				/* 0.2.90 cursor on sld: the key toggles slide of the step */
+				const uint8_t pattern=menu_getViewedPattern(),voice=menu_getActiveVoice();
+				const uint8_t step=(uint8_t)(seqButtonPressed+menu_activeBar*16);
+				if(menu_isSlideCursor()==2) {
+					/* 0.2.93 cursor on acc: the key toggles accent of the step */
+					const uint8_t accent=(uint8_t)!seq_getAccent(pattern,voice,step);
+					seq_setAccent(pattern,voice,step,accent);
+				} else {
+				const uint8_t on=(uint8_t)!seq_getSlide(pattern,voice,step);
+				seq_setSlide(pattern,voice,step,on); // 0.2.96 the 303 field keeps its mode
+				}
+				preset_touchTimer(PRESET_PAT_TIMER);
+				led_updateSeqLeds();
+				menu_repaintAll();
+				break;
+			}
 			if(stepEdit_press(menu_getViewedPattern(),menu_getActiveVoice(),seqButtonPressed,
 				(uint8_t)(seqButtonPressed+menu_activeBar*16))) {
 				led_clearAllBlinkLeds();
@@ -1339,7 +1214,6 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 					activeParameters[PAR_PATTERN_MODE] = SKIP_NEXT_KIT_AUTOLOAD;
 				}
 
-				saveDiag_begin();
 				seq_patternSet.shuffle[seqButtonPressed + 16 * menu_activePatternBank] = activeParameters[PAR_SHUFFLE];
 
 
@@ -1362,7 +1236,6 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 
 				menu_selectedPresetNr[SAVE_TYPE_PATTERN] = seqButtonPressed + 16 * menu_activePatternBank;
 				preset_refreshTmpPat(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);
-				menu_showSaveDiag();
 				menu_activePage = PATTERN_SAVE_PAGE_OK;
 				sucessTimer = systick_ticks;
 				menu_repaint();
@@ -1415,6 +1288,10 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 						(uint8_t) ((seqButtonPressed & 0xf) + 0x10));
 				//turn button led on
 				led_setValue(1, ledNr);
+			} else if (seqButtonPressed == 15) {
+				/* 0.2.83: Step 16 toggles the gater, its LED shows it */
+				mixer_setPerformanceGateEnabled(!mixer_getPerformanceGateEnabled());
+				led_setValue(mixer_getPerformanceGateEnabled(), ledNr);
 			} else {
 				/*
 				 //moved pattern select to select buttons
@@ -1831,7 +1708,10 @@ static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 
 				//change voice page on display if in voice mode
 				if ((buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_VOICE) || (buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_PERF) /*|| (buttonHandler_stateMemory.selectButtonMode ==SELECT_MODE_STEP) */) {
+					/* 0.2.90: a random step page stays a random step page of the new voice */
+					const uint8_t lfoExtra = menu_lfoExtraScreen();
 					menu_switchPage(voiceNr);
+					if(lfoExtra) menu_openLfoExtra(lfoExtra==2);
 				}
 				frontPanel_sendData(SEQ_CC, SEQ_SET_ACTIVE_TRACK, voiceNr);
 
@@ -1862,6 +1742,25 @@ static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 }
 
 //--------------------------------------------------------
+/* 0.2.92 in voice/step edit both bar buttons together switch follow on/off.
+ * The first button has already moved one bar; the chord moves it back. */
+static uint8_t buttonHandler_barHeld, buttonHandler_barBefore;
+static uint8_t buttonHandler_barChord(uint8_t bit)
+{
+	buttonHandler_barHeld |= bit;
+	if(buttonHandler_barHeld != 3u) { buttonHandler_barBefore = menu_activeBar; return 0; }
+	const uint8_t on = !(activeParameters[PAR_FOLLOW] & FOLLOW_BAR);
+	activeParameters[PAR_FOLLOW] = on ? FOLLOW_BAR : 0;
+	menu_activeBar = buttonHandler_barBefore;
+	if(on) {
+		const uint8_t step = seq_getStepIndex(menu_getActiveVoice());
+		if(step != 255) menu_activeBar = step/16;
+	}
+	led_updateSeqLeds();
+	led_updateBarLeds();
+	menu_showNote(on ? "Follow on       " : "Follow off      ", "                ");
+	return 1;
+}
 void buttonHandler_buttonPressed(uint8_t buttonNr) {
 	if(buttonNr!=BUT_MODE2)buttonHandler_perfLongArmed=0;
 	buttonHandler_loadLongArmed=0;
@@ -1905,6 +1804,8 @@ void buttonHandler_buttonPressed(uint8_t buttonNr) {
 		}
 		else
 		{
+			if(menu_noteOctave(12)) break; // 0.2.96 nte: octave up
+			if(buttonHandler_barChord(1u)) break; // 0.2.92
 			//step view -> bar mode
 			if(menu_activeBar < NUM_BARS-1)
 			{
@@ -1921,13 +1822,7 @@ void buttonHandler_buttonPressed(uint8_t buttonNr) {
 					{
 						dst=&seq_patternSet.seq_subStepPattern[seq_activePattern][menu_getActiveVoice()][(menu_activeBar*16)+k];
 						src=&seq_patternSet.seq_subStepPattern[seq_activePattern][menu_getActiveVoice()][((menu_activeBar-1)*16)+k];
-						dst->note		= src->note;
-						dst->param1Nr 	= src->param1Nr;
-						dst->param1Val 	= src->param1Val;
-						dst->param2Nr	= src->param2Nr;
-						dst->param2Val	= src->param2Val;
-						dst->prob		= src->prob;
-						dst->volume		= src->volume;
+						plock_copy(dst,src);
 					}
 
 					/*
@@ -1989,6 +1884,8 @@ void buttonHandler_buttonPressed(uint8_t buttonNr) {
 		}
 		else
 		{
+			if(menu_noteOctave(-12)) break; // 0.2.96 nte: octave down
+			if(buttonHandler_barChord(2u)) break; // 0.2.92
 			if(menu_activeBar > 0)
 			{
 				//seq bar mode
@@ -2324,11 +2221,11 @@ void buttonHandler_buttonReleased(uint8_t buttonNr) {
 
 
 	case BUT_PAGE_UP:
-
+			buttonHandler_barHeld &= (uint8_t)~1u; // 0.2.92
 			break;
 
 	case BUT_PAGE_DOWN:
-
+			buttonHandler_barHeld &= (uint8_t)~2u;
 			break;
 
 	case BUT_VOICE_1:

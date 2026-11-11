@@ -177,21 +177,21 @@ void Distortion_init(MasterDistortion *dist)
 	dist->lp3_state[1] = 0.0;
 }
 
-IN_ITCM_RAM void Distortion_setDrive(MasterDistortion *dist,float d)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void Distortion_setDrive(MasterDistortion *dist,float d)
 {
 	dist->drive = d;
 }
-IN_ITCM_RAM void Distortion_setParam1(MasterDistortion *dist,float p)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void Distortion_setParam1(MasterDistortion *dist,float p)
 {
 	dist->p1 = p;
 }
 
-IN_ITCM_RAM void Distortion_setParam2(MasterDistortion *dist,float p)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void Distortion_setParam2(MasterDistortion *dist,float p)
 {
 	dist->p2 = p;
 }
 
-IN_ITCM_RAM void Distortion_setParam3(MasterDistortion *dist,float p)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void Distortion_setParam3(MasterDistortion *dist,float p)
 {
 	dist->p3 = p;
 }

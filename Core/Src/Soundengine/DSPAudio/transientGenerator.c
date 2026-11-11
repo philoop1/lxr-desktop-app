@@ -26,7 +26,7 @@ void transient_init(TransientGenerator* transient)
 	transient->volume	= 1.f;
 };
 //---------------------------------------------------------------
-IN_ITCM_RAM void transient_setWaveform(TransientGenerator* transient, const uint8_t waveform)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void transient_setWaveform(TransientGenerator* transient, const uint8_t waveform)
 {
 	if(waveform < NUM_TRANSIENTS + 2)
 		transient->waveform = waveform;

@@ -27,7 +27,7 @@
 #include "../Parameters.h"
 //-----------------------------------------------------------------
 //#define NUM_PAGES 12		
-#define NUM_SUB_PAGES 8	// a maximum of 8 subpages 
+#define NUM_SUB_PAGES 10	// 0.2.82: 10 (FX page fln, ph2); menuIndex has room for 32
 #define MASK_PARAMETER 0x07
 
 #define MASK_PAGE 0xf8
@@ -67,6 +67,9 @@ extern uint8_t menu_loadedPresetNr[NUM_CURRENT];
 extern uint32_t sucessTimer;
 
 void menu_setShownPattern(uint8_t patternNr);
+/* 0.2.89: the sequencer shows the next pattern; the step edit selection moves with it */
+void menu_followPattern(uint8_t patternNr);
+uint8_t menu_isSlideCursor(void); // 0.2.90; 0.2.93: 1 = sld, 2 = acc
 uint8_t menu_getViewedPattern();
 
 
@@ -138,8 +141,17 @@ enum PageNames
 #define PERF_ACCENT_SUBPAGE 3
 #define PERF_GROOVE_SUBPAGE 4
 #define PERF_SEND_SUBPAGE 6
+#define PERF_INT_SEND_SUBPAGE 7	// 0.2.68 SHIFT + Step 6
+#define GLOBAL_MCOMP_SUBPAGE 3	// 0.2.71 SHIFT + Step 1: master compressor
+void menu_openGlobalLayer(uint8_t subPage);
+void menu_showNote(const char *line1, const char *line2);	// 0.2.92 16 chars per line, 1 s
+void menu_showNoteFor(const char *line1, const char *line2, uint32_t ticks);	// 0.2.105 own time (4 kHz ticks)
+/* 0.2.96 cursor on nte of the Step page: the bar buttons move the selected steps an octave; 1 = used */
+uint8_t menu_noteOctave(int8_t semitones);
+void menu_warnLocksDropped(void);	// 0.2.72: 2 s display note after a PLK1 load error
 void menu_openPerformanceLayer(uint8_t subPage);
 void menu_openLfoExtra(uint8_t secondScreen);
+uint8_t menu_lfoExtraScreen(void); // 0.2.90
 uint8_t menu_cycleVoiceLfo(uint8_t buttonNr);
 
 enum NamesEnum
@@ -354,6 +366,28 @@ enum NamesEnum
 	TEXT_HUMANIZE1,TEXT_HUMANIZE2,TEXT_HUMANIZE3,TEXT_HUMANIZE4,
 	TEXT_STEP_FLAM_VELO,
 	TEXT_FLAM_SLOT,TEXT_FLAM_REPEATS,TEXT_FLAM_GRID,TEXT_FLAM_PITCH,TEXT_FLAM_PLUS_ONE,TEXT_FLAM_ACCEL,
+	TEXT_FLAM_STEPS,
+	TEXT_HIGH_DAMP,
+	TEXT_INT_SEND1,TEXT_INT_SEND2,TEXT_INT_SEND3,TEXT_INT_SEND4,TEXT_INT_SEND5,TEXT_INT_SEND6,
+	TEXT_LOAD_INT_SEND,
+	TEXT_MCOMP_ON,TEXT_MCOMP_RATIO,TEXT_MCOMP_ATTACK,TEXT_MCOMP_RELEASE,TEXT_MCOMP_THRESH,TEXT_MCOMP_GAIN,TEXT_MCOMP_MIX,
+	TEXT_FX_REFLECTION, /* 0.2.76 reverb variation */
+	TEXT_FX_SIZE, /* 0.2.77 reverb room size */
+	TEXT_FX_DEPTH, /* 0.2.78 phaser depth */
+	TEXT_SEND_FX, /* 0.2.79 send page snd */
+	TEXT_FX_PAGE, /* 0.2.81 FX page browse */
+	TEXT_FX_STAGES, /* 0.2.82 phaser 2 stages */
+	TEXT_FX_DIST_TYPE, /* 0.2.83 dst */
+	TEXT_FX_BIAS,
+	TEXT_FX_OUT_LEVEL,
+	TEXT_PITCH_SLOPE, /* 0.2.85 mod target list: pitch EG slope */
+	TEXT_GLIDE_MODE, /* 0.2.90 glide */
+	TEXT_GLIDE_TIME,
+	TEXT_STEP_SLIDE,
+	TEXT_AEF_AMT, /* 0.2.91 amp EG -> filter */
+	TEXT_FENV_DECAY, /* 0.2.93 */
+	TEXT_ACC_AMT,
+	TEXT_STEP_ACCENT,
 
 
 
@@ -534,6 +568,26 @@ enum shortNamesEnum
 	,SHORT_HUMANIZE1,SHORT_HUMANIZE2,SHORT_HUMANIZE3,SHORT_HUMANIZE4
 	,SHORT_STEP_FLAM_VELO
 	,SHORT_FLAM_SLOT,SHORT_FLAM_REPEATS,SHORT_FLAM_GRID,SHORT_FLAM_PITCH,SHORT_FLAM_PLUS_ONE,SHORT_FLAM_ACCEL
+	,SHORT_FLAM_STEPS
+	,SHORT_HIGH_DAMP
+	,SHORT_INT_SEND1,SHORT_INT_SEND2,SHORT_INT_SEND3,SHORT_INT_SEND4,SHORT_INT_SEND5,SHORT_INT_SEND6
+	,SHORT_LOAD_INT_SEND
+	,SHORT_MCOMP_ON,SHORT_MCOMP_RATIO,SHORT_MCOMP_ATTACK,SHORT_MCOMP_RELEASE,SHORT_MCOMP_THRESH,SHORT_MCOMP_GAIN,SHORT_MCOMP_MIX
+	,SHORT_FX_REFLECTION
+	,SHORT_FX_SIZE
+	,SHORT_FX_DEPTH
+	,SHORT_SEND_FX
+	,SHORT_FX_PAGE
+	,SHORT_FX_STAGES
+	,SHORT_FX_BIAS
+	,SHORT_PITCH_SLOPE
+	,SHORT_GLIDE_MODE
+	,SHORT_GLIDE_TIME
+	,SHORT_STEP_SLIDE
+	,SHORT_AEF_AMT
+	,SHORT_FENV_DECAY
+	,SHORT_ACC_AMT
+	,SHORT_STEP_ACCENT
 
 	
 };
@@ -731,6 +785,26 @@ enum longNamesEnum
 	,LONG_HUMANIZE1,LONG_HUMANIZE2,LONG_HUMANIZE3,LONG_HUMANIZE4
 	,LONG_STEP_FLAM_VELO
 	,LONG_FLAM_SLOT,LONG_FLAM_REPEATS,LONG_FLAM_GRID,LONG_FLAM_PITCH,LONG_FLAM_PLUS_ONE,LONG_FLAM_ACCEL
+	,LONG_FLAM_STEPS
+	,LONG_HIGH_DAMP
+	,LONG_INT_SEND1,LONG_INT_SEND2,LONG_INT_SEND3,LONG_INT_SEND4,LONG_INT_SEND5,LONG_INT_SEND6
+	,LONG_LOAD_INT_SEND
+	,LONG_MCOMP_ON,LONG_MCOMP_RATIO,LONG_MCOMP_ATTACK,LONG_MCOMP_RELEASE,LONG_MCOMP_THRESH,LONG_MCOMP_GAIN,LONG_MCOMP_MIX
+	,LONG_FX_REFLECTION
+	,LONG_FX_SIZE
+	,LONG_FX_DEPTH
+	,LONG_SEND_FX
+	,LONG_FX_PAGE
+	,LONG_FX_STAGES
+	,LONG_FX_BIAS
+	,LONG_FX_OUT_LEVEL
+	,LONG_GLIDE_MODE
+	,LONG_GLIDE_TIME
+	,LONG_STEP_SLIDE
+	,LONG_AEF_AMT
+	,LONG_FENV_DECAY
+	,LONG_ACC_AMT
+	,LONG_STEP_ACCENT
 	
 };
 
@@ -861,9 +935,7 @@ extern uint8_t paramToModTarget[END_OF_SOUND_PARAMETERS];
 
 
 void menu_showSdError(uint8_t res);
-void menu_showSaveDiag(void);
 void menu_flamEditSelect(uint8_t preset);
-void menu_kitLoadDiagTick(void);
 
 /** returns the current menu index (page and parameter, see MASK_PAGE / MASK_PARAMETER) */
 uint8_t getMenuIndx(void);
@@ -874,6 +946,8 @@ void menu_repaintAll();
 //-----------------------------------------------------------------
 //repaint the screen. show all changes*/
 void menu_repaint();
+/* 0.2.103 menu_repaint only marks the page; this draws it (main loop) */
+void menu_processRepaint(void);
 //-----------------------------------------------------------------
 //For nonblocking display refreshs
 void menu_tick();
@@ -902,6 +976,7 @@ void menu_parseEncoder(int8_t inc, uint8_t button);
 //-----------------------------------------------------------------
 void menu_switchPage(uint8_t pageNr);
 //-----------------------------------------------------------------
+uint8_t menu_fxPageRow(uint8_t page); /* 0.2.81 */
 void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle);
 //-----------------------------------------------------------------
 void menu_resetActiveParameter();

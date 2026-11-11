@@ -12,10 +12,11 @@ work; its checkboxes do not claim that a feature has already been ported.
 
 ## Experimental Mutador changes
 
-Current preview: **Mutador 0.2.62**, experimental and awaiting broader physical-device
+Current preview: **Mutador 0.2.73**, experimental and awaiting broader physical-device
 checks of its new controls. The startup display identifies this version.
 
-- **SHIFT+Step 1 from every mode:** opens pattern selection with the first PERF view.
+- **Pattern selection from every mode:** hold PERFORMANCE for half a second (SHIFT+Step 1 until 0.2.70).
+- **SHIFT+Step 1 master compressor** (0.2.71): stereo master bus with ratio, attack, release, threshold, gain and mix, stored in the global settings.
 - **Velocity headroom:** new/reset steps default to 100. The active projects and TMP on the mounted card were proportionally converted once, with verified backups.
 - **rvl then avl after cnt:** Mutador Random Velocity plus a -100 to +100 percent proportional velocity gain for all sequencer voices and MIDI output: +50 is x1.5, +100 is x2, clipped at 127. Both persist with project settings; pbr moves to the last field.
 - **Pattern Scale 2/4/6/8/12/16/24/32:** hold LOAD (from 0.2.52; PERFORMANCE before), turn the encoder to preview, then click to confirm. A running change starts Step 1 on the next transport bar; stopped changes apply immediately. Confirmation enables `scl=pat`. Save the pattern/project to retain it.
@@ -25,9 +26,10 @@ checks of its new controls. The startup display identifies this version.
 - **Stray/Glide LFOs** (`str`/`gld`), with smooth random motion, Offset bias and Retrigger behavior. `ofs=63` is neutral.
 - **Common Voice-CC map** on the voice channels, including Snare CC112-118, LFO controls and destination selection. Global/Pch channels retain priority; the first matching voice wins on a shared channel.
 - **Snare noise envelope and second oscillator** with Mix/FM/Ring, kit storage, Morph and LFO/velocity/step destinations. Snare OSC/FM names and ordering follow Mutador, retaining PWM in place of Membrane.
-- Dedicated **SHIFT+2 Accent**, **SHIFT+3 MIDI Delay** and **SHIFT+4 Groove** windows stay out of regular PERF navigation. The separate VCA volume view is hidden; the VCAs remain active.
+- Dedicated **SHIFT+2 Groove**, **SHIFT+3 MIDI Delay**, **SHIFT+4 Accent**, **SHIFT+5 external sends** and **SHIFT+6 internal FX sends** windows stay out of regular PERF navigation (2 and 4 swapped in 0.2.68). The separate VCA volume view is hidden; the VCAs remain active.
 
 See the [Performance chapter](manual/chapters/07_performance.md),
+[button cheat sheet](manual/chapters/08_cheat_sheet.md),
 [MIDI map](manual/chapters/05_midi_and_clock.md), and
 [latest session](docs/sessions/031-random-step-lfo-flam-probability.md).
 The release build and native source/timing/storage tests passed. This does
@@ -153,13 +155,13 @@ When the build has finished it shows where the update file is and how to install
 ```
 ======================================================================
   Firmware update file:
-    .../lxr2-Mutador/build/release/LXR_V2_V1.7_Mutador0.2.62.img
+    .../lxr2-Mutador/build/release/LXR_V2_V1.7_Mutador0.2.68.img
   ...
 ```
 
 The base version `1.7` comes from `project(VERSION ...)` in
 [CMakeLists.txt](CMakeLists.txt). `LXR_MUTADOR_VERSION` in the same file sets the
-`Mutador0.2.62` suffix of this experimental fork image and the `Mutador 0.2.62`
+`Mutador0.2.68` suffix of this experimental fork image and the `Mutador 0.2.68`
 line on the startup screen.
 Verified build artifacts and their hashes are in the
 [firmware image archive](firmware-archive/README.md).

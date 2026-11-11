@@ -12,8 +12,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from import_lxr1_patterns import LXR2_PATTERN_BYTES
+
 KIT_LINK_OFFSET = 3662  # TRANSFER_V3_KIT_OFFSET in presetManager.c
-PATTERN_BYTES = 4574
+CND2_PATTERN_BYTES = 4574
 KIT_BYTES = 328
 
 
@@ -46,7 +48,7 @@ def main() -> None:
             files[root / f"{block:02d}-{folder.name}.SND"] = kit
             for index in range(8):
                 data = bytearray((folder / "LXR2" / f"{index:02d}-LXR1{index + 1}.PAT").read_bytes())
-                if len(data) != PATTERN_BYTES or data[8:14] != b"PatV03" or data[KIT_LINK_OFFSET] != 0:
+                if len(data) not in (CND2_PATTERN_BYTES, LXR2_PATTERN_BYTES) or data[8:14] != b"PatV03" or data[KIT_LINK_OFFSET] != 0:
                     raise ValueError(f"{folder}: unexpected pattern {index}")
                 data[KIT_LINK_OFFSET] = block
                 files[root / f"{block * 8 + index:02d}-{folder.name}.PAT"] = bytes(data)

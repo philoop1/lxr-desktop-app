@@ -29,7 +29,7 @@
  Parameter parameterArray[END_OF_SOUND_PARAMETERS];
 //the parameter numbers from the AVR/Frontpanel
 //####################################################################
- IN_ITCM_RAM void paramArray_setParameter(uint16_t idx, ptrValue newValue)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void paramArray_setParameter(uint16_t idx, ptrValue newValue)
 {
 
 #if 1

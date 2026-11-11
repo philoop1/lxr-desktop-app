@@ -73,7 +73,7 @@ void DecayEg_setDecay(DecayEg* eg, uint8_t data2)
 	eg->decay = DecayEg_calcTime(data2);
 }
 //--------------------------------------------------
-IN_ITCM_RAM void DecayEg_setSlope(DecayEg* eg, uint8_t data2)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void DecayEg_setSlope(DecayEg* eg, uint8_t data2)
 {
 	float amount 	= ((data2/127.f)-0.5f)*2;
 	// 127 gave amount 1 and a division by zero; this is the steepest the amp EG gets too

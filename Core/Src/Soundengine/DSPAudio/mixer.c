@@ -14,6 +14,7 @@
 #include "Soundengine/DSPAudio/mixer.h"
 #include "Soundengine/config.h"
 #include "Soundengine/AudioCodecManager.h"
+#include "Soundengine/cpuDiag.h"
 #include "Soundengine/DSPAudio/CymbalVoice.h"
 #include "Soundengine/DSPAudio/DrumVoice.h"
 #include "Soundengine/DSPAudio/Snare.h"
@@ -24,7 +25,9 @@
 #include "Soundengine/TriggerOut.h"
 #include "menu/menu.h"
 #include "Soundengine/FxBus.h"
+#include "Soundengine/DSPAudio/FX/InsertFx.h"
 #include "Soundengine/DSPAudio/PerformanceMasterFilter.h"
+#include "Soundengine/DSPAudio/FX/Compressor.h"
 
 	uint8_t r2_Available;
 	uint8_t l1_Available;
@@ -44,6 +47,7 @@ INDTCMZ int16_t mixer_voice_samples[6];		/**< stores the last outputted sample o
 
 static float mixer_voiceVca[7],mixer_masterVca;
 static uint8_t mixer_fxSend[7],mixer_fxSendMode,mixer_fxOutputMode;
+static uint8_t mixer_intSend[6];	// 0.2.68 live sends into the internal FX bus
 uint8_t mixer_getFxOutputMode(void) {return mixer_fxOutputMode;}
 
 void mixer_init()
@@ -57,6 +61,7 @@ void mixer_init()
 		mixer_voice_samples[i] 		= 0;
 		mixer_audioRouting[i]		= 0;
 	}
+	InsertFx_init();
 	mixer_decimation_rate[6] 		= 1;
 #endif
 
@@ -70,6 +75,8 @@ IN_ITCM_RAM void mixer_decimateBlock(const uint8_t voiceNr, int16_t* buffer)
 {
 	uint8_t i;
 	float phaseInc = mixer_decimation_rate[voiceNr]*mixer_decimation_rate[6];
+	/* 0.2.100 full rate holds nothing: keep the last sample and leave (Mutador fast path) */
+	if(phaseInc >= 1.f) { mixer_voice_samples[voiceNr] = buffer[OUTPUT_DMA_SIZE-1]; return; }
 	for(i=0;i<OUTPUT_DMA_SIZE;i++)
 	{
 		mixer_decimation_cnt[voiceNr] += phaseInc;
@@ -584,6 +591,48 @@ uint8_t mixer_handleFxSendCc(uint8_t cc, uint8_t value)
 	return 0;
 }
 //-----------------------------------------------------------------------
+static uint8_t mixer_gateEnabled;
+static float mixer_gateGain = 1.f;
+static float mixer_gateTarget = 1.f;
+void mixer_setPerformanceGateEnabled(uint8_t enabled)
+{
+	mixer_gateEnabled = enabled ? 1u : 0u;
+	if(!mixer_gateEnabled) mixer_gateTarget = 1.f;
+}
+uint8_t mixer_getPerformanceGateEnabled(void)
+{
+	return mixer_gateEnabled;
+}
+void mixer_setPerformanceGatePhase(uint8_t open)
+{
+	mixer_gateTarget = (!mixer_gateEnabled || open) ? 1.f : 0.f;
+}
+/* interleaved stereo, both DAC pairs; nothing to do while fully open */
+/* noinline: stays in flash, the ITCM block code is full */
+__attribute__((noinline))
+void mixer_applyPerformanceGate(int16_t *output, int16_t *output2, uint16_t frames)
+{
+	const float slew = 1.f / 32.f;
+	float gain = mixer_gateGain;
+	const float target = mixer_gateTarget;
+	if(gain >= 0.999f && target >= 0.999f) { mixer_gateGain = 1.f; return; }
+	for(uint16_t i = 0; i < frames; i++)
+	{
+		if(gain < target) { gain += slew; if(gain > target) gain = target; }
+		else if(gain > target) { gain -= slew; if(gain < target) gain = target; }
+		output[i * 2] = (int16_t)(output[i * 2] * gain);
+		output[i * 2 + 1] = (int16_t)(output[i * 2 + 1] * gain);
+		output2[i * 2] = (int16_t)(output2[i * 2] * gain);
+		output2[i * 2 + 1] = (int16_t)(output2[i * 2 + 1] * gain);
+	}
+	mixer_gateGain = gain;
+}
+//-----------------------------------------------------------------------
+void mixer_setIntSend(uint8_t voice,uint8_t value)
+{
+	if(voice<6)mixer_intSend[voice]=value>127?127:value;
+}
+//-----------------------------------------------------------------------
 void mixer_setFxSendMode(uint8_t mode)
 {
 	mixer_fxSendMode = (mode <= MIXER_FX_SEND_MODE_CFL) ? mode : MIXER_FX_SEND_MODE_NORMAL;
@@ -695,6 +744,12 @@ static void __attribute__((noinline)) mixer_mixVoiceBlock(uint8_t voiceNr, uint8
 	const float panL, const float panR, int16_t* data,
 	int16_t* outL, int16_t* outR, int16_t* outL2, int16_t* outR2,int16_t* fxBuffer)
 {
+	/* 0.2.79: an insert runs on the mono voice before pan and sends */
+	if(routing >= MIXER_ROUTING_INSERT_FIRST) {
+		if(routing <= MIXER_ROUTING_INSERT_LAST)
+			InsertFx_process(voiceNr, (uint8_t)(routing - MIXER_ROUTING_INSERT_FIRST), data, OUTPUT_DMA_SIZE);
+		routing = MIXER_ROUTING_DAC1_STEREO;
+	}
 	const uint8_t mode = mixer_fxSendMode;
 	const uint8_t send = mixer_fxSend[voiceNr];
 	const float vcaGain = mixer_voiceVca[voiceNr] * mixer_masterVca;
@@ -708,6 +763,33 @@ static void __attribute__((noinline)) mixer_mixVoiceBlock(uint8_t voiceNr, uint8
 	MixerOutputRoute dryRoute = {outL,outR,0.f,0.f};
 	MixerOutputRoute sendRoute = {outL,outR,0.f,0.f};
 	uint8_t i;
+	/* 0.2.107 the send target (snd) modulates the internal send around its setting */
+	float intSend = 0.f;
+	if(voiceNr < 6) {
+		intSend = mixer_intSend[voiceNr] / 127.f + insertFx_mod[voiceNr][INS_MOD_SND];
+		intSend = intSend < 0.f ? 0.f : intSend > 1.f ? 1.f : intSend;
+	}
+	/* Keep the internal send, dry output and external send in one block pass. */
+	if(intSend > 0.f && dryDest != MIXER_ROUTING_FX_BUS) {
+		MixerOutputRoute intRoute;
+		mixer_configureOutputRoute(&intRoute, MIXER_ROUTING_FX_BUS,
+			vcaGain * intSend, panL, panR, outL,outR,outL2,outR2,fxBuffer);
+		if(hasDry) mixer_configureOutputRoute(&dryRoute, dryDest, dryGain, panL, panR,
+			outL,outR,outL2,outR2,fxBuffer);
+		if(hasSend) mixer_configureOutputRoute(&sendRoute, mixer_getFxSendRoute(send), sendGain,
+			panL,panR,outL,outR,outL2,outR2,fxBuffer);
+		for(i = 0; i < OUTPUT_DMA_SIZE; i++) {
+			const int16_t sample = data[i];
+			const int16_t post = applyVca ? (int16_t)(sample * vcaGain) : sample;
+			mixer_addSampleToRoute(&intRoute, sample);
+			/* Jack fallback can put both routes on the same saturating output. */
+			if(hasSend && mode == MIXER_FX_SEND_MODE_PFL) mixer_addSampleToRoute(&sendRoute, sample);
+			if(hasDry) mixer_addSampleToRoute(&dryRoute, post);
+			if(hasSend && mode != MIXER_FX_SEND_MODE_PFL) mixer_addSampleToRoute(&sendRoute, post);
+			if(mode == MIXER_FX_SEND_MODE_NORMAL && applyVca) data[i] = post;
+		}
+		return;
+	}
     if(mode==MIXER_FX_SEND_MODE_NORMAL) {
         if(applyVca)for(i=0;i<OUTPUT_DMA_SIZE;i++)data[i]=(int16_t)(data[i]*vcaGain);
         mixer_addDataToOutput(routing,panL,panR,data,outL,outR,outL2,outR2,fxBuffer);
@@ -999,9 +1081,12 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
 #endif
 
 #endif
+	CPU_DIAG_MASTER_START();	// 0.2.104 voices done, master stage starts
 	FxBus_process(fxBusData,  &output[pos],&output[pos+1],&output2[pos],&output2[pos+1], OUTPUT_DMA_SIZE);
 	masterFilter_process(output2,OUTPUT_DMA_SIZE);
+	masterComp_process(output2,OUTPUT_DMA_SIZE);	// 0.2.71
 	mixer_addMasterFxSendAfterFilter(output2,&output[pos],&output[pos+1]);
+	mixer_applyPerformanceGate(output,output2,OUTPUT_DMA_SIZE);	// 0.2.83 gater, last
 /*
 	if(activeParameters[UNUSED_PAR_GLO_SAT])
 	{

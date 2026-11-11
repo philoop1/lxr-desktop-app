@@ -15,6 +15,7 @@
 
 #include "Soundengine/DSPAudio/FX/Reverb.h"
 #include "Soundengine/DSPAudio/FX/FxRamBuffer.h"
+#include <math.h>
 
 
 
@@ -203,6 +204,84 @@ void Reverb_init(Reverb *r)
 
 
 
+/* 0.2.71: the per-sample helpers inlined into Reverb_process. Same arithmetic
+ * as VerbDelay.c, AllpassDelay.c, VerbModDelay.c, 1PoleLp.c and TiltEq.c, but
+ * without about 30 calls per sample and without double precision steps. */
+static inline float rv_onePole(OnePoleFilter *f, float in)
+{
+	const float b = (float)f->b;
+	const float nb = fmaf((float)f->r, in - b, b);
+	f->b = nb;
+	return nb;
+}
+static inline float rv_vdRead(VerbDelay *d)
+{
+	const float v = (float)d->ramBuffer[d->readPtr];
+	d->readPtr = (uint16_t)((d->readPtr + 1) & (MAX_ALLPASS_SIZE - 1));
+	return v;
+}
+static inline void rv_vdWrite(VerbDelay *d, float in)
+{
+	d->ramBuffer[d->writePtr] = (__fp16)in;
+	d->writePtr = (uint16_t)((d->writePtr + 1) & (MAX_ALLPASS_SIZE - 1));
+}
+static inline float rv_vdProcess(VerbDelay *d, float in)
+{
+	rv_vdWrite(d, in);
+	return rv_vdRead(d);
+}
+static inline float rv_vdReadTap(VerbDelay *d, float percent)
+{
+	const uint16_t offset = percent/100.f * d->length;
+	const uint16_t r1 = (uint16_t)((d->readPtr - offset) & (MAX_ALLPASS_SIZE - 1));
+	return (float)d->ramBuffer[r1];
+}
+static inline float rv_vdReadTapSample(VerbDelay *d, uint16_t idx)
+{
+	const uint16_t r1 = (uint16_t)((d->readPtr - idx) & (MAX_ALLPASS_SIZE - 1));
+	return (float)d->ramBuffer[r1];
+}
+static inline float rv_apProcess(AllpassDelay *d, float input)
+{
+	d->out = rv_vdRead(&d->delay);
+	d->in = input + d->g*d->out;
+	rv_vdWrite(&d->delay, d->in);
+	return d->out + (-d->g * d->in);
+}
+static inline void rv_mdCalcLength(VerbModDelay *d)
+{
+	const float scaledSize = d->length*d->roomSz;
+	const float filteredPos = rv_onePole(&d->lp, scaledSize + d->depth*(d->modVal));
+	float pos = d->writePtr-filteredPos;
+	if(pos<0)pos+=MAX_DELAY_SIZE;
+	const uint32_t itg = pos;
+	d->frac = pos-itg;
+	d->readPtr = itg & (MAX_DELAY_SIZE - 1);
+}
+static inline float rv_apmProcess(AllpassModDelay *d, float input)
+{
+	rv_mdCalcLength(&d->delay);
+	const uint32_t rp = d->delay.readPtr;
+	d->out = (float)d->delay.ramBuffer[rp];
+	d->delay.readPtr = (rp + 1) & (MAX_DELAY_SIZE - 1);
+	d->in = input + d->g*d->out;
+	const uint32_t w = d->delay.writePtr;
+	d->delay.ramBuffer[w] = (__fp16)d->in;
+	d->delay.writePtr = (w + 1) & (MAX_DELAY_SIZE - 1);
+	return d->out + (-d->g * d->in);
+}
+static inline float rv_tilt(TiltEq *eq, float in)
+{
+	eq->lp_out = eq->a0*in + eq->b1*eq->lp_out;
+	return eq->lgain*eq->lp_out + eq->hgain*(in - eq->lp_out);
+}
+#define calcOnePole(f,x) rv_onePole((f),(x))
+#define VerbDelay_process(d,x) rv_vdProcess((d),(x))
+#define VerbDelay_ReadTap(d,x) rv_vdReadTap((d),(x))
+#define VerbDelay_ReadTapSample(d,x) rv_vdReadTapSample((d),(x))
+#define AllpassDelay_process(d,x) rv_apProcess((d),(x))
+#define AllpassModDelay_process(d,x) rv_apmProcess((d),(x))
+#define TiltEq_process(e,x) rv_tilt((e),(x))
 //void Reverb_process(Reverb *r, int16_t* input1, int16_t* input2)
 void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet)
 {
@@ -260,7 +339,7 @@ void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, u
 		 early += VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[2]) * 0.125f ;
 		 early += VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[3]) * 0.25f ;
 
-		 monoInput = 0.5 * TiltEq_process(&r->eq, monoInput);//calcOnePole(&r->lpImpulse, monoInput);
+		 monoInput = 0.5f * TiltEq_process(&r->eq, monoInput);//calcOnePole(&r->lpImpulse, monoInput);
 		 in  = AllpassDelay_process(&r->inputAllpass[0], AllpassDelay_process(&r->inputAllpass[1], (monoInput)));
 		 in2 = AllpassDelay_process(&r->inputAllpass[2], AllpassDelay_process(&r->inputAllpass[3], (monoInput)));
 
@@ -428,13 +507,13 @@ void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, u
 
 
 		    //read output taps
-			out2  = VerbDelay_ReadTapSample(&r->delay[2], 266) * 0.6;
+			out2  = VerbDelay_ReadTapSample(&r->delay[2], 266) * 0.6f;
 			//out2 += VerbDelay_ReadTapSample(&r->delay[2], 2046) * 0.6;
-			out2 -= VerbDelay_ReadTapSample(&r->apDelay[1].delay, 1913) * 0.6;
-			out2 += VerbDelay_ReadTapSample(&r->delay[3], 996) * 0.6;
+			out2 -= VerbDelay_ReadTapSample(&r->apDelay[1].delay, 1913) * 0.6f;
+			out2 += VerbDelay_ReadTapSample(&r->delay[3], 996) * 0.6f;
 			//out2 -= VerbDelay_ReadTapSample(&r->delay[0], 1990) * 0.6;
-			out2 -= VerbDelay_ReadTapSample(&r->apDelay[0].delay, 187) * 0.6;
-			out2 -= VerbDelay_ReadTapSample(&r->delay[1], 1066) * 0.6;
+			out2 -= VerbDelay_ReadTapSample(&r->apDelay[0].delay, 187) * 0.6f;
+			out2 -= VerbDelay_ReadTapSample(&r->delay[1], 1066) * 0.6f;
 
 			out= TiltEq_process(&r->eqFb,fmaf(early, r->earlyVolume, out2));
 
@@ -449,7 +528,14 @@ void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, u
 			stereoOut++;
 	}
 }
-IN_ITCM_RAM void Reverb_setDelayTime(Reverb *r, float t)
+#undef calcOnePole
+#undef VerbDelay_process
+#undef VerbDelay_ReadTap
+#undef VerbDelay_ReadTapSample
+#undef AllpassDelay_process
+#undef AllpassModDelay_process
+#undef TiltEq_process
+/* 0.2.102 out of ITCM: a parameter setter */ void Reverb_setDelayTime(Reverb *r, float t)
 {
 #if SPIN_SEMI
 	if(r->delayTime != t)
@@ -477,12 +563,18 @@ IN_ITCM_RAM void Reverb_setDelayTime(Reverb *r, float t)
 #endif
 }
 
-IN_ITCM_RAM void Reverb_setFeedback(Reverb *r, float fb)
+/* 0.2.77: the decay time grows with 1/-ln(fb), so a linear knob put almost the
+ * whole range into the top quarter. -ln(fb) now falls exponentially with the
+ * knob: equal steps give roughly equal ratios of decay time. 0 stays dry, the
+ * top value keeps the old maximum of 1.0. Not per sample: runs from flash. */
+void Reverb_setFeedback(Reverb *r, float fb)
 {
-	r->feedback = fb;//feedbackShaper.shape(fb);
+	if(fb<=0.f) r->feedback=0.f;
+	else if(fb>=1.f) r->feedback=1.f;
+	else r->feedback=expf(-3.f*expf(-7.31f*fb));
 }
 
-IN_ITCM_RAM void Reverb_setComposition(Reverb *r, float c)
+/* 0.2.102 out of ITCM: a parameter setter */ void Reverb_setComposition(Reverb *r, float c)
 {
 	TiltEq_setParameter(&r->eq, -1+2*c);
 	TiltEq_setParameter(&r->eqFb, -1+2*c);
@@ -491,7 +583,7 @@ IN_ITCM_RAM void Reverb_setComposition(Reverb *r, float c)
 //	setOnePoleCoef(&r->lpImpulse, c);
 }
 
-IN_ITCM_RAM void Reverb_setVariation(Reverb *r, float v)
+/* 0.2.102 out of ITCM: a parameter setter */ void Reverb_setVariation(Reverb *r, float v)
 {
 #if SPIN_SEMI
 	//variationParameter = v;

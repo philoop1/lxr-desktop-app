@@ -13,6 +13,23 @@ implemented in this desktop fork.
 [Previous: Sequencer and patterns](03_sequencer_and_patterns.md) ·
 [Next: MIDI and clock](05_midi_and_clock.md)
 
+## Unsaved pattern edits (0.2.66)
+
+A pattern change keeps what you recorded or edited in a pattern; switching
+back shows it again. The edits live in RAM until SAVE Project writes them to
+the card, so without saving they are gone after power off. Saving a pattern to
+another slot copies the edits there and puts the source slot back to the state
+it had when you entered it. Up to 0.2.65 every pattern change discarded
+unsaved edits.
+
+## High Pitch Damp (0.2.66)
+
+Global `hpd` (third global page) makes high pitched drum voices quieter, as
+the LXR1 Mutador did: voice 1 above 120 Hz, voices 2 and 3 and (from 0.2.67)
+the snare above 1 kHz. 0 is
+off, 100 is the full LXR1 Mutador damping. Samples are not damped. The value
+is kept in MUTA.CFG with the other global extras.
+
 ## Pattern Scale and the new sound controls
 
 Encoder confirmation in the Scale window sets the pattern's scale in memory;

@@ -358,6 +358,9 @@ def main() -> None:
     defines = ''.join(re.findall(r'#define (?:EXPO_FM_OCTAVES|OSC_MAX_PHASE_INC|PD_MIN_KNEE|OSC_SCAN_GLIDE).*\n', header)).replace('#define', '\n#define')
     struct = re.search(r'typedef struct OscStruct.*?\} OscInfo;', header, re.S).group(0)
     oscillator = oscillator.replace('\r\n', '\n')
+    defines += '\n' + re.search(r'#define OSC_FM_OFFSET.*\n', oscillator).group(0)  # 0.2.87
+    defines += re.search(r'#define PD_RES_MAX_REL.*\n', oscillator).group(0)  # 0.2.88
+    defines += '#ifndef __GNUC__\n#define __attribute__(x)\n#endif\n'
     bank = read('Core/Inc/Soundengine/DSPAudio/WaveBank.h').replace('\r\n', '\n')
     bank_defines = ''.join(re.findall(r'#define WAVEBANK_(?:MAX|LEVELS|FRAME_SAMPLES) .*\n', bank))
     bank_helpers = '\n'.join(extract(bank, sig) for sig in
@@ -371,7 +374,7 @@ def main() -> None:
         'static inline int16_t osc_readFrame', 'static inline int16_t osc_readScan',
         'void calcWaveBankBlock(OscInfo', 'void calcWaveBankFmBlock(OscInfo',
         'static inline int16_t osc_readSine', 'IN_ITCM_RAM void calcExpoFmBlock',
-        'IN_ITCM_RAM void calcPhaseDistBlock', 'IN_ITCM_RAM void calcNextOscSampleFmBlock',
+        '__attribute__((noinline)) void calcPdResonanceBlock', 'void calcPhaseDistBlock(OscInfo* osc, int16_t* buf, uint8_t size) //', 'IN_ITCM_RAM void calcNextOscSampleFmBlock',
         'IN_ITCM_RAM void calcNextOscSampleBlock')]
     wavebank = read('Core/Src/Soundengine/DSPAudio/WaveBank.c').replace('\r\n', '\n')
     bodies.append(extract(wavebank, 'uint8_t waveBank_level(float freq)'))

@@ -1,3 +1,5 @@
 /build/
 __pycache__/
 /SD-Card/bootloader.img
+/SD-Card/Backup_*/
+/firmware-archive/*.elf

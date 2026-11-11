@@ -30,6 +30,7 @@ def main(plan_path):
     code = r"""
 #include <stdint.h>
 #include <stdio.h>
+#include "Preset/TrigConditions.h"
 #include <stdlib.h>
 #include <string.h>
 #include "Soundengine/Sequencer/PerformanceScale.h"
@@ -45,6 +46,7 @@ def main(plan_path):
     for name in ("SEQ_DEFAULT_NOTE", "SEQ_DEFAULT_VELOCITY"):
         code += re.search(r"^#define " + name + r" .*", header, re.M)[0] + "\n"
     code += (ROOT / "Core/Inc/Preset/SeqStep.h").read_text().replace('#include "main.h"', "")
+    code += re.search(r"enum TrigCondition\s*\{.*?\};", header, re.S)[0] + "\n"
     code += re.search(r"typedef struct PatternSetStruct.*?}PatternSet;", header, re.S)[0]
     code += r"""
 PatternSet seq_patternSet;
@@ -55,7 +57,16 @@ int f_read(FIL *f,void *dest,unsigned count,UINT *bytes){
  memcpy(dest,disk+cursor,*bytes);cursor+=*bytes;return FR_OK;
 }
 """
-    for name in ("preset_readPatternScale", "preset_readPatternData"):
+    code += "FlamPreset seq_flamPresets[NUM_FLAM_PRESETS];\n"
+    code += "static uint32_t seq_flamMask[NUM_FLAM_PRESETS];\n"
+    code += re.search(r"static const uint8_t seq_flamGridPulses\[.*?;", sequencer)[0] + "\n"
+    for name in ("seq_flamDefaultPreset", "seq_flamPosition", "seq_flamCalcMask",
+                 "seq_flamPresetsChanged", "seq_flamResetPresets"):
+        code += function(sequencer, name) + "\n"
+    code += "void preset_touchFlamTimer(void) {}\n"
+    for name in ("preset_readPatternScale", "preset_readFlamProbability", "preset_readTrigConditions",
+                 "preset_flamSlotUsed", "preset_flamSameShape", "preset_flamForVelocity",
+                 "preset_readFlamVelocity", "preset_readPatternData"):
         code += function(preset, name) + "\n"
     code += function(sequencer, "seq_resetNote") + "\n"
     code += r"""
@@ -82,6 +93,7 @@ int main(int argc,char **argv){
    check(before&&after&&ver&&head,"audit TSV row");
    unsigned version=(unsigned)atoi(ver),header=(unsigned)atoi(head);
    memset(&seq_patternSet,0,sizeof(seq_patternSet));
+   seq_flamResetPresets();
    load(before,header,version,0);load(after,header,version,1);
    for(unsigned track=0;track<7;track++){
      for(unsigned step=0;step<64;step++){
@@ -95,6 +107,8 @@ int main(int argc,char **argv){
              "Flam/Shift preserved");
        slots++;changed+=(original.volume!=expected.volume);
      }
+     check(!memcmp(&seq_patternSet.trigCondition[0][track],&seq_patternSet.trigCondition[1][track],sizeof(TrigTrack)),
+           "trigger conditions preserved");
      check(seq_patternSet.length[0][track]==seq_patternSet.length[1][track],"track length preserved");
      for(unsigned bar=0;bar<4;bar++)
        check(seq_patternSet.seq_mainSteps[bar][0][track]==seq_patternSet.seq_mainSteps[bar][1][track],

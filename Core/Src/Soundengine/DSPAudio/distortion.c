@@ -24,6 +24,9 @@ IN_ITCM_RAM __inline void setDistortionShape(Distortion *dist, float shape)
 IN_ITCM_RAM void calcDistBlock(const Distortion *dist, int16_t* buf, const uint8_t size)
 {
 	uint8_t i;
+	/* 0.2.103 drive knob at 0 is the only negative shape (setDistortionShape
+	 * subtracts 1/128): pass the block instead of a division per sample */
+	if(dist->shape < 0.f) return;
 	for(i=0;i<size;i++)
 	{
 			float x = buf[i]/32767.f;
@@ -43,6 +46,7 @@ void calcDistBlockFiltered(Distortion *dist, int16_t* buf, const uint8_t size)
 #else
 			float shape = dist->shape;
 #endif
+			if(shape < 0.f) continue;	// 0.2.103 drive knob at 0, see calcDistBlock
 			float x = buf[i]/32767.f;
 			//const float shape1 = 1+dist->shape;
 			x = (1+shape)*x/(1+shape*fabsf(x));

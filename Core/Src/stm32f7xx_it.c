@@ -34,6 +34,7 @@
 #include "Soundengine/MIDI/Uart.h"
 #include "Soundengine/USB/usb_manager.h"
 #include "lcd.h"
+#include "freezeDiag.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -97,6 +98,7 @@ void NMI_Handler(void)
   /* USER CODE END NonMaskableInt_IRQn 1 */
 }
 
+#if !LXR_FREEZE_DIAG /* the freeze diagnosis build has its own fault handlers */
 /**
   * @brief This function handles Hard fault interrupt.
   */
@@ -164,6 +166,7 @@ void UsageFault_Handler(void)
     /* USER CODE END W1_UsageFault_IRQn 0 */
   }
 }
+#endif
 
 /**
   * @brief This function handles System service call via SWI instruction.
@@ -204,6 +207,7 @@ void PendSV_Handler(void)
   /* USER CODE END PendSV_IRQn 1 */
 }
 
+#if !LXR_FREEZE_DIAG /* freezeDiag.c samples the interrupted PC here */
 /**
   * @brief This function handles System tick timer.
   */
@@ -220,6 +224,7 @@ void SysTick_Handler(void)
 	  encoder_callback();
   /* USER CODE END SysTick_IRQn 1 */
 }
+#endif
 
 /******************************************************************************/
 /* STM32F7xx Peripheral Interrupt Handlers                                    */
@@ -268,6 +273,7 @@ void TIM2_IRQHandler(void)
 #if CALC_SAMPLES_IN_INTERRUPT
 //#ifndef DEBUG
 
+  FREEZE_BEAT(audioBeat);
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_SET);
 	seq_tick();
 	soundengine_calcNextSampleBlock();
@@ -304,6 +310,7 @@ void TIM8_TRG_COM_TIM14_IRQHandler(void)
   /* USER CODE BEGIN TIM8_TRG_COM_TIM14_IRQn 1 */
 
   systick_ticks++;
+  FREEZE_MARK(inMenuTick, 1);
   if(lcd_process_display_interrupt)
     {
   	menu_tick();
@@ -321,6 +328,7 @@ void TIM8_TRG_COM_TIM14_IRQHandler(void)
   	menu_tick();
     }
 
+  FREEZE_MARK(inMenuTick, 0);
 #if CALC_SAMPLES_IN_INTERRUPT
   //seq_tick();
 #endif

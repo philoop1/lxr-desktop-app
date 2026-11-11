@@ -368,7 +368,8 @@ void lfo_setPhaseOffset(Lfo *lfo, uint8_t offset)
 	lfo->phaseOffset = offset>=127 ? UINT32_MAX : (uint32_t)(offset / 127.f * 0xffffffff);
 	lfo_updateHeldRandomFromOffset(lfo);
 }
-IN_ITCM_RAM void lfo_setSync(Lfo* lfo, uint8_t sync)
+/* 0.2.100 out of ITCM: only MIDI/menu set the sync, the audio fast paths need the room */
+void lfo_setSync(Lfo* lfo, uint8_t sync)
 {
 	lfo->sync = sync;
 	lfo->phaseInc = lfo_calcPhaseInc(lfo->freq,lfo->sync);
@@ -503,6 +504,17 @@ void lfo_dispatchRandomSteps(void)
 {
     for(uint8_t voice=0;voice<6;voice++)
         lfo_dispatchNextValue(&randomStepLfos[voice]);
+}
+
+/* 0.2.107 the voice whose targets a random step node uses, 0xff if it is none */
+uint8_t lfo_randomStepTargetVoice(const ModulationNode *node)
+{
+    for(uint8_t i=0;i<6;i++)
+        if(node==&randomStepLfos[i].modTarget) {
+            const uint8_t v=activeParameters[PAR_RPS_VOI1+i];
+            return (v>=1 && v<=6) ? (uint8_t)(v-1) : 0xff;
+        }
+    return 0xff;
 }
 
 void lfo_resetRandomStepTargets(void)

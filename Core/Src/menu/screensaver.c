@@ -20,6 +20,7 @@
 #include "delay.h"
 #include "graphic.h"
 #include "Soundengine/Soundengine.h"
+extern uint8_t display_refresh_state;	// menu.c: 0 = no LCD transfer running
 
 #define SCREENSAVER_ACTIVE 1
 
@@ -432,9 +433,15 @@ void screensaver_check()
 		{
 			if(screensaver_timer >= screensaver_Timeout)
 			{
-				//lcd_turnOn(0,0);
-				screensaver_Active = 1;	
-				screensaver_cellState = 0;
+				/* 0.2.103 start only between two display transfers: the menu
+				 * interrupt must not be halfway through a byte when we write */
+				__disable_irq();
+				if(display_refresh_state == 0)
+				{
+					screensaver_Active = 1;
+					screensaver_cellState = 0;
+				}
+				__enable_irq();
 			}
 		}
 		else

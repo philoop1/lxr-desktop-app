@@ -17,6 +17,7 @@ TRACKS = 7
 LXR1_PATTERNS = 8
 LXR1_STEPS = 128
 LXR2_STEPS = 64
+LXR2_PATTERN_BYTES = 4462
 STEP_BYTES = 7
 LXR1_PATTERN_BYTES = TRACKS * LXR1_PATTERNS * LXR1_STEPS * STEP_BYTES + 112 + 16 + 1 + 56
 ROLLS = {(0, 4): 1, (0, 2, 4, 6): 3, tuple(range(8)): 5}
@@ -225,6 +226,72 @@ class SampleMap:
         return value
 
 
+# LXR1 velocity and LFO modulation scale a value downwards from the set value
+# (full velocity or LFO top = set value); LXR2 modulates around the value in
+# both directions. The import moves the base value into the middle of the LXR1
+# range and halves the depth, so both swing over the same span.
+SEMITONE_TARGETS = {f"PAR_COARSE{i}" for i in range(1, 7)} | {
+    "PAR_FM_FREQ1", "PAR_FM_FREQ2", "PAR_FM_FREQ3", "PAR_MOD_OSC_F1_CYM",
+    "PAR_MOD_OSC_F2_CYM", "PAR_MOD_OSC_F1", "PAR_MOD_OSC_F2"}
+FINE_TARGETS = {f"PAR_FINE{i}" for i in range(1, 7)}
+PAN_TARGETS = {f"PAR_PAN{i}" for i in range(1, 7)}
+SWITCH_TARGET = re.compile(r"PAR_NONE|WAVE|FILTER_TYPE|SYNC_LFO|RETRIGGER_LFO|"
+                           r"VOLUME_MOD_ON_OFF|VEL_DEST|LAYER_MODE|PAR_FX_")
+
+
+def lxr1_modulation_range(name: str, base: int, amount: int, lfo: bool) -> tuple[int, int] | None:
+    """LXR2 base value and depth that cover the LXR1 swing, or None to keep."""
+    if amount <= 0 or SWITCH_TARGET.search(name):
+        return None
+    amt = amount / 127
+    if lfo and name in PAN_TARGETS:
+        # LXR1 swings the pan +-64*amount around the value already.
+        return base, round(amount / 2)
+    if name in FINE_TARGETS:
+        # LXR1 ignores the set fine value: 63.5*(1-amount) .. 63.5.
+        centre, depth = 63.5 * (1 - amt / 2), 63.5 * amt / 2
+    elif name in SEMITONE_TARGETS:
+        # Frequency times (1-amount) .. 1, as semitones below the value.
+        # Full velocity stays the set value, the low end stops at 0.
+        low = max(0.0, base + 12 * math.log2(max(1 - amt, 2 ** -4)))
+        centre, depth = (base + low) / 2, (base - low) / 2
+    else:
+        centre, depth = base * (1 - amt / 2), base * amt / 2
+    return min(127, max(0, round(centre))), min(127, max(0, round(depth)))
+
+
+def convert_lxr1_modulation(kit: bytearray, enum: dict[str, int], targets: list[str]) -> list[str]:
+    notes: list[str] = []
+    moved: dict[int, str] = {}
+    for kind, dest, amount_name, lfo in (("velocity", "PAR_VEL_DEST_", "PAR_VELO_MOD_AMT_", False),
+                                         ("LFO", "PAR_TARGET_LFO", "PAR_AMOUNT_LFO", True)):
+        for voice in range(1, 7):
+            dest_index = enum[f"{dest}{voice}"]
+            amount_index = enum[f"{amount_name}{voice}"]
+            target = kit[dest_index]
+            if not target or target >= len(targets) or targets[target] not in enum:
+                continue
+            name = targets[target]
+            param = enum[name]
+            if param >= len(kit):
+                continue
+            result = lxr1_modulation_range(name, kit[param], kit[amount_index], lfo)
+            if result is None:
+                continue
+            base, depth = result
+            label = f"{kind} {voice} -> {name[4:]}"
+            if param in moved:
+                kit[amount_index] = depth
+                notes.append(f"{label}: base already moved by {moved[param]}, only the depth converted")
+                continue
+            if base != kit[param] or depth != kit[amount_index]:
+                notes.append(f"{label}: base {kit[param]}->{base}, depth {kit[amount_index]}->{depth}")
+            kit[param] = base
+            kit[amount_index] = depth
+            moved[param] = label
+    return notes
+
+
 def convert_kit(data: bytes, suffix: str, lxr1_source: Path,
                 sample_map: SampleMap | None = None) -> tuple[bytes, list[str]]:
     raw = source_kit(data, suffix)
@@ -266,6 +333,8 @@ def convert_kit(data: bytes, suffix: str, lxr1_source: Path,
         sample_map.scan(bytes(kit))
         sample_map.apply(kit)
         notes.extend(sample_map.notes)
+    targets = mod_targets(Path(__file__).resolve().parents[1] / "Core/Src/menu/Cc2Text.c")
+    notes.extend(convert_lxr1_modulation(kit, enum, targets))
     extras = b"SNE2" + b"LFX1" + bytes(6) + bytes((2,)) * 6
     rps = bytearray(42)
     for voice in range(6):
@@ -361,10 +430,10 @@ def convert(data: bytes, suffix: str, repeat: bool = False,
         payload.append(kit_slot)
         payload.extend(b"SCL2" + bytes((16, 16 ^ 0xA5)))
         payload.extend(b"FLP1" + bytes((100,)) * (TRACKS * LXR2_STEPS))
-        payload.extend(b"CND2" + bytes((0,)) * (1 + TRACKS * LXR2_STEPS))
+        payload.extend(b"CND3" + bytes(1 + TRACKS * (LXR2_STEPS // 4) * 3))
         header = f"{name[:6]}{pat + 1:02d}"[:8].ljust(8).encode("ascii", errors="replace")
         image = header + b"PatV03" + payload
-        if len(image) != 4574:
+        if len(image) != LXR2_PATTERN_BYTES:
             raise AssertionError(f"unexpected LXR2 PAT size: {len(image)}")
         outputs.append(image)
     return outputs, warnings

@@ -20,7 +20,7 @@
 //------------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------------
-IN_ITCM_RAM void SVF_setReso(ResonantFilter* filter, float feedback)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void SVF_setReso(ResonantFilter* filter, float feedback)
 {
 	filter->q = 1-feedback;
 	if(filter->q<0.1f)filter->q = 0.02f;
@@ -86,7 +86,7 @@ IN_ITCM_RAM void SVF_recalcFreq(ResonantFilter* filter)
 #endif
 }
 //------------------------------------------------------------------------------------
-IN_ITCM_RAM void SVF_setDrive(ResonantFilter* filter,float drive)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void SVF_setDrive(ResonantFilter* filter,float drive)
 {
 #if USE_SHAPER_NONLINEARITY
 	filter->drive = drive;

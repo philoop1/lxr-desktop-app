@@ -233,7 +233,9 @@ void sync_markLeadStep(void)
 void sync_midiResetPosition()
 {
 	sync_clockCnt = 0;
-	sync_barClockCnt=0;
+	/* 0.2.78: the first clock after START is the downbeat and must count as 0
+	 * (as in sync_requestStartOnNextBar); 0 here put every bar one clock early. */
+	sync_barClockCnt=95;
 	sync_barPhaseValid=1;
 	sync_barPhaseFromStart=1;
 	sync_lastClockTick=systick_ticks;

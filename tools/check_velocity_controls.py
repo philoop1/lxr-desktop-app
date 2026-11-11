@@ -44,6 +44,12 @@ void Cymbal_trigger(uint8_t velocity,uint8_t note){Drum_trigger(4,velocity,note)
 void HiHat_trigger(uint8_t velocity,uint8_t open,uint8_t note){Drum_trigger(5+open,velocity,note);}
 void seq_sendMidiNoteOn(uint8_t channel,uint8_t note,uint8_t velocity){(void)channel;(void)note;output++;outVelocity=velocity;}
 #define NOTE_ON 144
+#define SLIDE_TRACKS 3
+uint8_t seq_getSlide(uint8_t p,uint8_t t,uint8_t st){(void)p;(void)t;(void)st;return 0;}
+void Drum_setSlideNext(uint8_t v,uint8_t on){(void)v;(void)on;}
+uint8_t seq_getAccent(uint8_t p,uint8_t t,uint8_t st){(void)p;(void)t;(void)st;return 0;}
+uint8_t fenv_accentVelocity(uint8_t v,uint8_t a,uint8_t vel){(void)v;(void)a;return vel;}
+void fenv_trigger(uint8_t v,uint8_t vel){(void)v;(void)vel;}
 void uart_sendFrontpanelByte(uint8_t value){(void)value;front++;}
 """
 voice=read('Core/Src/Soundengine/MIDI/MidiVoiceControl.c')
@@ -67,6 +73,8 @@ void copyClear_reset(void){copyClear_Mode=0;}
 void menu_openPerformanceLayer(uint8_t page){currentPage=10;layer=page;}
 void led_setMode2(uint8_t mode){modeLED=mode;}
 void led_initPatternSelectLeds(void){shortcuts++;}
+#define GLOBAL_MCOMP_SUBPAGE 3
+unsigned globalOpens,globalSub;void menu_openGlobalLayer(uint8_t s){globalOpens++;globalSub=s;}
 """
 btn=read('Core/Src/buttonHandler.c');code+=function(btn,'buttonHandler_enterPatternShortcut')
 prefix=function(btn,'buttonHandler_seqButtonPressed');prefix=prefix[:prefix.index('if(copyClear_Mode')]
@@ -110,15 +118,15 @@ int main(void){
  }
  for(unsigned page=0;page<32;page++)for(unsigned mode=0;mode<13;mode++)for(unsigned copy=0;copy<9;copy++){
   currentPage=page;buttonHandler_stateMemory.selectButtonMode=mode;copyClear_Mode=copy;
-  buttonHandler_buttonTimerStepNr=7;shift=1;shortcuts=disarmed=0;
+  buttonHandler_buttonTimerStepNr=7;shift=1;shortcuts=disarmed=globalOpens=globalSub=0;
   buttonHandler_seqButtonPressed(0);
-  check(shortcuts==1&&disarmed==1&&copyClear_Mode==0&&buttonHandler_buttonTimerStepNr==NO_STEP_SELECTED,
-      "SHIFT Step1 bypasses every mode and cancels pending automation/copy");
-  check(currentPage==10&&layer==0&&modeLED==SELECT_MODE_PERF&&buttonHandler_stateMemory.selectButtonMode==SELECT_MODE_PATTERN,
-      "any-mode shortcut selects patterns while showing first PERF view");
+  /* 0.2.71: SHIFT Step1 opens the master compressor in every mode;
+   * pattern select stays on the long PERF press (buttonHandler_tick). */
+  check(globalOpens==1&&globalSub==GLOBAL_MCOMP_SUBPAGE&&!shortcuts,
+      "SHIFT Step1 opens the master compressor page in every mode");
  }
- shift=0;shortcuts=0;buttonHandler_seqButtonPressed(0);check(!shortcuts,"unshifted Step1 is not intercepted");
- shift=1;buttonHandler_seqButtonPressed(1);check(!shortcuts,"other shifted steps are not intercepted");
+ shift=0;shortcuts=globalOpens=0;buttonHandler_seqButtonPressed(0);check(!shortcuts&&!globalOpens,"unshifted Step1 is not intercepted");
+ shift=1;buttonHandler_seqButtonPressed(1);check(!shortcuts&&!globalOpens,"other shifted steps are not intercepted");
  printf("VELOCITY/SHORTCUT PASS %u assertions\n",checks);return 0;
 }
 """

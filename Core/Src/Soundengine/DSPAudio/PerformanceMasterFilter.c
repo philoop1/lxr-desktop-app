@@ -3,6 +3,8 @@
  * Julian Schmidt / Sonic Potions, with Mutador performance modifications.
  */
 #include "Soundengine/DSPAudio/PerformanceMasterFilter.h"
+#include "Soundengine/config.h"
+#include "Soundengine/cpuDiag.h"
 #include "Soundengine/DSPAudio/ResonantFilter.h"
 #include "Soundengine/MIDI/valueShaper.h"
 static uint8_t mixer_masterFilterMode;	/**< FILTER_LP or FILTER_HP*/
@@ -153,6 +155,42 @@ static inline void mixer_updateMasterFilterCoefficients(void)
 	mixer_masterFilterCoefficientsDirty = 0;
 }
 //-----------------------------------------------------------------------
+/* 0.2.103 the steady state (filter on, fully wet, no switch, no glide) runs
+ * every block while the master filter is on: it lives in ITCM, the rarely
+ * used fade/transition loop stays in flash. */
+IN_ITCM_RAM static __attribute__((noinline)) void masterFilter_steadyBlock(int16_t* output, uint32_t frames, uint8_t hp)
+{
+	uint32_t i;
+	ResonantFilter* filterL = &mixer_masterFilterL;
+	ResonantFilter* filterR = &mixer_masterFilterR;
+	const float f = mixer_masterFilterCoefficientF;
+	const float qUse = mixer_masterFilterCoefficientQ;
+
+	if(hp)
+	{
+		for(i=0;i<frames;i++)
+		{
+			const float xL = mixer_lookupMasterFilterDrive(output[i * 2]);
+			const float xR = mixer_lookupMasterFilterDrive(output[i * 2 + 1]);
+			const float lowL = mixer_runMasterFilterSample(filterL,xL,f,qUse);
+			const float lowR = mixer_runMasterFilterSample(filterR,xR,f,qUse);
+			output[i * 2] = __SSAT((int32_t)((xL - lowL) * FILTER_GAIN),16);
+			output[i * 2 + 1] = __SSAT((int32_t)((xR - lowR) * FILTER_GAIN),16);
+		}
+	}
+	else
+	{
+		for(i=0;i<frames;i++)
+		{
+			const float xL = mixer_lookupMasterFilterDrive(output[i * 2]);
+			const float xR = mixer_lookupMasterFilterDrive(output[i * 2 + 1]);
+			const float lowL = mixer_runMasterFilterSample(filterL,xL,f,qUse);
+			const float lowR = mixer_runMasterFilterSample(filterR,xR,f,qUse);
+			output[i * 2] = __SSAT((int32_t)(lowL * FILTER_GAIN),16);
+			output[i * 2 + 1] = __SSAT((int32_t)(lowR * FILTER_GAIN),16);
+		}
+	}
+}
 void masterFilter_process(int16_t* output,uint32_t frames)
 {
 	uint32_t i;
@@ -169,35 +207,10 @@ void masterFilter_process(int16_t* output,uint32_t frames)
 		mixer_masterFilterSwitchState == MASTER_FILTER_SWITCH_IDLE &&
 		mixer_masterFilterValue == mixer_masterFilterTargetValue)
 	{
-		const float f = mixer_masterFilterCoefficientF;
-		const float qUse = mixer_masterFilterCoefficientQ;
-
-		if(mixer_masterFilterMode == FILTER_HP)
-		{
-			for(i=0;i<frames;i++)
-			{
-				const float xL = mixer_lookupMasterFilterDrive(output[i * 2]);
-				const float xR = mixer_lookupMasterFilterDrive(output[i * 2 + 1]);
-				const float lowL = mixer_runMasterFilterSample(filterL,xL,f,qUse);
-				const float lowR = mixer_runMasterFilterSample(filterR,xR,f,qUse);
-				output[i * 2] = __SSAT((int32_t)((xL - lowL) * FILTER_GAIN),16);
-				output[i * 2 + 1] = __SSAT((int32_t)((xR - lowR) * FILTER_GAIN),16);
-			}
-		}
-		else
-		{
-			for(i=0;i<frames;i++)
-			{
-				const float xL = mixer_lookupMasterFilterDrive(output[i * 2]);
-				const float xR = mixer_lookupMasterFilterDrive(output[i * 2 + 1]);
-				const float lowL = mixer_runMasterFilterSample(filterL,xL,f,qUse);
-				const float lowR = mixer_runMasterFilterSample(filterR,xR,f,qUse);
-				output[i * 2] = __SSAT((int32_t)(lowL * FILTER_GAIN),16);
-				output[i * 2 + 1] = __SSAT((int32_t)(lowR * FILTER_GAIN),16);
-			}
-		}
+		masterFilter_steadyBlock(output, frames, mixer_masterFilterMode == FILTER_HP);
 		return;
 	}
+	CPU_DIAG_FLAG(CPU_DIAG_FILTER);	// 0.2.104 the fade/glide loop (flash)
 
 	for(i=0;i<frames;i++)
 	{

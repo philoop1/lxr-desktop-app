@@ -14,6 +14,7 @@
 
 #include "Soundengine/MIDI/MidiVoiceControl.h"
 #include "Soundengine/DSPAudio/DrumVoice.h"
+#include "Soundengine/DSPAudio/FilterEnv.h" // 0.2.93
 #include "Soundengine/DSPAudio/Snare.h"
 #include "Soundengine/DSPAudio/HiHat.h"
 #include "Soundengine/MIDI/MidiMessages.h"
@@ -40,6 +41,7 @@ static void voiceControl_trigger(uint8_t voice, uint8_t note, uint8_t vel, uint8
 		Cymbal_trigger(vel, soundNote);
 	else
 		HiHat_trigger(vel,voice-5,soundNote);
+	fenv_trigger(voice,vel); // 0.2.93 filter env and accent; 0.2.95 after the voice (slide)
 	
 	//Send trigger out signal
 	/*

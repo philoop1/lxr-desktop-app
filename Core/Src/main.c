@@ -9,6 +9,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "freezeDiag.h"
 #include "fatfs.h"
 
 
@@ -51,6 +52,7 @@ typedef struct ImageFileHeaderStruct
 #include "Soundengine/DSPAudio/SampleBank.h"
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/MIDI/Uart.h"
+#include "Soundengine/MIDI/MidiParser.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -242,7 +244,7 @@ __attribute__((section(".itcm_text"))) float foo(float a)
 	return ((a + 105)*a + 945) / ((15*a + 420)*a + 945);
 }
 
-volatile static int8_t checkMainLoc = 0;
+volatile int8_t checkMainLoc = 0;	// 0.2.104 read by the peak diagnosis
 
 /**
   * @brief  The application entry point.
@@ -361,6 +363,9 @@ int main(void)
   lcd_string("Bootloader...");
 
 #else
+#if LXR_FREEZE_DIAG
+freezeDiag_boot();
+#endif
 	//print boot up message
 lcd_clear();
 lcd_string("LXR2 Mutador");
@@ -959,10 +964,14 @@ preset_initTmpFolder();
 //----- load tmp stuff --------
 //manually saved files
 loadTmpFolderFiles();
+//autosave master/send settings (0.2.88), before the kit
+preset_loadTmpCfg();
 //autosave kit
 preset_LoadTmpKit();
 //autosave pattern
 preset_LoadTmpPat();
+// 0.2.89: show the bank of the pattern that played last
+menu_activePatternBank = menu_playedPattern < NUM_PATTERN ? (uint8_t)(menu_playedPattern/16u) : 0;
 led_updateSeqLeds();
 
 preset_resetAllSaveTimers();
@@ -976,9 +985,13 @@ lcd_process_display_interrupt = 1;
 
   HAL_NVIC_SetPriority(EXTI9_5_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+#if LXR_FREEZE_DIAG
+  freezeDiag_arm();
+#endif
   while (1)
   {
   checkMainLoc = -14;
+  FREEZE_BEAT(mainBeat);
 
 	  //check SD card
 	  if((BSP_SD_IsDetected() == SD_PRESENT) &&  (lastSdState == SD_NOT_PRESENT))
@@ -1014,11 +1027,15 @@ lcd_process_display_interrupt = 1;
 	//  menu_tick();
     checkMainLoc = -12;
 	  buttonHandler_tick();
+	  midiParser_velocityTick(); // 0.2.99 spread vlv/velo changes over the loop passes
+	  soundengine_serviceAudio(); // 0.2.100 a due block does not wait behind buttons
 	  adc_checkPots();
 	//  menu_tick();
   checkMainLoc = -11;
 	  //get the encoder values
 	  menu_parseEncoder(encode_read4(),encode_readButton());
+	  soundengine_serviceAudio(); // 0.2.100 nor behind the encoder and its repaint
+	  menu_processRepaint(); // 0.2.103 the repaint asked for this pass, after the audio block
 	//  menu_tick();
 	  led_tickHandler();
 	//  menu_tick();
@@ -1030,6 +1047,7 @@ lcd_process_display_interrupt = 1;
   checkMainLoc = -10;
 
 	  //update the menu according to the encoder values
+	  soundengine_serviceAudio(); // 0.2.106 a due block does not wait behind the blocking SPI of dio_process
 	  dio_process();
 	//  menu_tick();
 	  adc_checkPots();
@@ -1049,7 +1067,6 @@ lcd_process_display_interrupt = 1;
 
 	  //check if we have to save something
 	  preset_processTimer();
-	  menu_kitLoadDiagTick();
 
     checkMainLoc = -7;
 

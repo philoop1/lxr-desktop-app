@@ -317,61 +317,17 @@ static void frontParser_handleSysexData(unsigned char data)
 			}
 
 			//calculate the step pattern and track indices
-			const uint8_t absPat 	= frontParser_sysexSeqStepNr/128;
+			const uint8_t absPat 	= frontParser_sysexSeqStepNr/NUM_STEPS;
 			const uint8_t currentTrack 		= absPat / 8;
 			const uint8_t currentPattern 	= absPat - currentTrack*8;
-			const uint8_t currentStep		= frontParser_sysexSeqStepNr - absPat*128;
+			const uint8_t currentStep		= frontParser_sysexSeqStepNr - absPat*NUM_STEPS;
 
-#if USE_PATTERN_EDIT_BUFFER
-			if( (currentPattern == seq_activePattern) )
-			{
+            if(currentPattern<NUM_PATTERN && currentTrack<NUM_TRACKS && currentStep<NUM_STEPS) {
+                Step legacy;
+                memcpy(&legacy,frontParser_sysexBuffer,sizeof(legacy));
+                plock_import(&seq_patternSet.seq_subStepPattern[currentPattern][currentTrack][currentStep],&legacy);
+            }
 
-
-				patternBackupBuffer.seq_subStepPattern[currentTrack][currentStep].volume 	= frontParser_sysexBuffer[0];
-				patternBackupBuffer.seq_subStepPattern[currentTrack][currentStep].prob 	= frontParser_sysexBuffer[1];
-				patternBackupBuffer.seq_subStepPattern[currentTrack][currentStep].note 	= frontParser_sysexBuffer[2];
-				patternBackupBuffer.seq_subStepPattern[currentTrack][currentStep].param1Nr = frontParser_sysexBuffer[3];
-				patternBackupBuffer.seq_subStepPattern[currentTrack][currentStep].param1Val 	= frontParser_sysexBuffer[4];
-				patternBackupBuffer.seq_subStepPattern[currentTrack][currentStep].param2Nr 	= frontParser_sysexBuffer[5];
-				patternBackupBuffer.seq_subStepPattern[currentTrack][currentStep].param2Val 	= frontParser_sysexBuffer[6];
-			}
-			else
-			{
-				PatternSet* patternSet = &seq_patterns;
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].volume 	= frontParser_sysexBuffer[0];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].prob 	= frontParser_sysexBuffer[1];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].note 	= frontParser_sysexBuffer[2];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].param1Nr = frontParser_sysexBuffer[3];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].param1Val 	= frontParser_sysexBuffer[4];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].param2Nr 	= frontParser_sysexBuffer[5];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].param2Val 	= frontParser_sysexBuffer[6];
-			}
-#else
-
-			PatternSet* patternSet = &seq_patternSet;
-
-			//do not overwrite playing pattern
-			/*
-			if( (currentPattern == seq_activePattern)   && seq_isRunning())
-			{
-				seq_tmpPattern.seq_subStepPattern[currentTrack][currentStep].volume 	= frontParser_sysexBuffer[0];
-				seq_tmpPattern.seq_subStepPattern[currentTrack][currentStep].prob 	= frontParser_sysexBuffer[1];
-				seq_tmpPattern.seq_subStepPattern[currentTrack][currentStep].note 	= frontParser_sysexBuffer[2];
-				seq_tmpPattern.seq_subStepPattern[currentTrack][currentStep].param1Nr = frontParser_sysexBuffer[3];
-				seq_tmpPattern.seq_subStepPattern[currentTrack][currentStep].param1Val 	= frontParser_sysexBuffer[4];
-				seq_tmpPattern.seq_subStepPattern[currentTrack][currentStep].param2Nr 	= frontParser_sysexBuffer[5];
-				seq_tmpPattern.seq_subStepPattern[currentTrack][currentStep].param2Val 	= frontParser_sysexBuffer[6];
-			} else {
-*/
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].volume 	= frontParser_sysexBuffer[0];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].prob 	= frontParser_sysexBuffer[1];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].note 	= frontParser_sysexBuffer[2];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].param1Nr = frontParser_sysexBuffer[3];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].param1Val 	= frontParser_sysexBuffer[4];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].param2Nr 	= frontParser_sysexBuffer[5];
-				patternSet->seq_subStepPattern[currentPattern][currentTrack][currentStep].param2Val 	= frontParser_sysexBuffer[6];
-			//}
-#endif
 			//signal that a new data chunk is available
 			//frontParser_newSeqDataAvailable = 1;
 			//reset receive counter for next chunk
@@ -489,92 +445,24 @@ static void frontParser_handleMidiMessage()
 	}
 		break; // case FRONT_CC_LFO_TARGET
 
-	case FRONT_SET_P1_DEST: { // cortex_midiMsg.status
-		// **AUTOM add 1 to the value as our cortex parameters are off by 1 for the lower 127 params
-			uint8_t hi = cortex_midiMsg.data1;
-			uint8_t lo = cortex_midiMsg.data2;
-			uint8_t val = (hi<<7)|lo;
-			if(val && val < 128 )
-				val++;
 
-
-#if USE_PATTERN_EDIT_BUFFER
-			patternBackupBuffer.seq_subStepPattern[frontParser_activeTrack][seq_selectedStep].param1Nr = val;
-
-#else
-
-			seq_patternSet.seq_subStepPattern[frontParser_shownPattern]
-			                                 [frontParser_activeTrack]
-			                                 [seq_selectedStep].param1Nr = val;
-#endif
-		}
-		break;
-	case FRONT_SET_P2_DEST: { // cortex_midiMsg.status
-		// **AUTOM same here
-			uint8_t hi = cortex_midiMsg.data1;
-			uint8_t lo = cortex_midiMsg.data2;
-			uint8_t val = (hi<<7)|lo;
-			if(val && val < 128 )
-				val++;
-
-#if USE_PATTERN_EDIT_BUFFER
-			if( (currentPattern == seq_activePattern) )
-			{
-				patternBackupBuffer.seq_subStepPattern[frontParser_activeTrack][seq_selectedStep].param2Nr = val;
-			}
-			else
-			{
-				seq_patterns.seq_subStepPattern[frontParser_shownPattern]
-				                                 [frontParser_activeTrack]
-				                                 [seq_selectedStep].param2Nr = val;
-			}
-
-#else
-			seq_patternSet.seq_subStepPattern[frontParser_shownPattern]
-			                                 [frontParser_activeTrack]
-			                                 [seq_selectedStep].param2Nr = val;
-#endif
-		}
-		break;
-	case FRONT_SET_P1_VAL: { // cortex_midiMsg.status
-			uint8_t stepNr = cortex_midiMsg.data1;
-			uint8_t value = cortex_midiMsg.data2;
-
-#if USE_PATTERN_EDIT_BUFFER
-			if( (currentPattern == seq_activePattern) )
-			{
-				patternBackupBuffer.seq_subStepPattern[frontParser_activeTrack][stepNr].param1Val = value;
-			}
-			else
-			{
-				seq_patterns.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][stepNr].param1Val = value;
-			}
-
-#else
-			seq_patternSet.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][stepNr].param1Val = value;
-#endif
-		}
-		break;
-	case FRONT_SET_P2_VAL: { // cortex_midiMsg.status
-			uint8_t stepNr = cortex_midiMsg.data1;
-			uint8_t value = cortex_midiMsg.data2;
-
-#if USE_PATTERN_EDIT_BUFFER
-			if( (currentPattern == seq_activePattern) )
-			{
-				patternBackupBuffer.seq_subStepPattern[frontParser_activeTrack][stepNr].param2Val = value;
-			}
-			else
-			{
-				seq_patterns.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][stepNr].param2Val = value;
-			}
-
-#else
-			seq_patternSet.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][stepNr].param2Val = value;
-#endif
-
-		}
-		break;
+    case FRONT_SET_P1_DEST:
+    case FRONT_SET_P2_DEST: {
+        uint8_t value=(cortex_midiMsg.data1<<7)|cortex_midiMsg.data2;
+        if(value && value<128)++value;
+        if(frontParser_shownPattern<NUM_PATTERN && frontParser_activeTrack<NUM_TRACKS && seq_selectedStep<NUM_STEPS)
+            plock_slot(&seq_patternSet.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][seq_selectedStep],
+                       cortex_midiMsg.status==FRONT_SET_P2_DEST,1,value);
+        break;
+    }
+    case FRONT_SET_P1_VAL:
+    case FRONT_SET_P2_VAL: {
+        uint8_t step=cortex_midiMsg.data1;
+        if(frontParser_shownPattern<NUM_PATTERN && frontParser_activeTrack<NUM_TRACKS && step<NUM_STEPS)
+            plock_slot(&seq_patternSet.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][step],
+                       cortex_midiMsg.status==FRONT_SET_P2_VAL,0,cortex_midiMsg.data2);
+        break;
+    }
 
 	case FRONT_ARM_AUTOMATION_STEP: // cortex_midiMsg.status
 		{
@@ -751,8 +639,9 @@ static void frontParser_handleSeqCC()
 			cortex_midiMsg.data2>100 ? 100 : cortex_midiMsg.data2;
 		break;
 	case FRONT_SEQ_TRIG_CONDITION:
-		seq_patternSet.trigCondition[frontParser_shownPattern][frontParser_activeTrack][frontParser_activeStep] =
-			cortex_midiMsg.data2<TRIG_COND_COUNT ? cortex_midiMsg.data2 : TRIG_COND_ALWAYS;
+		if(frontParser_shownPattern >= NUM_PATTERN || frontParser_activeTrack >= NUM_TRACKS || frontParser_activeStep >= NUM_STEPS) break;
+		trigTrackSet(&seq_patternSet.trigCondition[frontParser_shownPattern][frontParser_activeTrack],
+		             frontParser_activeStep, cortex_midiMsg.data2 < TRIG_COND_COUNT ? cortex_midiMsg.data2 : TRIG_COND_ALWAYS);
 		break;
 
 	case FRONT_SEQ_SHIFT:
@@ -931,6 +820,7 @@ static void frontParser_handleSeqCC()
 	case FRONT_SEQ_REQUEST_STEP_PARAMS:{
 
 		const uint8_t data2 = cortex_midiMsg.data2;
+		if(frontParser_shownPattern >= NUM_PATTERN || frontParser_activeTrack >= NUM_TRACKS || data2 >= NUM_STEPS) break;
 
 		/* send back probability, volume and note nr*/
 		uart_sendFrontpanelByte(FRONT_SEQ_CC);
@@ -955,7 +845,8 @@ static void frontParser_handleSeqCC()
 		uart_sendFrontpanelByte(seq_patternSet.flamProbability[frontParser_shownPattern][frontParser_activeTrack][cortex_midiMsg.data2]);
 		uart_sendFrontpanelByte(FRONT_SEQ_CC);
 		uart_sendFrontpanelByte(FRONT_SEQ_TRIG_CONDITION);
-		uart_sendFrontpanelByte(seq_patternSet.trigCondition[frontParser_shownPattern][frontParser_activeTrack][cortex_midiMsg.data2]);
+		uart_sendFrontpanelByte(trigTrackGet(&seq_patternSet.trigCondition[frontParser_shownPattern][frontParser_activeTrack],
+		                                     cortex_midiMsg.data2));
 
 		uart_sendFrontpanelByte(FRONT_SEQ_CC);
 		uart_sendFrontpanelByte(FRONT_SEQ_SHIFT);
@@ -963,12 +854,12 @@ static void frontParser_handleSeqCC()
 
 
 
-		//send back automation params
+		Step legacy;
+        plock_export(&seq_patternSet.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][data2],&legacy);
+        //send back automation params
 		// **AUTOM subtract one for differing offsets when parameter is < 128
 		uint8_t hi,lo;
-		uint8_t dest = seq_patternSet.seq_subStepPattern[frontParser_shownPattern]
-														[frontParser_activeTrack]
-														[data2].param1Nr;
+		uint8_t dest = legacy.param1Nr;
 		if(dest < 128 && dest)
 			dest--;
 		hi = dest>>7;
@@ -977,18 +868,14 @@ static void frontParser_handleSeqCC()
 		uart_sendFrontpanelByte(hi);
 		uart_sendFrontpanelByte(lo);
 
-		uint8_t val = seq_patternSet.seq_subStepPattern[frontParser_shownPattern]
-													   [frontParser_activeTrack]
-													   [data2].param1Val;
+		uint8_t val = legacy.param1Val;
 		hi = val>>7;
 		lo = val&0x7f;
 		uart_sendFrontpanelByte(FRONT_SET_P1_VAL);
 		uart_sendFrontpanelByte(hi);
 		uart_sendFrontpanelByte(lo);
 		// **AUTOM subtract one for differing offsets
-		dest = seq_patternSet.seq_subStepPattern[frontParser_shownPattern]
-												[frontParser_activeTrack]
-												[data2].param2Nr;
+		dest = legacy.param2Nr;
 		if(dest < 128 && dest)
 			dest--;
 		hi = dest>>7;
@@ -997,9 +884,7 @@ static void frontParser_handleSeqCC()
 		uart_sendFrontpanelByte(hi);
 		uart_sendFrontpanelByte(lo);
 
-		val = seq_patternSet.seq_subStepPattern[frontParser_shownPattern]
-											   [frontParser_activeTrack]
-											   [data2].param2Val;
+		val = legacy.param2Val;
 		hi = val>>7;
 		lo = val&0x7f;
 		uart_sendFrontpanelByte(FRONT_SET_P2_VAL);

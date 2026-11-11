@@ -210,3 +210,15 @@ Mutador 0.2.60: `LXR_V2_V1.7_Mutador0.2.60.img`, 360928 bytes, SHA256 `008D3471B
 Mutador 0.2.61: `LXR_V2_V1.7_Mutador0.2.61.img`, 364128 bytes, SHA256 `B930C1FF309255CCDCBE667DE7C9C637DC63663F1DF5864CC59397276103D78C`. Flam presets (repeats, resolution, velocity, pitch, +1, accelerate/brake) per project; hardware test pending.
 
 Mutador 0.2.62: `LXR_V2_V1.7_Mutador0.2.62.img`, 364360 bytes, SHA256 `B981B0339ED541A55D827BA09FCD17117A50F9DAC99C1DD5C6E042D54E351B0A`. Import page click fix (SD access inside the sample interrupt window); hardware test pending.
+
+Mutador 0.2.63: `LXR_V2_V1.7_Mutador0.2.63.img`, 366704 bytes, SHA256 `24A0136F4B2830DE50EFA79ED49DE46756E499BEF9EA1E7A08E5EC69832CDD5F`. Long flams (stp 1..16, flam has priority over its track), stp replaces fla on the Flam preset screen, encoder scrolls past empty places on the Step page; hardware test pending.
+
+Mutador 0.2.64: `LXR_V2_V1.7_Mutador0.2.64.img`, 366804 bytes, SHA256 `082B4615C11C036E94ED802DC0B1DBD26D4E38A5B272B3C792F2C6E29BDEF86F`. lki=aut keeps the kit when the next pattern uses the same one; LXR1 importer converts velocity/LFO modulation (library build/lxr1-library-20261106); hardware test pending.
+
+Mutador 0.2.65: `LXR_V2_V1.7_Mutador0.2.65.img`, 366756 bytes, SHA256 `4E34036088DC053AFD2A47491F683B18A2CEC6BCE6DDAEFCE689D9B1AF36AB36`. Flam res /3 t4 /2 t8 1 t16 (triplets in flams); hardware test pending.
+
+Mutador 0.2.66: `LXR_V2_V1.7_Mutador0.2.66.img`, 367560 bytes, SHA256 `C03171BB3027C90F252BE4B4CE1B96C6699F79EB05753DA18F91A3A8E824DF3A`. Pattern change keeps unsaved edits, mfe on the PERF master filter page, global hpd (high pitch damping from the LXR1 Mutador); hardware test pending.
+
+Mutador 0.2.67: `LXR_V2_V1.7_Mutador0.2.67.img`, 367580 bytes, SHA256 `8E64759F0DEF2431BE765E649FD48C85112FD74F86F4A770964353C10C6CA702`. hpd damps voices 1-4 (snare added); hardware test pending.
+
+Mutador 0.2.68: `LXR_V2_V1.7_Mutador0.2.68.img`, 368068 bytes, SHA256 `59AFD3F0976EE762ADED6A0C4D4E4C8C4FB93FB1E91CB7AD04C3B7A6BF53836C`. Internal FX sends i1-i6 (SHIFT + Step 6, live), Groove on SHIFT + Step 2 and Accent on SHIFT + Step 4; hardware test pending.

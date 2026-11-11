@@ -14,6 +14,7 @@
 
 
 #include "Soundengine/FxBus.h"
+#include <string.h>
 #include "Soundengine/DSPAudio/BufferTools.h"
 #include "Soundengine/DSPAudio/mixer.h"
 #include "Soundengine/Sequencer/sequencer.h"
@@ -33,6 +34,7 @@ void FxBus_init()
 	Compressor_init(&fxBus.compressor);
 	Delay_init(&fxBus.delay);
 	TapeDelay_init(&fxBus.tape);
+	Phaser_init(&fxBus.phaser);
 
 
 
@@ -135,6 +137,9 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 		Reverb_process(&fxBus.reverb, fxBuffer, out, out2, size, channels, fxBus.dryWet);
 		break;
 #endif
+	case FX_PHASER:
+		Phaser_process(&fxBus.phaser, fxBuffer, out, (uint16_t)size, channels, fxBus.dryWet);
+		break;
 
 	}
 
@@ -145,7 +150,40 @@ void FxBus_prepareFxChange()
 	//memset(FX_BUFFER, 0, FX_BUFFER_SIZE*sizeof(__fp16) );
 	// the tape delay mutes what other effects left in FX_BUFFER
 	TapeDelay_reset(&fxBus.tape);
+	Phaser_reset(&fxBus.phaser);
 //	Ringmod_resetPhase(&fxBus.ringmod);
+}
+
+void FxBus_selectType(uint8_t type)
+{
+	if(type > FX_PHASER) type = FX_OFF;
+	if(fxBus.fxType != type) {
+		FxBus_prepareFxChange();
+#if USE_REVERB
+		if(type == FX_REVERB || fxBus.fxType == FX_REVERB)
+			memset((void*)FX_BUFFER, 0, sizeof(FX_BUFFER));
+#endif
+	}
+	fxBus.fxType = type;
+	FxBus_updateParameter();
+}
+
+uint8_t FxBus_sendIndex(uint8_t fxType)
+{
+	switch(fxType) {
+	case FX_DELAY: return 1;
+	case FX_TAPE: return 2;
+#if USE_REVERB
+	case FX_REVERB: return 3;
+#endif
+	default: return 0;
+	}
+}
+
+uint8_t FxBus_sendType(uint8_t index)
+{
+	static const uint8_t types[4] = {FX_OFF, FX_DELAY, FX_TAPE, FX_REVERB};
+	return types[index < 4 ? index : 0];
 }
 
 void FxBus_updateParameter()
@@ -198,6 +236,12 @@ void FxBus_updateParameter()
 		Reverb_setVariation(&fxBus.reverb, fxBus.parameter[3]);
 		break;
 #endif
+	case FX_PHASER:
+		Phaser_setRate(&fxBus.phaser, fxBus.parameter[0]);
+		Phaser_setDepth(&fxBus.phaser, fxBus.parameter[1]);
+		Phaser_setCentre(&fxBus.phaser, fxBus.parameter[2]);
+		Phaser_setFeedback(&fxBus.phaser, fxBus.parameter[3]);
+		break;
 	default:
 		break;
 	}

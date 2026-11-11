@@ -14,12 +14,11 @@ the other slots are retained. All other divisions play all enabled stored
 slots. See [Performance controls](07_performance.md) for divisions, bar
 lengths and the confirmed switch on the next Takt-1/downbeat.
 
-From every mode, **SHIFT + Step 1** enters pattern selection and shows the
-first PERF display (BPM, roll, Morph and sample rate). Release SHIFT,
-then use the step buttons to choose a pattern. **SHIFT + PATTERN** opens the
-dedicated pattern-selection display instead. The SHIFT + Step 1 shortcut is
-available from every mode in Mutador 0.1.23; device testing remains open.
-From 0.2.52 holding PERFORMANCE for half a second opens the same view.
+From every mode, **hold PERFORMANCE for half a second** to enter pattern
+selection with the first PERF display (BPM, roll, Morph and sample rate), then
+use the step buttons to choose a pattern. **SHIFT + PATTERN** (Step 16) opens
+the dedicated pattern-selection display instead. From 0.1.23 to 0.2.70
+SHIFT + Step 1 did the same; since 0.2.71 it opens the master compressor.
 
 Hold a voice button for half a second to see which patterns are used: the
 step LEDs light each pattern of the played bank that has a step on any track,
@@ -47,8 +46,8 @@ or incoming MIDI notes. Save the project to retain the four global controls.
 
 ## 606-style pattern range (0.1.8)
 
-Enter pattern selection with SHIFT + PATTERN, or SHIFT + Step 1 from PERF,
-then release SHIFT. Hold the first pattern button and press the last one.
+Enter pattern selection with SHIFT + PATTERN, or hold PERFORMANCE for half a
+second, then release the buttons. Hold the first pattern button and press the last one.
 The inclusive range loops in order, returning from its last pattern to its
 first. For example, holding pattern buttons 2 and 5 links 2 → 3 → 4 → 5 → 2.
 Only the range endpoints need to be held; intermediate patterns are included.
@@ -97,17 +96,19 @@ From 0.2.56 `fvl` after `shf` sets the velocity curve of the Flam, from -100 to 
 
 The Flam control of a Step now picks one of 15 Flam presets of the project, `F1` to `F15`. F1 to F10 start as the former x2, x3, x4, x6, x8 and 2+1 to 8+1, so existing patterns sound the same. F11 to F15 start as examples: F11 speeds up, F12 slows down, F13 rises two semitones per hit, F14 fades out on the x8 grid, F15 plays three quick hits.
 
-Scroll the Step screen past the automation screen to the Flam preset screen. It edits the preset of the Step you selected last:
+Press the selected Step again to go from the Step screens to the automation screen and on to the Flam preset screens; since 0.2.63 the encoder also scrolls there past the empty places. The screens edit the preset of the Step you selected last, the one its `flm` shows:
 
 | Control | Range | Function |
 |---|---|---|
-| fla | F1..F15 | Which preset the screen edits. Selecting a Step or changing its Flam jumps here. |
-| rep | 1..12 | Number of hits including the main hit. The hits always stay inside the Step, so a grid limits them (x4: at most 4). |
-| res | x2, x3, x4, x6, x8, x12 | Grid of the hits inside the Step. |
+| rep | 1..64 | Number of hits including the main hit. The hits stay inside the flam length, so the grid limits them (x4 and stp 1: at most 4, x4 and stp 2: at most 8). |
+| res | /3, t4, /2, t8, 1, t16, x2, x3, x4, x6, x8, x12 | Grid of the hits. x2 to x12 are hits per Step. From 0.2.65 the slower grids: `1` one hit per Step, `/2` and `/3` one hit every 2 or 3 Steps, `t16`, `t8` and `t4` sixteenth, eighth and quarter triplets (3 hits over 2, 4 or 8 Steps). They need a matching `stp`: `res t8`, `rep 3`, `stp 4` plays one quarter of eighth triplets. |
 | fvl | -100..+100 % | Velocity curve, as before, now for every Step using the preset. |
 | fpt | -12..+12 | Pitch step per hit in semitones; the notes stop at 0 and 127. The +1 hit continues the steps. |
 | +1 | off/on | One more hit at the start of the following empty Step, like 2+1 to 8+1. |
 | bb | -100..+100 % | Accelerate or brake. Positive values make the gaps shorter towards the end, negative values longer; 0 keeps them even. |
+| stp | 1..16 | Length of the flam in Steps (0.2.63). 1 is the flam inside its Step as before. |
+
+From `stp` 2 on the preset is a long flam: the hits run on the `res` grid over `stp` Steps, `bb`, `fvl` and `fpt` run over the whole length and `+1` plays on the first Step after it. A long flam has priority over its track: notes of the same track that fall into it are skipped, also when another long flam would start there. At the end of the track it continues into the next loop; stop and a pattern change end it. Shift and groove move the start hit, the other hits keep their distance to it. Until 0.2.62 a `fla` control chose the edited preset; it is gone, and older projects load with `stp` 1.
 
 Flam probability (`fpr`) stays per Step. Edits apply at once to every Step using the preset and are kept two seconds later in the tmp folder; SAVE Project stores the presets in the project (prj.nfo, after the name). Loading or creating a project starts from the factory presets, older projects keep them. Patterns saved by 0.2.56 to 0.2.60 still hold a velocity per Step: on loading, a Step with its own velocity points at a preset with the same Flam and that velocity, which takes a free place from F15 down to F11. When no place is free, the preset with the nearest velocity is used. The per-Step velocity table is gone, which frees about 28 KB of RAM. A pattern copied into another project uses the presets of that project.
 
@@ -115,9 +116,9 @@ Flam probability (`fpr`) stays per Step. Edits apply at once to every Step using
 
 `cnd` follows `prob` on the first Step screen. A Step sounds only when its condition is true and its existing probability passes. Available conditions are `---` (always), `1st` (first track loop only), `n1s` (every loop except the first), `fil` (Fill on), `nfl` (Fill off), and every `A:B` combination from `1:1` through `8:8` where A is at most B. `1:2` plays on loops 1, 3, 5, ...; `2:4` on loops 2, 6, 10, ... . Each track counts its own loops and resets on transport restart or pattern change. Shifted Steps use their source position's loop. Flam repeats share the Step's condition.
 
-Fill is currently a latched `fil` on/off control on the first PERF page, after `spd` (on the SHIFT + Step 4 Groove page before 0.2.54). It defaults to off and is not saved. A dedicated Fill button may be added later. Since 0.2.10, `pre`/`npr` follow the most recent evaluated condition on the same track, ignoring PRE variants as history sources. `nei`/`nne` follow the preceding track (track 1 has no neighbor). A failed Step probability counts as false. A result is retained for the whole Flam group. `lst`/`nls` test whether this pattern is due to leave at its next boundary, including a queued change, Song end/next entry or the performance pattern loop. A change queued after a Step has passed cannot affect that earlier Step.
+Fill is currently a latched `fil` on/off control on the first PERF page, after `spd` (on the SHIFT + Step 4, now Step 2, Groove page before 0.2.54). It defaults to off and is not saved. A dedicated Fill button may be added later. Since 0.2.10, `pre`/`npr` follow the most recent evaluated condition on the same track, ignoring PRE variants as history sources. `nei`/`nne` follow the preceding track (track 1 has no neighbor). A failed Step probability counts as false. A result is retained for the whole Flam group. `lst`/`nls` test whether this pattern is due to leave at its next boundary, including a queued change, Song end/next entry or the performance pattern loop. A change queued after a Step has passed cannot affect that earlier Step.
 
-Conditions are copied with Steps, tracks and patterns. New pattern saves append a `CND1` block after the Flam Probability data; older patterns load with `cnd=---` for every Step.
+Conditions are copied with Steps, tracks and patterns. New pattern saves append a `CND3` block after the Flam Probability data. It stores the pattern transform and six bits per Step for conditions. The firmware also reads `CND1` and `CND2`. Patterns without condition data use `cnd=---` for every Step. Earlier firmware reads the main pattern but defaults CND3 conditions and the transform when loading a new save.
 
 ## Scale Transform (0.2.10)
 

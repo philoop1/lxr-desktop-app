@@ -27,6 +27,16 @@ uint32_t systick_ticks;uint8_t menu_activeBar;
 static uint16_t held;static unsigned selects,toggles,blinkClears;static uint8_t lastToggle;
 uint8_t menu_getViewedPattern(void){return 3;}
 uint8_t menu_getActiveVoice(void){return 1;}
+/* 0.2.90: the cursor is not on sld here */
+uint8_t activeParameters[600];enum{PAR_STEP_SLIDE=500,PAR_STEP_ACCENT=501,PRESET_PAT_TIMER=1};
+uint8_t menu_isSlideCursor(void){return 0;}
+uint8_t seq_getSlide(uint8_t p,uint8_t v,uint8_t s){(void)p;(void)v;(void)s;return 0;}
+void seq_setSlide(uint8_t p,uint8_t v,uint8_t s,uint8_t on){(void)p;(void)v;(void)s;(void)on;}
+uint8_t seq_getAccent(uint8_t p,uint8_t v,uint8_t s){(void)p;(void)v;(void)s;return 0;}
+void seq_setAccent(uint8_t p,uint8_t v,uint8_t s,uint8_t on){(void)p;(void)v;(void)s;(void)on;}
+void preset_touchTimer(uint8_t t){(void)t;}
+void led_updateSeqLeds(void){}
+void menu_repaintAll(void){}
 uint8_t stepEdit_press(uint8_t p,uint8_t v,uint8_t key,uint8_t step){(void)p;(void)v;(void)step;uint8_t first=!held;held|=(uint16_t)(1u<<key);return first;}
 void stepEdit_release(uint8_t key){held&=(uint16_t)~(1u<<key);}
 void led_clearAllBlinkLeds(void){blinkClears++;}
@@ -96,7 +106,7 @@ def build(mutation=None):
         btn = btn.replace(a, REPLACE.get(mutation, ''))
     decls = re.search(r'#define STEP_LONG_NONE.*?static uint32_t buttonHandler_stepLongDeadline;', btn, re.S)[0]
     press = function(btn, 'buttonHandler_seqButtonPressed')
-    a = press.index('		case SELECT_MODE_STEP:\n			if(stepEdit_press(')
+    a = press.index('		case SELECT_MODE_STEP:\n')
     b = press.index('		case SELECT_MODE_PATTERN:', a)
     pressed = function(btn, 'buttonHandler_buttonPressed')
     reset = re.search(r'\tbuttonHandler_stepLongKey=STEP_LONG_NONE;[^\n]*\n', pressed)

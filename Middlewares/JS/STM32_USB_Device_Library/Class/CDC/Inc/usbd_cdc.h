@@ -152,12 +152,8 @@
 
  //buffer for parsed midi messages
  extern MidiMsg usb_MidiMessages[USB_MIDI_INPUT_BUFFER_SIZE];
- extern uint8_t usb_MidiMessagesRead;
- extern uint8_t usb_MidiMessagesWrite;
-
- extern uint8_t  usb_MidiInBuff [TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS];
- extern uint8_t* usb_MidiInWrPtr;
- extern uint8_t* usb_MidiInRdPtr;
+ extern volatile uint8_t usb_MidiMessagesRead;
+ extern volatile uint8_t usb_MidiMessagesWrite;
 /**
   * @}
   */
@@ -227,6 +223,7 @@ uint8_t  USBD_CDC_SetTxBuffer        (USBD_HandleTypeDef   *pdev,
 uint8_t  USBD_CDC_SetRxBuffer        (USBD_HandleTypeDef   *pdev,
                                       uint8_t  *pbuff);
 
+void USBD_CDC_ResumeMidiRx(void);
 uint8_t  USBD_CDC_ReceivePacket      (USBD_HandleTypeDef *pdev);
 
 uint8_t  USBD_CDC_TransmitPacket     (USBD_HandleTypeDef *pdev);

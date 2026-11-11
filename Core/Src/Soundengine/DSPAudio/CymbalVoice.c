@@ -13,6 +13,7 @@
 
 
 #include "Soundengine/DSPAudio/CymbalVoice.h"
+#include "Soundengine/DSPAudio/FilterEnv.h" // 0.2.93
 #include "Soundengine/DSPAudio/squareRootLut.h"
 #include "Soundengine/DSPAudio/modulationNode.h"
 #include "Soundengine/TriggerOut.h"
@@ -127,6 +128,7 @@ IN_ITCM_RAM void Cymbal_calcAsync()
 {
 	//calc the osc  vol eg
 	cymbalVoice.egValueOscVol = slopeEg2_calc(&cymbalVoice.oscVolEg);
+	if(fenv_on[4]) fenv_tick(4, cymbalVoice.egValueOscVol); // 0.2.93 filter env
 
 	//turn off trigger signal if trigger gate mode is on and volume == 0
 	/*
@@ -154,8 +156,29 @@ IN_ITCM_RAM void Cymbal_calcAsync()
 
 }
 //---------------------------------------------------
+/* 0.2.102 silent-voice sleep (Mutador): EG at 0 gives 0 in every sample.
+ * Skip the work, keep the phases and the fader smoothing moving, clear the
+ * filter once. */
+static uint8_t cymbal_sleeping;
 void Cymbal_calcSyncBlock(int16_t* buf, const uint8_t size)
 {
+	const float faderTarget = adc_getFaderVolume(4);
+	if(cymbalVoice.egValueOscVol == 0.f)
+	{
+		if(!cymbal_sleeping)
+		{
+			SVF_reset(&cymbalVoice.filter);
+			cymbal_sleeping = 1;
+		}
+		cymbalVoice.osc.phase += cymbalVoice.osc.phaseInc * size;
+		cymbalVoice.modOsc.phase += cymbalVoice.modOsc.phaseInc * size;
+		cymbalVoice.modOsc2.phase += cymbalVoice.modOsc2.phaseInc * size;
+		for(uint8_t i=0;i<size;i++) calcOnePole(&cymbalVoice.FaderVolumeFilter, faderTarget);
+		cymbalVoice.combinedVolume = 0.f;
+		bufferTool_clearBuffer(buf,size);
+		return;
+	}
+	cymbal_sleeping = 0;
 		int16_t mod[size];
 		int16_t mod2[size];
 		//calc next mod osc sample
@@ -202,7 +225,7 @@ void Cymbal_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  cymbalVoice.combinedVolume * calcOnePole( &cymbalVoice.FaderVolumeFilter, adc_getFaderVolume(4));
+				buf[j] *=  cymbalVoice.combinedVolume * calcOnePole( &cymbalVoice.FaderVolumeFilter, faderTarget);
 			}
 #else
 			for(j=0;j<size;j++)
@@ -231,7 +254,7 @@ void Cymbal_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  cymbalVoice.combinedVolume * calcOnePole( &cymbalVoice.FaderVolumeFilter, adc_getFaderVolume(4));
+				buf[j] *=  cymbalVoice.combinedVolume * calcOnePole( &cymbalVoice.FaderVolumeFilter, faderTarget);
 			}
 #else
 			for(j=0;j<size;j++)

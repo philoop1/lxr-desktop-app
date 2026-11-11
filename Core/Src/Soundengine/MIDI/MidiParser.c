@@ -12,10 +12,13 @@
  */
 
 
+#include <string.h>
+#include "freezeDiag.h"
 #include <Soundengine/MIDI/CortexParser.h>
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/MIDI/MidiNoteNumbers.h"
 #include "Soundengine/DSPAudio/DrumVoice.h"
+#include "Soundengine/DSPAudio/FilterEnv.h" // 0.2.93
 #include "Soundengine/DSPAudio/Snare.h"
 #include "Soundengine/config.h"
 #include "Soundengine/DSPAudio/HiHat.h"
@@ -253,6 +256,8 @@ static Lfo *midiParser_voiceLfo(uint8_t voice);
 /** handle all incoming CCs and invoke action*/
 void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFloatModulator, float v)
 {
+	FREEZE_MARK(lastStatus, msg.status);
+	FREEZE_MARK(lastData1, msg.data1);
 
 	struct
 	{
@@ -348,7 +353,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 		{
 			const float f = value.flt;//value.itg/127.f;
 			//exponential full range freq
-			SVF_directSetFilterValue(&voiceArray[msg.data1-FILTER_FREQ_DRUM1].filter,valueShaperF2F(f,FILTER_SHAPER) );
+			fenv_setBase((uint8_t)(msg.data1-FILTER_FREQ_DRUM1),valueShaperF2F(f,FILTER_SHAPER)); // 0.2.93 base for the filter env
 		}
 			break;
 		case RESO_DRUM1:
@@ -723,7 +728,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 					#else
 						const float f = value.flt;
 						//exponential full range freq
-						SVF_directSetFilterValue(&snareVoice.filter,valueShaperF2F(f,FILTER_SHAPER) );
+						fenv_setBase(3,valueShaperF2F(f,FILTER_SHAPER)); // 0.2.93
 					#endif
 				}
 					break;
@@ -825,7 +830,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 			{
 				const float f = value.flt;
 				//exponential full range freq
-				SVF_directSetFilterValue(&cymbalVoice.filter,valueShaperF2F(f,FILTER_SHAPER) );
+				fenv_setBase(4,valueShaperF2F(f,FILTER_SHAPER)); // 0.2.93
 			}
 				break;
 
@@ -891,7 +896,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				{
 					const float f = value.flt;
 					//exponential full range freq
-					SVF_directSetFilterValue(&hatVoice.filter,valueShaperF2F(f,FILTER_SHAPER) );
+					fenv_setBase(5,valueShaperF2F(f,FILTER_SHAPER)); // 0.2.93
 				}
 				break;
 
@@ -1285,7 +1290,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
                 uint8_t voice=(uint8_t)(msg.data1-CC2_VEL_DEST_1);
                 uint8_t destination=value.itg;
                 modNode_setDestination(&velocityModulators[voice],destination);
-                activeParameters[PAR_VEL_DEST_1+voice]=paramToModTarget[destination];
+                activeParameters[PAR_VEL_DEST_1+voice]=modTargetFromParam(destination,voice);	// 0.2.107
                 break;
             }
 			case CC2_VELO_MOD_AMT_1:
@@ -1431,7 +1436,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
                 uint8_t voice=(uint8_t)(msg.data1-CC2_TARGET_LFO1);
                 uint8_t destination=value.itg;
                 modNode_setDestination(&midiParser_voiceLfo(voice)->modTarget,destination);
-                uint8_t target=paramToModTarget[destination];
+                uint8_t target=modTargetFromParam(destination,(uint8_t)(activeParameters[PAR_VOICE_LFO1+voice]-1));	// 0.2.107
                 activeParameters[PAR_TARGET_LFO1+voice]=target;
                 uint8_t targetVoice=voiceFromModTargValue(target);
                 if(targetVoice)activeParameters[PAR_VOICE_LFO1+voice]=targetVoice;
@@ -1517,19 +1522,26 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 			case CC2_FX_TYPE:
 #if 1
 				// Clamp types this firmware does not have
-				if(value.itg > FX_TAPE) value.itg = FX_OFF;
+				if(value.itg > FX_PHASER) value.itg = FX_OFF;
+				if( fxBus.fxType != value.itg) {
+					FxBus_prepareFxChange();
 #if USE_REVERB
-				if((value.itg == FX_REVERB) && (fxBus.fxType != value.itg)) FxBus_prepareFxChange();
-#else
-				if( fxBus.fxType != value.itg) FxBus_prepareFxChange();
+					/* 0.2.71: delay and reverb read FX_BUFFER in different layouts;
+					 * clear it when the reverb comes or goes, else the new effect
+					 * plays the old one's data as a noise burst (~75 us). */
+					if(value.itg == FX_REVERB || fxBus.fxType == FX_REVERB)
+						memset((void*)FX_BUFFER, 0, sizeof(FX_BUFFER));
 #endif
+				}
 				fxBus.fxType = value.itg;
 				FxBus_updateParameter();
+				activeParameters[PAR_SEND_FX] = FxBus_sendIndex(fxBus.fxType); // 0.2.79 snd follows
 				//change visible parameters to selected FX type
-				if(menu_activePage == FX_MODE_PAGE)
+				if(menu_activePage == FX_MODE_PAGE && !activeParameters[PAR_FX_PAGE])
 				{
-					if(menu_getSubPage() != fxBus.fxType)
-						menu_switchSubPage(fxBus.fxType, 1 );
+					/* 0.2.81: only the send page follows; an insert page stays */
+					if(menu_getSubPage() != menu_fxPageRow(0))
+						menu_switchSubPage(menu_fxPageRow(0), 0 );
 				}
 #endif
 				break;
@@ -1664,6 +1676,23 @@ static void midiParser_refreshVelocityParameter(uint16_t parameter)
 		}
 	}
 }
+/* 0.2.99 a vlv/velo change re-applies up to 7 destinations x 7 tracks; done
+ * at once it held the main loop past the audio block (click). Each change
+ * only marks the tracks, the main loop applies one per pass. */
+static uint8_t midiParser_velocityPending[7];
+uint8_t midiParser_velocityTick(void)
+{
+	for(uint8_t i=0;i<7;i++) {
+		const uint8_t mask=midiParser_velocityPending[i];
+		if(!mask)continue;
+		uint8_t track=0;
+		while(!(mask&(1u<<track)))track++;
+		midiParser_velocityPending[i]=(uint8_t)(mask&~(1u<<track));
+		midiParser_applyVelocityDestination(track,(uint16_t)(PAR_PERF_VELO_DECAY+i));
+		return 1;
+	}
+	return 0;
+}
 void midiParser_setAccentParameter(uint16_t param,uint8_t value)
 {
 	if(param!=PAR_PERF_VELO_LEVEL && (param<PAR_PERF_VELO_DECAY || param>PAR_PERF_VELO_DRIVE))return;
@@ -1673,8 +1702,8 @@ void midiParser_setAccentParameter(uint16_t param,uint8_t value)
 	for(uint8_t i=0;i<7;i++) {
 		uint16_t destination=(uint16_t)(PAR_PERF_VELO_DECAY+i);
 		uint8_t newDepth=midiParser_velocityAmount(destination);
-		if(oldDepth[i]!=newDepth)
-			for(uint8_t track=0;track<7;track++)midiParser_applyVelocityDestination(track,destination);
+		(void)destination;
+		if(oldDepth[i]!=newDepth)midiParser_velocityPending[i]=0x7f; // 0.2.99 applied by midiParser_velocityTick
 	}
 	menu_repaint();
 }
@@ -1718,7 +1747,7 @@ uint8_t midiParser_isValidChannel(uint8_t chan);
 /* Numbers with a legacy meaning: like Morph CC2 they need a Pch of their own. */
 static uint8_t midiParser_needsOwnPch(uint8_t cc)
 {
-	return (cc>=54 && cc<=59) || (cc>=67 && cc<=75) || (cc>=92 && cc<=97) || (cc>=102 && cc<=119);
+	return (cc>=53 && cc<=59) || (cc>=67 && cc<=75) || (cc>=92 && cc<=97) || (cc>=102 && cc<=119);
 }
 static uint8_t midiParser_scaleCc(uint8_t value,uint8_t maximum)
 {
@@ -1766,6 +1795,7 @@ static uint8_t midiParser_extendedPerformanceCc(uint8_t cc,uint8_t value)
 	case 16: parameter=PAR_PERF_DELAY_MODE;value=(uint8_t)(value>=64);break;
 	case 126: parameter=PAR_PERF_DELAY_TARGET;value=(uint8_t)(((uint16_t)value*10u+63u)/127u);break;
 	case 44: midiParser_setAccentParameter(PAR_PERF_VELO_LEVEL,value==64?63:value);return 1;
+	case 53: mixer_setPerformanceGateEnabled((uint8_t)(value>=64));return 1;	// 0.2.83 gater, as on the LXR1
 	case 54: midiParser_setStepPerformance(PAR_PERF_SCARCITY,midiParser_scaleCc(value,100));return 1;
 	case 55: performance_set(PAR_PERF_AVL,midiParser_scaleCc(value,200));menu_repaintAll();return 1;
 	case 56: return midiParser_menuCc(PAR_PERF_FILL,(uint8_t)(value>=64));

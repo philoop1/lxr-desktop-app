@@ -96,6 +96,7 @@ void lfo_initRandomSteps(void);
 void lfo_applyRandomStepSettings(uint8_t voice);
 void lfo_dispatchRandomSteps(void);
 void lfo_resetRandomStepTargets(void);
+uint8_t lfo_randomStepTargetVoice(const ModulationNode *node);	// 0.2.107
 void lfo_randomStepOriginalValueChanged(uint16_t idx);
 
 #endif /* LFO_H_ */

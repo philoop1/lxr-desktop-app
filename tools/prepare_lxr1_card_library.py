@@ -8,7 +8,7 @@ import csv
 import hashlib
 from pathlib import Path
 
-from import_lxr1_patterns import (SampleMap, convert, convert_kit, enum_values, parameter_maps,
+from import_lxr1_patterns import (LXR2_PATTERN_BYTES, SampleMap, convert, convert_kit, enum_values, parameter_maps,
                                   sample_bank, source_offset)
 
 
@@ -54,7 +54,7 @@ def main() -> None:
             extra = data[kit_offset + 228:kit_offset + 240] if data[8] >= 10 else b""
             snd = data[:8] + data[kit_offset:kit_offset + 228] + extra
             warnings.append("Original SND missing; SND extracted from this PRF")
-        if len(images) != 8 or any(len(image) != 4574 for image in images) or len(kit) != 328:
+        if len(images) != 8 or any(len(image) != LXR2_PATTERN_BYTES for image in images) or len(kit) != 328:
             raise ValueError(f"{source}: unexpected converted file size")
         prepared.append((source.stem, data, snd, images, warnings, existing, data[8], kit))
 

@@ -20,6 +20,8 @@
 #include "stm32f7xx_hal.h"
 #include "Soundengine/globals.h"
 #include "Preset/SeqStep.h"
+#include "Preset/StepLocks.h"
+#include "Preset/TrigConditions.h"
 #include "Parameters.h"
 
  /**<
@@ -67,6 +69,9 @@ enum TrigCondition {
 	TRIG_COND_COUNT
 };
 
+_Static_assert(NUM_STEPS == 64 && sizeof(TrigTrack) == 48, "packed condition track size");
+_Static_assert(TRIG_COND_ALWAYS == 0 && TRIG_COND_COUNT <= 64, "packed condition range");
+
 enum Seq_QuantisationEnum
 {
 	NO_QUANTISATION,
@@ -108,12 +113,24 @@ typedef struct PatternSettingsStruct
 
 
 
+#define PATTERN_INT_SENDS 6
+/* 0.2.90 slide: a marked step of track 1-3 glides in from the last note
+ * without retriggering the pitch and amp EG (flam repeats too). */
+#define SLIDE_TRACKS 3
+uint8_t seq_getSlide(uint8_t pattern, uint8_t track, uint8_t step);
+void seq_setSlide(uint8_t pattern, uint8_t track, uint8_t step, uint8_t on);
+/* 0.2.93 accent steps of every track (pattern block ACC1) */
+uint8_t seq_getAccent(uint8_t pattern, uint8_t track, uint8_t step);
+void seq_setAccent(uint8_t pattern, uint8_t track, uint8_t step, uint8_t on);
+/* 0.2.70: puts the pattern's i1..i6 live when ldl is aut */
+void seq_applyIntSends(uint8_t pattern);
+
 typedef struct PatternSetStruct
 {
 	Step seq_subStepPattern[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];	//contains step data
 	StepTiming seq_stepTiming[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
 	uint8_t flamProbability[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
-	uint8_t trigCondition[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
+	TrigTrack trigCondition[NUM_PATTERN][NUM_TRACKS];
 	uint16_t seq_mainSteps[NUM_BARS][NUM_PATTERN][NUM_TRACKS];		//bits represent if step is active
 	//PatternSetting seq_patternSettings[NUM_PATTERN];				//pattern chaining info
 	uint8_t length[NUM_PATTERN][NUM_TRACKS];	//only used in euklid generator?
@@ -121,6 +138,9 @@ typedef struct PatternSetStruct
 	uint8_t kitNr[NUM_PATTERN];
 	uint8_t scale[NUM_PATTERN];
 	uint8_t transform[NUM_PATTERN];
+	uint8_t intSend[NUM_PATTERN][PATTERN_INT_SENDS];	// 0.2.70 i1..i6, ISD1 block
+	uint64_t slide[NUM_PATTERN][SLIDE_TRACKS];	// 0.2.90 slide steps of tracks 1-3, SLD1 block
+	uint64_t accent[NUM_PATTERN][NUM_TRACKS];	// 0.2.93 accent steps, ACC1 block
 }PatternSet;
 
 typedef struct PatternBackupBufferStruct
@@ -128,7 +148,7 @@ typedef struct PatternBackupBufferStruct
 	Step seq_subStepPattern[NUM_TRACKS][NUM_STEPS];	//contains step data
 	uint8_t seq_stepTiming[NUM_TRACKS][NUM_STEPS];
 	uint8_t flamProbability[NUM_TRACKS][NUM_STEPS];
-	uint8_t trigCondition[NUM_TRACKS][NUM_STEPS];
+	TrigTrack trigCondition[NUM_TRACKS];
 	uint16_t seq_mainSteps[NUM_BARS][NUM_TRACKS];		//bits represent if step is active
 	//PatternSetting seq_patternSettings[NUM_PATTERN];				//pattern chaining info
 	uint8_t length[NUM_TRACKS];	//only used in euklid generator?
@@ -136,6 +156,9 @@ typedef struct PatternBackupBufferStruct
 	uint8_t kitNr;
 	uint8_t scale;
 	uint8_t transform;
+	uint8_t intSend[PATTERN_INT_SENDS];
+	uint64_t slide[SLIDE_TRACKS];
+	uint64_t accent[NUM_TRACKS];
 }PatternBackupBuffer;
 
 /*
@@ -157,6 +180,10 @@ extern uint16_t seq_prescaleCounter;
 //I think this is a doomed approach and not fully implemented
 //leave it to 0 and remove me in the future!!!
 #define USE_PATTERN_EDIT_BUFFER 0
+
+// 0.2.66: set by saving to another slot; the next pattern change then
+// restores the source slot from the backup buffer
+extern uint8_t seq_revertActiveOnSwitch;
 
 
 #if USE_PATTERN_EDIT_BUFFER
@@ -250,6 +277,10 @@ void seq_setExtSync(uint8_t isExt);
 //------------------------------------------------------------------------------
 /** switch to pattern patNr after the current pattern has finished*/
 void seq_setNextPattern(const uint8_t patNr);
+/* 0.2.92 pattern save of a link loop of 2-4 one-bar patterns as one pattern */
+#define LINK_NOT_MERGEABLE 255
+uint8_t seq_linkLoopBars(void);
+uint8_t seq_mergeLinkLoop(uint8_t dst);
 //------------------------------------------------------------------------------
 void seq_toggleStep(uint8_t voice, uint8_t stepNr, uint8_t patternNr);
 //------------------------------------------------------------------------------
@@ -278,14 +309,12 @@ uint8_t seq_isStepActive(uint8_t voice, uint8_t stepNr, uint8_t patternNr);
 uint8_t seq_isMainStepActive(uint8_t voice, uint8_t mainStepNr, uint8_t pattern);
 uint8_t seq_isPatternUsed(uint8_t pattern);
 void seq_setHumanize(uint8_t lane,uint8_t amount);
-uint8_t seq_flamHitVolume(uint8_t track,uint8_t source,uint8_t volume,int16_t pulse);
 /* 0.2.61 flam presets */
 extern FlamPreset seq_flamPresets[NUM_FLAM_PRESETS];
 void seq_flamDefaultPreset(uint8_t preset,FlamPreset *out);
 void seq_flamResetPresets(void);
 void seq_flamPresetsChanged(void);
 uint32_t flamIdxToPattern(uint8_t flamIdx);
-uint8_t seq_flamHitNote(uint8_t track,uint8_t source,uint8_t note,int16_t pulse);
 //------------------------------------------------------------------------------
 /** mutes and unmutes a track [0..maxTrack]*/
 void seq_setMute(uint8_t trackNr, uint8_t isMuted);

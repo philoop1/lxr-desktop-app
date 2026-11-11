@@ -51,9 +51,10 @@ typedef struct StepTiming
 /* 0.2.61 flam presets. A step's flam value 1..15 picks one of the project's
  * presets; presets 1..10 start as the former fixed flams x2..x8 and 2+1..8+1. */
 #define NUM_FLAM_PRESETS 16	// index 0 = off
-#define FLAM_PRESET_BYTES 6
-#define FLAM_NUM_GRIDS 6	// x2 x3 x4 x6 x8 x12 hits per step
-#define FLAM_MAX_REPEATS 12
+#define FLAM_PRESET_BYTES 7	// 0.2.63: + steps
+#define FLAM_NUM_GRIDS 12	// x2 x3 x4 x6 x8 x12 hits per step; 0.2.65: t16 1 t8 /2 t4 /3 (16..72 pulses)
+#define FLAM_MAX_REPEATS 64	// 0.2.63: long flams need more hits
+#define FLAM_MAX_STEPS 16	// 0.2.63: a flam may run over 1..16 steps
 #define FLAM_PITCH_ZERO 12	// pitch 0..24 = -12..+12 semitones per hit
 #define FLAM_ACCEL_FLAT 50	// accel 0..100: below 50 the hits slow down, above they speed up
 typedef struct FlamPresetStruct
@@ -64,6 +65,7 @@ typedef struct FlamPresetStruct
 	uint8_t pitch;		// 0..24, FLAM_PITCH_ZERO = same note
 	uint8_t plusOne;	// 1 = one more hit on the following empty step
 	uint8_t accel;		// 0..100, FLAM_ACCEL_FLAT = even spacing
+	uint8_t steps;		// 0.2.63: 1..FLAM_MAX_STEPS steps the flam runs over
 }FlamPreset;
 
 

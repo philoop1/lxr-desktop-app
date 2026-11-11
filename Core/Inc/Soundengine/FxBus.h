@@ -23,8 +23,9 @@
 #include "Soundengine/DSPAudio/FX/Delay.h"
 #include "Soundengine/DSPAudio/FX/Reverb.h"
 #include "Soundengine/DSPAudio/FX/TapeDelay.h"
+#include "Soundengine/DSPAudio/FX/Phaser.h"
 
-#define USE_REVERB 0
+#define USE_REVERB 1
 
 enum FxTypeEnum
 {
@@ -35,8 +36,9 @@ enum FxTypeEnum
 	FX_DELAY,
 	FX_TAPE,
 #if USE_REVERB
-	FX_REVERB
+	FX_REVERB,
 #endif
+	FX_PHASER,	// 0.2.78 (FX page row 7)
 };
 
 typedef struct FxStruct
@@ -54,6 +56,7 @@ typedef struct FxStruct
 	Compressor compressor;
 	Delay delay;
 	TapeDelay tape;
+	Phaser phaser;
 
 
 
@@ -71,6 +74,11 @@ void FxBus_setParameter(uint8_t idx, float value);
 void FxBus_updateParameter();
 //to prevent NaN pollution from delay
 void FxBus_prepareFxChange();
+/* 0.2.79: switch the bus effect safely (clears the shared buffer when the reverb comes or goes) */
+void FxBus_selectType(uint8_t type);
+/* send page snd: 0 off, 1 del, 2 tpe, 3 rev */
+uint8_t FxBus_sendIndex(uint8_t fxType);
+uint8_t FxBus_sendType(uint8_t index);
 
 
 #endif /* INC_SOUNDENGINE_FXBUS_H_ */

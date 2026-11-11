@@ -55,11 +55,14 @@ typedef struct OscStruct
 	uint8_t		tableOffset;	//overtone table
 	uint16_t	levelMix;		// user wavetables: share of the next octave level, 0..32767
 	float		scanPos;		// user wavetables: PWM scan position, glides to the PWM value
+	float		pdRatio;		// 0.2.88 pd resonance: 2nd osc / main osc rate, 0 = plain PD (snare)
+	float		pdRes;			// resonance ratio of the last block, 0 after a trigger
 	float		pdKnee;			// phase distortion: knee of the last block, 0 after a trigger
 
 
 	float		pitchMod;	// modulation value for frequency
 	float 		fmMod;
+	float		fmFloor;		// 0.2.87: 0 = original half-wave FM, very negative = full wave (drums 1-3)
 
 	float		modNodeValue;
 

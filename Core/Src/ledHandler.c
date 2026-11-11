@@ -20,13 +20,14 @@
 #include "menu/menu.h"
 #include "Soundengine/globals.h"
 #include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/DSPAudio/mixer.h"
 
 //since we need an array to store the start time we have to limit the number of simultanousely pulsable LEDs
 #define NUM_OF_PULSABLE_LEDS 8	//MAX 8 at the moment (because of led_pulsingLeds)
 #define LED_PULSE_TIME_MS 50		/**<time a pulsed LED stays on in [ms]*/
 #define LED_PULSE_TIME ((uint16_t)(LED_PULSE_TIME_MS*4))
 
-#define NUM_OF_BLINKABLE_LEDS 4
+#define NUM_OF_BLINKABLE_LEDS 24	// 0.2.97 was 4: a step selection of up to 16 steps blinks (plus mode and other LEDs)
 #define LED_BLINK_TIME_MS 250
 #define LED_BLINK_TIME ((uint16_t)(LED_BLINK_TIME_MS*4))
 
@@ -49,7 +50,7 @@ volatile uint8_t led_pulsingLeds;
 //volatile uint16_t led_nextBlinkTime[NUM_OF_BLINKABLE_LEDS];		/**< stores the time a LED was activated*/
 //uint32_t led_nextBlinkTime=0;
 volatile uint8_t led_blinkLedNumber[NUM_OF_BLINKABLE_LEDS];	/**< stores the corresponding LED number*/
-volatile uint8_t led_blinkingLeds;
+volatile uint32_t led_blinkingLeds;	// 0.2.97 one bit per blink slot
 uint8_t led_blinkToggleState = 0;							//to synchronize all blinking LEDs
 uint8_t led_blinkPrescaler = 0;
 //--------------------------------------------
@@ -108,6 +109,9 @@ void led_initPatternSelectLeds()
 		}
 		if(bank==menu_activePatternBank) led_setBlinkLed(ledIdx,1);
 	}
+	// 0.2.92 a blink clear above must not stop the pattern select mode blink
+	if(buttonHandler_getMode()==SELECT_MODE_PATTERN && menu_activePage!=PATTERN_SAVE_PAGE && menu_activePage!=PATTERN_SAVE_PAGE_OK)
+		led_setBlinkLed(LED_MODE2,1);
 	//Bar /Bank buttons
 	switch(menu_activePatternBank)
 	{
@@ -414,12 +418,21 @@ void led_clearActive_step()
 void led_updateSeqLeds()
 {
 	//prevent steps showing up in manual trigger edit mode  (perf)
-	if(buttonHandler_getMode() != SELECT_MODE_PERF)
+	if(buttonHandler_getMode() == SELECT_MODE_PERF)
+		led_setValue(mixer_getPerformanceGateEnabled(),led_idx2StepLed(15));	// 0.2.83 gater
+	else
 	{
 		uint8_t trackNr = menu_getActiveVoice();
 		uint8_t patternNr = menu_shownPattern;
+		const uint8_t showSlide = menu_isSlideCursor(); // 0.2.90
 		for(uint8_t i=0; i<16; i++)
 		{
+			if(showSlide) {
+				const uint8_t step=(uint8_t)(menu_activeBar*16+i);
+				led_setValue(showSlide==2 ? seq_getAccent(patternNr,trackNr,step) : seq_getSlide(patternNr,trackNr,step),led_idx2StepLed(i)); // 0.2.93 acc
+				led_setBlinkLed(led_idx2StepLed(i),0);
+				continue;
+			}
 			uint8_t isActive = seq_isMainStepActive(trackNr,menu_activeBar*16+i,patternNr);
 			led_setValue(isActive,led_idx2StepLed(i));
 			if(buttonHandler_getMode()==SELECT_MODE_STEP) {
@@ -537,6 +550,10 @@ void led_setMode2(uint8_t status)
 		case 7:
 			//led_setBlinkLed(LED_MODE4,1);
 		break;
+
+		case SELECT_MODE_PATTERN: // 0.2.92 pattern select: perf blinks, like voice in step edit
+			led_setBlinkLed(LED_MODE2,1);
+		break;
 		
 		default:
 		break;
@@ -583,7 +600,7 @@ void led_clearAllBlinkLeds()
 		//reset led
 		led_reset(led_blinkLedNumber[i]);
 		//set slot to inactive
-		led_blinkingLeds &= (uint8_t)~(1<<i);
+		led_blinkingLeds &= ~((uint32_t)1u<<i);
 	}
 };
 //-------------------------------------------------------
@@ -592,17 +609,21 @@ void led_setBlinkLed(const uint8_t ledNr, const uint8_t onOff)
 	if(onOff)
 	{
 		//--- turn on blinking ---
+		// 0.2.92 an LED that already blinks keeps its one slot: two slots
+		// toggle it twice per period and it would stop blinking
+		for(int i=0;i<NUM_OF_BLINKABLE_LEDS;i++)
+			if((led_blinkingLeds & ((uint32_t)1u<<i)) && led_blinkLedNumber[i]==ledNr) return;
 		//search for a free blink slot
 		for(int i=0;i<NUM_OF_BLINKABLE_LEDS;i++)
 		{
-			if( !(led_blinkingLeds & (1<<i)))
+			if( !(led_blinkingLeds & ((uint32_t)1u<<i)))
 			{
 				//we found a free slot	
 			
 				//store led number
 				led_blinkLedNumber[i] = ledNr;
 				//set slot to active
-				led_blinkingLeds |= (uint8_t)(1<<i);
+				led_blinkingLeds |= ((uint32_t)1u<<i);
 				//turn on LED
 				led_toggleTemp(ledNr);
 			
@@ -620,7 +641,7 @@ void led_setBlinkLed(const uint8_t ledNr, const uint8_t onOff)
 			{
 				//we found the matching slot
 				//set slot to inactive
-				led_blinkingLeds &= (uint8_t)~(1<<i);
+				led_blinkingLeds &= ~((uint32_t)1u<<i);
 				led_reset(ledNr);
 			}
 		}
@@ -644,7 +665,7 @@ void led_blinkHandler()
 		for(int i=0;i<NUM_OF_BLINKABLE_LEDS;i++)
 		{
 			//if the led is active at the moment
-			if(led_blinkingLeds & (1<<i))
+			if(led_blinkingLeds & ((uint32_t)1u<<i))
 			{
 				if(led_blinkToggleState)
 					led_setValueTemp(1,led_blinkLedNumber[i]);

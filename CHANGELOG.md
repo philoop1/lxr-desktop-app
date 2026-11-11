@@ -6,6 +6,37 @@ are recorded here. The upstream project keeps its own Git history.
 
 ## Unreleased
 
+### Mutador 0.2.68 (hardware test pending)
+
+- Internal FX sends: SHIFT + Step 6 opens `i1` to `i6`, one send per voice (0..127) into the internal FX bus, after the VCA and in parallel to the voice output, like an aux send to the delay. Set the FX `d/w` fully wet to hear only the effect. A voice whose output is `FX` is not sent twice; in `fxs=cfl` its dry signal goes to St1 and the internal send feeds the bus. The sends are live and not saved.
+- SHIFT + Step 2 now opens the Groove page and SHIFT + Step 4 the Velocity/Accent page (swapped).
+
+### Mutador 0.2.67 (hardware test pending)
+
+- `hpd` also damps the snare (voice 4) by the rule of voices 2 and 3: from 1 kHz of its main oscillator down to 25 % at 16 kHz. Cymbal and hi-hat stay undamped.
+
+### Mutador 0.2.66 (hardware test pending)
+
+- Pattern change keeps unsaved edits. Until now leaving a pattern restored it from the copy made when it was entered, so notes recorded into a pattern were gone when you came back unless the pattern had been saved. The edits now stay in RAM and are stored with SAVE Project. Saving a pattern to another slot still works as "save as": the new slot gets the edits, the source slot goes back to its state when it was entered.
+- PERF master filter page: `mfe` (master filter on/off) next to `flt res drv`. It is the same setting as on the global page.
+- Global `hpd` (High Pitch Damp, 0..100 %, default 0) from the LXR1 Mutador: high pitched drum voices play quieter. Voice 1 above 120 Hz by 120/frequency (at least 10 %), before filter and drive; voices 2 and 3 from 1 kHz down to 25 % at 16 kHz. `hpd` blends between no damping (0) and the full LXR1 Mutador damping (100). Samples are not damped. Stored in MUTA.CFG v6; older files load with 0.
+
+### Mutador 0.2.65 (hardware test pending)
+
+- Flam presets: `res` gets six slower grids, shown from slow to fast before x2: `/3` (every 3 Steps), `t4` (quarter triplets, 3 hits over 8 Steps), `/2` (every 2 Steps), `t8` (eighth triplets, 3 hits over 4 Steps), `1` (every Step) and `t16` (sixteenth triplets, 3 hits over 2 Steps). Together with `stp` they play triplets on one track while the others stay straight, e.g. `res t8`, `rep 3`, `stp 4` is one quarter of eighth triplets. Older projects keep their grids.
+
+### Mutador 0.2.64 (hardware test pending)
+
+- `lki=aut`: a pattern change loads the pattern's kit only when it is a different kit than the one playing. Patterns that share a kit (an imported LXR1 performance uses one kit for all its patterns) now keep the kit and its unsaved edits and no longer reload it on every change. A pattern with another kit still loads it.
+- LXR1 import (`tools/import_lxr1_patterns.py`): velocity and LFO modulation are converted. The LXR1 scales a value downwards from the set value (full velocity = set value), the LXR2 swings around it. The converter moves the base value into the middle of the LXR1 range and halves the depth. Pitch targets (coarse, FM and modulator frequencies) are converted in semitones, which is close to the LXR1's linear frequency scaling; fine pitch follows the LXR1, which ignores the set fine value under modulation; LFO on pan only halves the depth. Imported kits therefore show other base values than on the LXR1. Converted kits list each change in NOTES.TXT.
+
+### Mutador 0.2.63 (hardware test pending)
+
+- Long flams: new Flam preset value `stp` (1..16 steps). From 2 on the hits of the preset run over that many Steps; `res` stays hits per Step and `rep` now goes up to 64. `bb`, `fvl` and `fpt` run over the whole length, `+1` follows the end, `fpr` decides for all hits, shift and groove move the start hit and the rest follows. While a long flam runs it has priority: other notes of its track are skipped. Stop and pattern change end it; at the end of the track it continues into the next loop.
+- The Flam preset screen shows `stp` in place of `fla`; it edits the preset of the Step selected last (set on `flm`).
+- Step screen: the encoder now steps over empty places to the automation and Flam preset screens and back.
+- Flam presets are saved as FLM2 (with `stp`); FLM1 from 0.2.61/0.2.62 still loads with `stp` 1.
+
 ### Mutador 0.2.62 (hardware test pending)
 
 - Import/export page: turning the encoder or confirming no longer clicks. The page reads names and kits from the SD card on every step; it now keeps the sample interrupt running around that access, like a save.

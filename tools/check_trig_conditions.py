@@ -25,6 +25,7 @@ last_function = source[last_match.start():pos]
 code = r'''
 #include <stdint.h>
 #include <stdio.h>
+#include "Preset/TrigConditions.h"
 #include <stdlib.h>
 #include "Soundengine/Sequencer/PerformanceScale.h"
 #include "Soundengine/Sequencer/PerformanceSteps.h"
@@ -35,7 +36,7 @@ enum {TRIG_COND_ALWAYS,TRIG_COND_FIRST,TRIG_COND_NOT_FIRST,
       TRIG_COND_FILL,TRIG_COND_NOT_FILL,TRIG_COND_RATIO_BASE,
       TRIG_COND_PRE=TRIG_COND_RATIO_BASE+36,TRIG_COND_NOT_PRE,TRIG_COND_NEI,TRIG_COND_NOT_NEI,TRIG_COND_LAST,TRIG_COND_NOT_LAST,TRIG_COND_COUNT};
 
-struct {uint8_t trigCondition[1][NUM_TRACKS][NUM_STEPS];} seq_patternSet;
+struct {TrigTrack trigCondition[1][NUM_TRACKS];} seq_patternSet;
 uint8_t seq_activePattern,activeParameters[2];
 int8_t seq_stepIndex[NUM_TRACKS];
 uint32_t seq_conditionLoop[NUM_TRACKS];
@@ -50,33 +51,33 @@ static void check(int ok,const char *message){if(!ok){fprintf(stderr,"FAIL %s\n"
 ''' + last_function + '\n' + function + r'''
 int main(void){
  PerfStep current={4,0,0,4,0,1};seq_stepIndex[0]=4;
- seq_patternSet.trigCondition[0][0][4]=TRIG_COND_FIRST;
+ trigTrackSet(&seq_patternSet.trigCondition[0][0], 4, TRIG_COND_FIRST);
  check(seq_conditionAllows(0,&current,0),"first on loop one");
  seq_conditionLoop[0]=1;check(!seq_conditionAllows(0,&current,0),"first ends");
- seq_patternSet.trigCondition[0][0][4]=TRIG_COND_NOT_FIRST;
+ trigTrackSet(&seq_patternSet.trigCondition[0][0], 4, TRIG_COND_NOT_FIRST);
  check(seq_conditionAllows(0,&current,0),"not-first after loop one");
  seq_conditionLoop[0]=0;check(!seq_conditionAllows(0,&current,0),"not-first excludes first");
- seq_patternSet.trigCondition[0][0][4]=TRIG_COND_FILL;
+ trigTrackSet(&seq_patternSet.trigCondition[0][0], 4, TRIG_COND_FILL);
  check(!seq_conditionAllows(0,&current,0),"fill disabled");
  activeParameters[PAR_PERF_FILL]=1;check(seq_conditionAllows(0,&current,0),"fill enabled");
- seq_patternSet.trigCondition[0][0][4]=TRIG_COND_NOT_FILL;
+ trigTrackSet(&seq_patternSet.trigCondition[0][0], 4, TRIG_COND_NOT_FILL);
  check(!seq_conditionAllows(0,&current,0),"not-fill disabled during fill");
  activeParameters[PAR_PERF_FILL]=0;check(seq_conditionAllows(0,&current,0),"not-fill enabled");
  for(unsigned b=1,base=TRIG_COND_RATIO_BASE;b<=8;base+=b,b++)
   for(unsigned a=1;a<=b;a++){
-   seq_patternSet.trigCondition[0][0][4]=(uint8_t)(base+a-1);
+   trigTrackSet(&seq_patternSet.trigCondition[0][0], 4, (uint8_t)(base+a-1));
    for(unsigned loop=0;loop<3*b;loop++){
     seq_conditionLoop[0]=loop;
     check(seq_conditionAllows(0,&current,0)==(loop%b==a-1),"A:B cycle");
    }
   }
  PerfStep next={0,0,0,0,0,2};seq_stepIndex[0]=15;seq_conditionLoop[0]=0;
- seq_patternSet.trigCondition[0][0][0]=TRIG_COND_FIRST;
+ trigTrackSet(&seq_patternSet.trigCondition[0][0], 0, TRIG_COND_FIRST);
  check(!seq_conditionAllows(0,&next,1),"next step at wrap is second loop");
- seq_patternSet.trigCondition[0][0][0]=TRIG_COND_NOT_FIRST;
+ trigTrackSet(&seq_patternSet.trigCondition[0][0], 0, TRIG_COND_NOT_FIRST);
  check(seq_conditionAllows(0,&next,1),"next step after wrap is not first");
  PerfStep previous={15,0,0,15,0,3};seq_stepIndex[0]=0;seq_conditionLoop[0]=1;
- seq_patternSet.trigCondition[0][0][15]=TRIG_COND_FIRST;
+ trigTrackSet(&seq_patternSet.trigCondition[0][0], 15, TRIG_COND_FIRST);
  check(seq_conditionAllows(0,&previous,-1),"previous shifted step belongs to first loop");
  seq_conditionLoop[0]=0;check(!seq_conditionAllows(0,&previous,-1),"no synthetic previous loop");
  perf_scaleSetPattern(16,0);perf_speedSet(PERF_SPEED_NEUTRAL,0);
@@ -108,5 +109,7 @@ if os.name == "nt":
     vs = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Microsoft Visual Studio/2022/Community/Common7/Tools/VsDevCmd.bat"
     subprocess.run(f'call "{vs}" -arch=x64 >nul && cl /nologo /W3 /TC /I"{root / "Core/Inc"}" /Fe:contract.exe contract.c "{root / "Core/Src/Soundengine/Sequencer/PerformanceScale.c"}" "{root / "Core/Src/Soundengine/Sequencer/PerformanceSteps.c"}" && contract.exe', shell=True, cwd=out, check=True)
 else:
-    subprocess.run(["cc", "-std=c11", "contract.c", "-o", "contract"], cwd=out, check=True)
+    subprocess.run(["cc", "-std=c11", "-I" + str(root / "Core/Inc"), "contract.c",
+                    str(root / "Core/Src/Soundengine/Sequencer/PerformanceScale.c"),
+                    str(root / "Core/Src/Soundengine/Sequencer/PerformanceSteps.c"), "-o", "contract"], cwd=out, check=True)
     subprocess.run([str(out / "contract")], cwd=out, check=True)

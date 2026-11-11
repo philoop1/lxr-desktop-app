@@ -34,10 +34,15 @@ older pattern files default to 16. Existing steps and automation are retained.
 The 29-byte `MUTA.CFG` v3 sidecar marks the new global override numbering;
 v1/v2 sidecars still load, translating old 16 to 16 and 12a/b/c to 12.
 `pbr` moved to the third global settings page in Mutador 0.2.18.
-SHIFT + Step 1 enters pattern selection from every mode and shows the first
-PERF display. It cancels pending step-automation selection and COPY/CLEAR
-selection before entering pattern selection.
-SHIFT + Step 4 opens the Groove page: `shf`, `sh2`, `sh3`, `sh4`. From 0.2.54 `fil`, a temporary on/off Fill latch for Step conditions, sits on the first PERF page after `spd`.
+Holding PERFORMANCE for half a second enters pattern selection from every
+mode and shows the first PERF display. It cancels pending step-automation
+selection and COPY/CLEAR selection first. Until 0.2.70 SHIFT + Step 1 did this.
+
+SHIFT + Step 1 (0.2.71) opens the master compressor on the fourth Global page:
+on/off, ratio, attack, release, threshold, make-up gain and mix. It works on the
+whole stereo output, independent of the `cmp` FX type, and is stored in the
+global settings (MUTA.CFG).
+SHIFT + Step 2 (Step 4 until 0.2.67) opens the Groove page: `shf`, `sh2`, `sh3`, `sh4`. From 0.2.54 `fil`, a temporary on/off Fill latch for Step conditions, sits on the first PERF page after `spd`.
 The second half of the Groove page holds humanize (0.2.55): `hm1` to `hm4`
 belong to the four steps of each group that `shf` to `sh4` shape. At 0 a step
 plays on time; turning up moves every hit by a random amount, up to a quarter
@@ -104,7 +109,7 @@ notes, automation, timing and pattern settings were preserved. Archived
 LXR files and Helicase were excluded. Updating firmware does not repeat this
 conversion. The proportional AVL correction in 0.1.25 changes no pattern data.
 
-SHIFT + Step 2 opens the Velocity/Accent page. `vlv` is its live master level;
+SHIFT + Step 4 (Step 2 until 0.2.67) opens the Velocity/Accent page. `vlv` is its live master level;
 it returns to neutral after settings load. The seven saved destinations are
 `vdc` amp decay, `vsr` sample rate, `vfi` filter cutoff, `vco` coarse pitch,
 `vsl` amp slope, `vma` modulation amount and `vdr` filter drive. A depth of
@@ -128,9 +133,16 @@ from eligible sequencer hits, not manual rolls or incoming MIDI.
 SHIFT + Step 5 opens the external sends `s1`–`s6` and `sm`; pressing it again
 switches between the two screens.
 
-SHIFT + Step 2, 3, 4 and 5 stay on their own pages; pressing PERF or scrolling
+SHIFT + Step 6 (0.2.68) opens the internal FX sends `i1`–`i6`: how much of each
+voice goes into the internal FX bus, after its VCA and in addition to its own
+output, like an aux send to the delay. Turn the FX `d/w` fully wet so only the
+effect returns. A voice whose output is `FX` already goes into the bus whole
+and is not sent twice; with `fxs=cfl` its dry signal goes to St1 and the
+internal send feeds the bus. The internal sends are live and not saved.
+
+SHIFT + Step 2, 3, 4, 5 and 6 stay on their own pages; pressing PERF or scrolling
 through its regular pages does not enter them. A further regular PERF page
-contains master filter cutoff, resonance and drive. The seven VCAs remain active but are not shown as a
+contains master filter cutoff, resonance and drive and, from 0.2.66, `mfe` to switch it on and off. The seven VCAs remain active but are not shown as a
 separate PERF page. Global `mfl` switches
 the master filter on/off; `fxs` selects normal/AFL/PFL/CFL send routing and
 `fxo` selects stereo/bipolar output routing. Sends use the physical output 2.
@@ -156,3 +168,5 @@ CPU and save/reboot remain pending.
 From 0.1.23, MUTA.CFG v4 adds rvl/avl after the previous payload. Versions
 1-3 load with neutral rvl=100 and avl=0 percent. The raw stored avl byte is
 0-200 with 100 neutral; the display shows -100 to +100 percent.
+
+[Next: Cheat sheet](08_cheat_sheet.md)

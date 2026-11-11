@@ -48,15 +48,19 @@ def run(preset, menu):
 #define NUM_KIT_SLOTS 64
 uint8_t activeParameters[NUM_PARAMS];
 uint8_t mainParameters[NUM_KIT_SLOTS][END_OF_SOUND_PARAMETERS];
-uint8_t mainLfoExtras[NUM_KIT_SLOTS][16],mainRpsExtras[NUM_KIT_SLOTS][16];
+uint8_t mainLfoExtras[NUM_KIT_SLOTS][16],mainRpsExtras[NUM_KIT_SLOTS][16],mainInsExtras[NUM_KIT_SLOTS][16],mainGldExtras[NUM_KIT_SLOTS][16];
 uint8_t *morphParameters;
+uint8_t preset_activeKitNr=0xff;
 unsigned checks;
 static uint8_t interpolate(uint8_t a,uint8_t b,uint8_t m){return (uint8_t)(a+((int)b-(int)a)*m/127);}
 static void preset_captureLfoExtras(uint8_t *data){data[0]=0xA1;}
 static void preset_captureRpsExtras(uint8_t *data){data[0]=0xB2;}
+static void preset_captureInsExtras(uint8_t *data){data[0]=0xC3;}
+static void preset_captureGldExtras(uint8_t *data){data[0]=0xD4;}
 static void check(int ok,const char *msg){checks++;if(!ok){fprintf(stderr,"FAIL %s\n",msg);exit(1);}}
 uint8_t preset_getMorphValue(uint16_t index, uint8_t morph);
 '''
+    code += function(preset, "preset_isProjectFx") + "\n"
     code += function(preset, "preset_getMorphValue") + "\n"
     code += function(preset, "preset_morphedKitValue") + "\n"
     code += function(preset, "preset_saveDrumsetRam") + "\n"
@@ -73,9 +77,10 @@ int main(void){
  check(mainParameters[9][PAR_COARSE1]==120,"full morph saves the target sound");
  check(mainParameters[9][PAR_TARGET_LFO1]==7,"mod targets come from the playing kit");
  check(mainParameters[9][PAR_MORPH_KIT_DEST]==5,"morph target slot is kept, not interpolated");
+ check(preset_getMorphValue(PAR_FX_P1,127)==activeParameters[PAR_FX_P1]&&preset_getMorphValue(PAR_FX_TYPE,90)==activeParameters[PAR_FX_TYPE],"project FX is not morphed");
  check(mainParameters[9][PAR_AUDIO_OUT3]==1,"audio routing comes from the playing kit, like the live Morph");
  check(mainParameters[9][PAR_BANK_CHANGE]==2,"bank change is not morphed, like the live Morph");
- check(mainLfoExtras[9][0]==0xA1&&mainRpsExtras[9][0]==0xB2,"LFO and rps extras are saved with the morphed kit");
+ check(mainLfoExtras[9][0]==0xA1&&mainRpsExtras[9][0]==0xB2&&mainInsExtras[9][0]==0xC3&&mainGldExtras[9][0]==0xD4,"LFO, rps, insert and glide extras are saved with the morphed kit");
  activeParameters[PAR_MORPH]=0;preset_saveDrumsetRam(10,1);
  check(mainParameters[10][PAR_COARSE1]==20,"morph 0 saves the playing kit");
  activeParameters[PAR_MORPH]=64;preset_saveDrumsetRam(11,1);
@@ -102,7 +107,7 @@ MUTATIONS = {
     'no-dest-keep': ('PRESET', ' ||\n\t   i == PAR_MORPH_KIT_DEST || i == PAR_BANK_CHANGE)', ' ||\n\t   i == PAR_BANK_CHANGE)'),
     'no-routing-keep': ('PRESET', '\t   (i >= PAR_AUDIO_OUT1 && i <= PAR_AUDIO_OUT6) ||\n', ''),
     'no-bank-keep': ('PRESET', ' || i == PAR_BANK_CHANGE)', ')'),
-    'no-morph-extras': ('PRESET', '		preset_captureLfoExtras(mainLfoExtras[presetNr]);\n		preset_captureRpsExtras(mainRpsExtras[presetNr]);\n	}\n	else', '	}\n	else'),
+    'no-morph-extras': ('PRESET', '		preset_captureLfoExtras(mainLfoExtras[presetNr]);\n		preset_captureRpsExtras(mainRpsExtras[presetNr]);\n		preset_captureInsExtras(mainInsExtras[presetNr]);\n		preset_captureGldExtras(mainGldExtras[presetNr]);\n		if(presetNr', '		if(presetNr'),
     'ram-only': ('MENU', 'preset_saveDrumsetSD(menu_selectedPresetNr[SAVE_TYPE_MORPH],0);', ''),
 }
 

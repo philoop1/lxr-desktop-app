@@ -1,5 +1,6 @@
 """Real-source tests for step groups, global grid, half-closed HH and sidecar IO."""
 from pathlib import Path
+from plock_source import plock_source
 import os,re,subprocess
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'build/edit-scale-hat-audit';OUT.mkdir(parents=True,exist_ok=True)
@@ -15,6 +16,7 @@ def function(code,name):
 prelude=r'''
 #include <stdint.h>
 #include <stdio.h>
+#include "Preset/TrigConditions.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -29,15 +31,17 @@ static unsigned checks;
 static void check(int ok,const char *what){checks++;if(!ok){fprintf(stderr,"FAIL %s\n",what);exit(1);}}
 '''
 prelude+=read(ROOT/'Core/Inc/Preset/SeqStep.h')
+prelude+=plock_source()  # 0.2.72: stepEdit uses plock_slot
 prelude+=r'''
-struct {Step seq_subStepPattern[64][7][64];StepTiming seq_stepTiming[64][7][64];uint8_t flamProbability[64][7][64];uint8_t flamVelocity[64][7][64];uint8_t trigCondition[64][7][64];struct{uint8_t scale;}seq_patternSettings[64];}seq_patternSet;
+struct {Step seq_subStepPattern[64][7][64];StepTiming seq_stepTiming[64][7][64];uint8_t flamProbability[64][7][64];uint8_t flamVelocity[64][7][64];TrigTrack trigCondition[64][7];struct{uint8_t scale;}seq_patternSettings[64];}seq_patternSet;
 typedef struct {uint16_t param;} ModTarg;
 const ModTarg modTargets[3]={{0},{5},{130}};
 uint8_t getNumModTargets(void){return 3;}
+#define MOD_TARGET_SND 3 /* 0.2.107 automation ends before the send targets: here the end of the table */
 uint8_t activeParameters[NUM_PARAMS];
 static uint8_t isRunning,fxOutput,fxMode,sendValues[7],vcaValues[7],enabled,cutoff,reso,drive;
 uint8_t seq_isRunning(void){return isRunning;}
-uint8_t humanSet[4];void seq_setHumanize(uint8_t lane,uint8_t amount){if(lane<4)humanSet[lane]=amount;}
+uint8_t drum_highDamp;void mixer_setIntSend(uint8_t v,uint8_t x){(void)v;(void)x;}void seq_storeIntSend(uint8_t v,uint8_t x){(void)v;(void)x;}void masterComp_set(uint8_t v,uint8_t x){(void)v;(void)x;}uint8_t humanSet[4];void seq_setHumanize(uint8_t lane,uint8_t amount){if(lane<4)humanSet[lane]=amount;}
 uint8_t mixer_handleFxSendCc(uint8_t cc,uint8_t value){sendValues[cc-30]=value;return 1;}
 uint8_t mixer_handleVcaCc(uint8_t cc,uint8_t value){vcaValues[cc-20]=value;return 1;}
 void mixer_setFxSendMode(uint8_t v){fxMode=v;}
@@ -54,6 +58,9 @@ typedef int FRESULT;
 typedef int FIL;
 enum {FR_OK=0,FR_DISK_ERR=1,FR_NO_FILE=4,FA_OPEN_EXISTING=0,FA_READ=1,FA_CREATE_ALWAYS=8,FA_WRITE=2};
 int SDFile;
+#define PROJECT_FX_COUNT (PAR_FX_DELAY_TYPE - PAR_FX_TYPE + 1)
+uint8_t preset_fxFromKit=1;
+static const char *preset_cfgName="MUTA.CFG";static uint8_t preset_cfgExact=0;static uint8_t preset_projectPattern=0;uint8_t menu_playedPattern=0;
 static uint8_t disk[128];static unsigned fileLength,present,shortWrite,closed;
 static FRESULT f_open(FIL*f,const char*name,unsigned flags){(void)f;check(!strcmp(name,"MUTA.CFG"),"sidecar filename");if(flags&FA_CREATE_ALWAYS){present=1;fileLength=0;return FR_OK;}return present?FR_OK:FR_NO_FILE;}
 static FRESULT f_read(FIL*f,void*dst,unsigned count,UINT*bytes){(void)f;*bytes=count<fileLength?count:fileLength;memcpy(dst,disk,*bytes);return FR_OK;}
@@ -77,6 +84,10 @@ void transient_trigger(Transient*n){(void)n;}
 void SnapEg_trigger(int*n){(void)n;}
 void HiHat_updatePan(void){panUpdates++;}
 static uint8_t seq_globalScaleMode;
+/* 0.2.79 send page snd */
+void FxBus_selectType(uint8_t t){(void)t;}
+uint8_t FxBus_sendType(uint8_t i){return i;}
+uint8_t InsertFx_setValue(uint8_t i,uint8_t v){(void)i;return v;}
 '''
 code=read(ROOT/'Core/Src/menu/StepSelection.c')+'\n'+read(ROOT/'Core/Src/Soundengine/Sequencer/PerformanceScale.c')+'\n'+read(ROOT/'Core/Src/menu/PerformanceControls.c')
 preset=read(ROOT/'Core/Src/Preset/presetManager.c')
@@ -154,10 +165,30 @@ int main(void){
  activeParameters[PAR_CLOCK_OFFSET]=37;activeParameters[PAR_CLOCK_OFFSET_FINE]=4;
  uint8_t saved[PERFORMANCE_EXTRA_BYTES];memcpy(saved,&activeParameters[PAR_FX_OUTPUT_MODE],sizeof(saved));
  for(unsigned i=0;i<4;i++)activeParameters[PAR_HUMANIZE1+i]=(uint8_t)(20+i*30);
- check(preset_savePerformanceExtension()==FR_OK&&fileLength==35&&disk[7]=='5',"versioned 35-byte v5 sidecar saved");
+ activeParameters[PAR_HIGH_DAMP]=42;
+ activeParameters[PAR_LOAD_INT_SEND]=0;
+ for(unsigned i=0;i<PROJECT_FX_COUNT;i++)activeParameters[PAR_FX_TYPE+i]=(uint8_t)(3+i*9);
+ menu_playedPattern=37;check(preset_savePerformanceExtension()==FR_OK&&fileLength==57&&disk[6]=='1'&&disk[7]=='0'&&disk[55]==37,"versioned 57-byte v10 sidecar saved with the played pattern");
+ for(unsigned i=0;i<PROJECT_FX_COUNT;i++)activeParameters[PAR_FX_TYPE+i]=0;
+ activeParameters[PAR_LOAD_INT_SEND]=1;
+ activeParameters[PAR_HIGH_DAMP]=0;
  for(unsigned i=0;i<4;i++)activeParameters[PAR_HUMANIZE1+i]=0;memset(humanSet,0,4);
  preset_loadPerformanceExtension();
- check(activeParameters[PAR_HUMANIZE1]==20&&activeParameters[PAR_HUMANIZE4]==110&&humanSet[1]==50&&humanSet[3]==110,"v5 humanize round trip reaches the sequencer");
+ check(activeParameters[PAR_HUMANIZE1]==20&&activeParameters[PAR_HUMANIZE4]==110&&humanSet[1]==50&&humanSet[3]==110&&activeParameters[PAR_HIGH_DAMP]==42&&activeParameters[PAR_LOAD_INT_SEND]==0,"v7 humanize, hpd and ldl round trip");
+ for(unsigned i=0;i<PROJECT_FX_COUNT;i++)check(activeParameters[PAR_FX_TYPE+i]==(uint8_t)(3+i*9),"v9 project FX round trip");
+ check(preset_fxFromKit==0,"v9 project keeps its FX on kit loads");check(preset_projectPattern==37,"v10 loads the played pattern");
+ /* lsh off: humanize stays live */
+ activeParameters[PAR_SHUFFLE_LOAD]=0;for(unsigned i=0;i<4;i++)activeParameters[PAR_HUMANIZE1+i]=5;
+ preset_loadPerformanceExtension();check(activeParameters[PAR_HUMANIZE1]==5&&activeParameters[PAR_HUMANIZE4]==5,"lsh off keeps live humanize");
+ activeParameters[PAR_SHUFFLE_LOAD]=1;preset_loadPerformanceExtension();check(activeParameters[PAR_HUMANIZE4]==110,"lsh on loads humanize");
+ /* 0.2.88 tmp.cfg restore is exact: humanize loads even with lsh off */
+ activeParameters[PAR_SHUFFLE_LOAD]=0;for(unsigned i=0;i<4;i++)activeParameters[PAR_HUMANIZE1+i]=5;
+ preset_cfgExact=1;preset_loadPerformanceExtension();preset_cfgExact=0;check(activeParameters[PAR_HUMANIZE4]==110,"exact restore ignores the lsh hold");
+ activeParameters[PAR_SHUFFLE_LOAD]=1;
+ disk[6]='0';disk[7]='6';fileLength=36;{uint8_t v6sum=0;for(unsigned i=8;i<35;i++)v6sum=(uint8_t)(v6sum+disk[i]);disk[35]=v6sum;}
+ activeParameters[PAR_HIGH_DAMP]=0;preset_loadPerformanceExtension();
+ check(activeParameters[PAR_HIGH_DAMP]==42&&activeParameters[PAR_LOAD_INT_SEND]==1,"v6 keeps hpd and loads ldl as aut");
+ check(preset_fxFromKit==1,"older sidecar takes FX from the kit");check(preset_projectPattern==0,"older project starts at pattern 1");
  memset(&activeParameters[PAR_FX_OUTPUT_MODE],0,PERFORMANCE_EXTRA_BYTES);fxOutput=0;activeParameters[PAR_PERF_RANDOM_VELO]=activeParameters[PAR_PERF_AVL]=0;
  preset_loadPerformanceExtension();check(!memcmp(saved,&activeParameters[PAR_FX_OUTPUT_MODE],sizeof(saved)),"sidecar exact round trip");
  check(activeParameters[PAR_PERF_RANDOM_VELO]==37&&activeParameters[PAR_PERF_AVL]==163&&activeParameters[PAR_PATTERN_SCALE]==7,"v4 velocity round trip leaves pattern-preview byte untouched");

@@ -13,6 +13,12 @@
 
 
 #include "Soundengine/DSPAudio/Oscillator.h"
+#include <math.h>
+/* 0.2.87: phase offset of the modulator. The float to unsigned conversion of the
+ * original drops every negative modulator value (the FPU saturates it to 0), so
+ * FM only used half the wave. fmFloor 0 keeps that sound (cymbal, hi-hat);
+ * a very negative floor gives the full wave. */
+#define OSC_FM_OFFSET(osc,x) ((uint32_t)(int32_t)fmaxf((x),(osc)->fmFloor))
 #include "Soundengine/DSPAudio/random.h"
 #include "Soundengine/DSPAudio/Samples.h"
 #include "Soundengine/DSPAudio/WaveBank.h"
@@ -116,7 +122,7 @@ IN_ITCM_RAM void calcFmSineBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf,
 		const uint32_t oscPhase = osc->phase;
 		int16_t oscOut ;
 
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<17);
+		const uint32_t index =  oscPhase + (OSC_FM_OFFSET(osc,modBuffer[i]*osc->fmMod)<<17);
 		uint32_t  itg	= index>>20;
 
 	#if INTERPOLATE_FM_OSC
@@ -139,7 +145,7 @@ int16_t calcFmSine(OscInfo* osc, OscInfo* modOsc)
 	const uint32_t oscPhase 	= osc->phase;
 	int16_t oscOut ;
 
-	const uint32_t index =  oscPhase + (((uint32_t)(modOsc->output*osc->fmMod))<<17);
+	const uint32_t index =  oscPhase + (OSC_FM_OFFSET(osc,modOsc->output*osc->fmMod)<<17);
 	uint32_t  itg	= index>>20;
 
 #if INTERPOLATE_FM_OSC
@@ -164,7 +170,7 @@ IN_ITCM_RAM void calcFmBlock(OscInfo* osc, const int16_t table[][1024], int16_t*
 	{
 		const uint32_t oscPhase = osc->phase;
 		int16_t oscOut ;
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<19);
+		const uint32_t index =  oscPhase + (OSC_FM_OFFSET(osc,modBuffer[i]*osc->fmMod)<<19);
 
 		uint32_t  itg	= index>>22; //10 bit index, 22 bit fractional part
 
@@ -192,7 +198,7 @@ void calcPwmFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size
 	{
 		const uint32_t oscPhase = osc->phase;
 		int16_t oscOut ;
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<19);
+		const uint32_t index =  oscPhase + (OSC_FM_OFFSET(osc,modBuffer[i]*osc->fmMod)<<19);
 		const uint32_t index2 = index + pwm * (UINT32_MAX/2);
 
 		 uint32_t  itg	 = index>>22;
@@ -230,7 +236,7 @@ int16_t calcFm(OscInfo* osc, OscInfo* modOsc, const int16_t table[][1024])
 	const uint32_t oscPhase = osc->phase;
 	int16_t oscOut ;
 
-	const uint32_t index =  oscPhase + (((uint32_t)(modOsc->output*osc->fmMod))<<19);
+	const uint32_t index =  oscPhase + (OSC_FM_OFFSET(osc,modOsc->output*osc->fmMod)<<19);
 
 	uint32_t  itg	= index>>22;
 
@@ -389,7 +395,7 @@ void calcWaveBankFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t
 	}
 	for(uint8_t i=0;i<size;i++)
 	{
-		const uint32_t index = osc->phase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<19);
+		const uint32_t index = osc->phase + (OSC_FM_OFFSET(osc,modBuffer[i]*osc->fmMod)<<19);
 		const int16_t oscOut = osc_readScan(&scan,index);
 		osc->phase += osc->phaseInc;
 		osc->output = oscOut;
@@ -543,8 +549,39 @@ IN_ITCM_RAM void calcExpoFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf,
 	}
 }
 //-----------------------------------------------------------
+/* 0.2.88 pd resonance (Casio CZ style, a synced sine): every cycle of the main
+ * osc restarts a sine at the 2nd osc's rate, faded out by a falling window so
+ * the restart does not click. The FM amount (DCW, follows the pitch EG) sweeps
+ * the resonance from the main pitch (ratio 1) up to the 2nd osc. Not in ITCM. */
+#define PD_RES_MAX_REL 0.45f		// highest resonance, relative to the sample rate
+__attribute__((noinline)) void calcPdResonanceBlock(OscInfo* osc, int16_t* buf, uint8_t size)
+{
+	float amount = osc->fmMod;
+	if(amount<0.f) amount = 0.f;
+	else if(amount>1.f) amount = 1.f;
+	const float inc = osc->phaseInc*(1.f/4294967296.f);
+	float ratio = osc->pdRatio;
+	if(inc>0.f && ratio>PD_RES_MAX_REL/inc) ratio = PD_RES_MAX_REL/inc;
+	if(ratio<1.f) ratio = 1.f;
+	const float target = 1.f + amount*(ratio-1.f);
+	const float start = osc->pdRes > 0.f ? osc->pdRes : target;
+	const float step = (target-start)/size;
+	osc->pdRes = target;
+	for(uint8_t i=0;i<size;i++)
+	{
+		const uint32_t oscPhase = osc->phase;
+		const float ph = oscPhase*(1.f/4294967296.f);
+		float x = ph*(start+step*(i+1));
+		x -= (float)(uint32_t)x;
+		const int16_t oscOut = (int16_t)(osc_readSine((uint32_t)(x*4294967040.f))*(1.f-ph));
+		osc->phase = oscPhase + osc->phaseInc;
+		osc->output = oscOut;
+		buf[i] = oscOut;
+	}
+}
+//-----------------------------------------------------------
 // Casio style phase distortion: amount warps the read speed of one sine cycle, from pure sine to saw.
-IN_ITCM_RAM void calcPhaseDistBlock(OscInfo* osc, int16_t* buf, uint8_t size)
+void calcPhaseDistBlock(OscInfo* osc, int16_t* buf, uint8_t size) // 0.2.88 flash: ITCM is full
 {
 	// user wavetables and samples have no sine to warp; they play plain
 	if(osc->waveform>PWM)
@@ -552,6 +589,7 @@ IN_ITCM_RAM void calcPhaseDistBlock(OscInfo* osc, int16_t* buf, uint8_t size)
 		calcNextOscSampleBlock(osc,buf,size,1.f,0.f);
 		return;
 	}
+	if(osc->pdRatio>1.01f) { calcPdResonanceBlock(osc,buf,size); return; }
 	float amount = osc->fmMod;
 	if(amount<0.f) amount = 0.f;
 	else if(amount>1.f) amount = 1.f;
@@ -842,7 +880,7 @@ void calcSampleOscFmBlock(OscInfo* osc,int16_t* modBuffer, int16_t* buf, uint8_t
 		const uint32_t oscPhase 	= osc->phase;
 		int16_t oscOut ;
 
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<14);
+		const uint32_t index =  oscPhase + (OSC_FM_OFFSET(osc,modBuffer[i]*osc->fmMod)<<14);
 		uint32_t  itg	= index>>17;
 
 	#if INTERPOLATE_FM_OSC
@@ -869,7 +907,7 @@ int16_t calcSampleOscFm(OscInfo* osc, OscInfo* modOsc)
 	const uint32_t oscPhase 	= osc->phase;
 	int16_t oscOut ;
 
-	const uint32_t index =  oscPhase + (((uint32_t)(modOsc->output*osc->fmMod))<<14);
+	const uint32_t index =  oscPhase + (OSC_FM_OFFSET(osc,modOsc->output*osc->fmMod)<<14);
 	uint32_t  itg	= index>>17;
 
 #if INTERPOLATE_FM_OSC

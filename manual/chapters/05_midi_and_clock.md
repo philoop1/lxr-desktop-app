@@ -37,7 +37,9 @@ and the next clock becomes the downbeat, without the early offset.
 ## Pattern and kit load settings
 
 `lki` is the kit-change mode: `aut` loads a pattern's associated kit when
-that pattern becomes active; `off` keeps the current kit. `lsh` controls a
+that pattern becomes active; `off` keeps the current kit. From 0.2.64 `aut`
+loads only when the new pattern uses another kit than the one playing, so
+patterns with the same kit keep it, with its unsaved edits. `lsh` controls a
 separate choice: when `on` (the default), a pattern change also loads that
 pattern's shuffle value. With `lsh=off`, the current shuffle is retained.
 

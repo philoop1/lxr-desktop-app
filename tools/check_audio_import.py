@@ -54,6 +54,7 @@ static unsigned checks;
 static void check(int ok,const char *label){checks++;if(!ok){fprintf(stderr,"FAIL %s\n",label);exit(1);}}
 static int16_t sat16(int32_t x){return x>32767?32767:x< -32768?-32768:(int16_t)x;}
 #define __SSAT(x,n) sat16(x)
+#define CPU_DIAG_FLAG(f) ((void)0) /* 0.2.104 peak diagnosis, normal build */
 static uint32_t __QADD16(uint32_t a,uint32_t b){return (uint16_t)sat16((int16_t)a+(int16_t)b)|((uint32_t)(uint16_t)sat16((int16_t)(a>>16)+(int16_t)(b>>16))<<16);}
 static uint32_t __PKHBT(int16_t a,int16_t b,unsigned shift){(void)shift;return (uint16_t)a|((uint32_t)(uint16_t)b<<16);}
 static void SVF_directSetFilterValue(ResonantFilter*f,float v){f->f=v*.45f;f->g=0;}
@@ -66,10 +67,16 @@ static void SVF_reset(ResonantFilter*f){f->a=f->b=f->s1=f->s2=0;}
 static float valueShaperF2F(float v,float shape){float k=2*shape/(1.0001f-shape);return (1+k)*v/(1+k*fabsf(v));}
 static float mixer_voiceVca[7],mixer_masterVca;
 static uint8_t mixer_fxSend[7],mixer_fxSendMode,mixer_fxOutputMode;
+static uint8_t mixer_intSend[6];
 static float ref_mixer_voiceVca[7],ref_mixer_masterVca;
 static uint8_t ref_mixer_fxSend[7],ref_mixer_fxSendMode,ref_mixer_fxOutputMode;
 static uint8_t mixer_checkOutJackAvailable(uint8_t route){return route;}
 static uint8_t ref_mixer_checkOutJackAvailable(uint8_t route){return route;}
+/* 0.2.79 inserts: not under test here, the routes above never select one */
+static void InsertFx_process(uint8_t v,uint8_t t,int16_t*b,uint16_t n){(void)v;(void)t;(void)b;(void)n;}
+/* 0.2.107 send/insert modulation offsets: none here, the send stays as set */
+enum {INS_MOD_SND,INS_MOD_SLOTS=6};
+static float insertFx_mod[6][INS_MOD_SLOTS];
 '''
 actualNames=['mixer_handleVcaCc','mixer_handleFxSendCc','mixer_setFxSendMode','mixer_setFxOutputMode',
              'mixer_configureOutputRoute','mixer_addSampleToRoute','mixer_getFxSendGain','mixer_getFxSendRoute',
@@ -139,6 +146,23 @@ int main(void){
  int16_t data[16],out[64]={0},fx[32]={0};for(int i=0;i<16;i++)data[i]=1000;
  mixer_mixVoiceBlock(0,MIXER_ROUTING_FX_BUS,1,0,data,out,out+1,out+32,out+33,fx);
  check(fx[0]==1000&&fx[1]==0&&out[0]==1000&&out[32]==0,"built-in FX bus remains a valid dry route");
+ // 0.2.68 internal sends: parallel to the voice output, after the VCA, not twice
+ mixer_intSend[0]=127;memset(fx,0,sizeof(fx));memset(out,0,sizeof(out));for(int i=0;i<16;i++)data[i]=1000;
+ mixer_mixVoiceBlock(0,MIXER_ROUTING_FX_BUS,1,0,data,out,out+1,out+32,out+33,fx);
+ check(fx[0]==1000&&fx[1]==0,"a voice routed to FX is not sent twice");
+ mixer_setFxSendMode(0);memset(fx,0,sizeof(fx));memset(out,0,sizeof(out));for(int i=0;i<16;i++)data[i]=1000;
+ mixer_mixVoiceBlock(0,MIXER_ROUTING_DAC1_STEREO,1,0,data,out,out+1,out+32,out+33,fx);
+ check(fx[0]==1000&&fx[30]==1000&&fx[1]==0&&out[32]==1000,"internal send adds to the FX bus and keeps the dry output");
+ mixer_intSend[0]=64;memset(fx,0,sizeof(fx));for(int i=0;i<16;i++)data[i]=1000;
+ mixer_mixVoiceBlock(0,MIXER_ROUTING_DAC1_STEREO,1,0,data,out,out+1,out+32,out+33,fx);
+ check(fx[0]>=495&&fx[0]<=505,"internal send level");
+ mixer_intSend[0]=127;mixer_handleVcaCc(20,0);memset(fx,0,sizeof(fx));for(int i=0;i<16;i++)data[i]=1000;
+ mixer_mixVoiceBlock(0,MIXER_ROUTING_DAC1_STEREO,1,0,data,out,out+1,out+32,out+33,fx);
+ check(fx[0]==0,"internal send follows the VCA");
+ mixer_handleVcaCc(20,127);mixer_setFxSendMode(3);mixer_handleFxSendCc(30,64);memset(fx,0,sizeof(fx));for(int i=0;i<16;i++)data[i]=1000;
+ mixer_mixVoiceBlock(0,MIXER_ROUTING_FX_BUS,1,0,data,out,out+1,out+32,out+33,fx);
+ check(fx[0]==1000,"in cfl a voice routed to FX reaches the bus through its internal send");
+ mixer_intSend[0]=0;
  printf("AUDIO IMPORT PASS %u reference assertions\n",checks);return 0;
 }
 '''

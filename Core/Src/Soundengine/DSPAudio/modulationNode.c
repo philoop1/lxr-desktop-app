@@ -14,6 +14,7 @@
 
 
 #include "Soundengine/DSPAudio/modulationNode.h"
+#include "freezeDiag.h"
 #include "Soundengine/DSPAudio/DrumVoice.h"
 #include "Soundengine/DSPAudio/CymbalVoice.h"
 #include "Soundengine/DSPAudio/HiHat.h"
@@ -23,6 +24,7 @@
 #include "Soundengine/MIDI/MidiMessages.h"
 #include "Soundengine/MIDI/MidiParser.h"
 #include "frontPanelParser_ui.h"
+#include "Soundengine/DSPAudio/FX/InsertFx.h"
 
 INDTCMZ ModulationNode velocityModulators[6];
 
@@ -90,9 +92,26 @@ void modNode_originalValueChanged(uint16_t idx)
 	lfo_randomStepOriginalValueChanged(idx);
 }
 //-----------------------------------------------------------------------
+/* 0.2.107 the voice a node's target belongs to: velocity = its own track, a
+ * voice LFO = its target voice, a random step lfo = its target voice */
+static uint8_t modNode_targetVoice(const ModulationNode* vm)
+{
+	if(vm >= &velocityModulators[0] && vm < &velocityModulators[6])
+		return (uint8_t)(vm - &velocityModulators[0]);
+	const ModulationNode *lfoNodes[6] = {&voiceArray[0].lfo.modTarget, &voiceArray[1].lfo.modTarget,
+		&voiceArray[2].lfo.modTarget, &snareVoice.lfo.modTarget, &cymbalVoice.lfo.modTarget, &hatVoice.lfo.modTarget};
+	for(uint8_t i = 0; i < 6; i++)
+		if(vm == lfoNodes[i]) {
+			const uint8_t v = activeParameters[PAR_VOICE_LFO1 + i];
+			return (v >= 1 && v <= 6) ? (uint8_t)(v - 1) : 0xff;
+		}
+	return lfo_randomStepTargetVoice(vm);
+}
+//-----------------------------------------------------------------------
 void modNode_resetTargets()
 {
 	uint8_t i;
+	InsertFx_clearMod();	// 0.2.107 the nodes add their offsets again this block
 	for(i=0;i<6;i++)
 	{
 		paramArray_setParameter(velocityModulators[i].destination,velocityModulators[i].originalValue);
@@ -128,6 +147,8 @@ void modNode_setDestination(ModulationNode* vm, uint16_t dest)
 	const uint32_t irqState=__get_PRIMASK();
 	__disable_irq();
 #endif
+	FREEZE_MARK(lastDest, dest);
+	FREEZE_MARK(inSetDest, 1);
 	/* Restore only this node's former destination. Resetting all twelve nodes
 	 * here can re-enter MIDI parameter handling while the UI changes dst. */
 	if(vm->destination < END_OF_SOUND_PARAMETERS &&
@@ -167,7 +188,7 @@ void modNode_setDestination(ModulationNode* vm, uint16_t dest)
 			break;
 	}
 destination_done:
-	(void)0;
+	FREEZE_MARK(inSetDest, 0);
 #if defined(__arm__) || defined(__thumb__)
 	__set_PRIMASK(irqState);
 #endif
@@ -181,6 +202,15 @@ void modNode_updateValue(ModulationNode* vm, float val)
 	Parameter const *p = &parameterArray[destination];
 
 	vm->lastVal = val;
+
+	/* 0.2.107 send / insert targets: an offset for the target voice, summed
+	 * over all nodes, bipolar around the stored setting like the others */
+	if(destination >= PAR_MODX_FIRST && destination <= PAR_MODX_LAST) {
+		const uint8_t voice = modNode_targetVoice(vm);
+		if(voice < 6)
+			InsertFx_addMod(voice, (uint8_t)(destination - PAR_MODX_FIRST), vm->amount * (val*2.f-1.f));
+		return;
+	}
 
 	// **PATROT avoid setting this if it's not set to something good
 	if(!p->ptr)

@@ -16,17 +16,24 @@
 #define ONE_POLELP_H_
 //-------------------------------------------------------------
 #include "stm32f7xx_hal.h"
+#include <math.h>
 //-------------------------------------------------------------
 #define CALC_FILTER_FREQ(f) (1-expf(-2.f*M_PI*f/(float)REAL_FS))
 
+/* 0.2.103 float state: calcOnePole already rounded through fmaf in float */
 typedef struct OnePoleStruct
 {
-	double r;
-	double b;
+	float r;
+	float b;
 } OnePoleFilter;
 //-------------------------------------------------------------
 void initOnePole(OnePoleFilter* filter);
-float calcOnePole(OnePoleFilter* filter, double input);
+/* 0.2.103 inline: it runs up to three times per voice and sample */
+static inline float calcOnePole(OnePoleFilter* filter, float input)
+{
+	filter->b = fmaf(filter->r, input - filter->b, filter->b);
+	return filter->b;
+}
 float calcOnePoleAdaptiveVolume(OnePoleFilter* filter, double input);
 void calcOnePoleBlock(OnePoleFilter* filter, int16_t* buf, const uint8_t size);
 void calcOnePoleBlockFixedInput(OnePoleFilter* filter, float input,float* output, const uint8_t size);

@@ -46,4 +46,11 @@ void Compressor_setRelease(Compressor *c, float t);
 void Compressor_setRatio(Compressor *c, uint8_t r);
 void Compressor_setGain(Compressor *c, float g);
 
+/* 0.2.71 master compressor: the same compressor on the main output after the
+ * master filter, PAR_MCOMP_ON..PAR_MCOMP_MIX order (on, ratio, attack,
+ * release, threshold, gain, mix). */
+#define MCOMP_NUM_PARAMS 7
+void masterComp_set(uint8_t idx, uint8_t value);
+void masterComp_process(int16_t *stereo, uint32_t frames);
+
 #endif /* INC_SOUNDENGINE_DSPAUDIO_FX_COMPRESSOR_H_ */

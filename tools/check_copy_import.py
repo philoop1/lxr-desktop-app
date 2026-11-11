@@ -1,5 +1,6 @@
 """Run the desktop sequencer's COPY functions with a 64-slot host pattern set."""
 from pathlib import Path
+from plock_source import plock_source
 import os
 import re
 import subprocess
@@ -18,7 +19,7 @@ def extract(name):
         position += 1
     return source[match.start():position]
 
-code = r'''
+code = (root / 'Core/Inc/Preset/TrigConditions.h').read_text() + '\n' + r'''
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,16 +28,24 @@ code = r'''
 #define NUM_PATTERN 64
 #define NUM_STEPS 64
 #define NUM_BARS 4
+#define SLIDE_TRACKS 3
 typedef struct {uint8_t note,volume,prob,param1Nr,param1Val,param2Nr,param2Val;} Step;
+'''+plock_source()+r'''
 typedef struct {uint8_t flam,shift;} Timing;
 static struct {
   Step seq_subStepPattern[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
   Timing seq_stepTiming[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
   uint8_t flamProbability[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
-  uint8_t trigCondition[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
+  TrigTrack trigCondition[NUM_PATTERN][NUM_TRACKS];
   uint16_t seq_mainSteps[NUM_BARS][NUM_PATTERN][NUM_TRACKS];
   uint8_t length[NUM_PATTERN][NUM_TRACKS];
+  uint64_t slide[NUM_PATTERN][SLIDE_TRACKS];
+  uint64_t accent[NUM_PATTERN][NUM_TRACKS];
 } seq_patternSet;
+static uint8_t seq_getSlide(uint8_t p,uint8_t t,uint8_t s){return t<SLIDE_TRACKS?(uint8_t)((seq_patternSet.slide[p][t]>>s)&1u):0;}
+static void seq_setSlide(uint8_t p,uint8_t t,uint8_t s,uint8_t on){if(t>=SLIDE_TRACKS)return;if(on)seq_patternSet.slide[p][t]|=1ull<<s;else seq_patternSet.slide[p][t]&=~(1ull<<s);}
+static uint8_t seq_getAccent(uint8_t p,uint8_t t,uint8_t s){return t<NUM_TRACKS?(uint8_t)((seq_patternSet.accent[p][t]>>s)&1u):0;}
+static void seq_setAccent(uint8_t p,uint8_t t,uint8_t s,uint8_t on){if(t>=NUM_TRACKS)return;if(on)seq_patternSet.accent[p][t]|=1ull<<s;else seq_patternSet.accent[p][t]&=~(1ull<<s);}
 static unsigned checks;
 static void check(int ok,const char *what){checks++;if(!ok){fprintf(stderr,"FAIL %s\n",what);exit(1);}}
 '''
@@ -47,7 +56,7 @@ int main(void){
   seq_patternSet.seq_subStepPattern[3][2][17]=(Step){60,97,41,5,77,6,88};
   seq_patternSet.seq_stepTiming[3][2][17]=(Timing){4,9};
   seq_patternSet.flamProbability[3][2][17]=37;
-  seq_patternSet.trigCondition[3][2][17]=5;
+  trigTrackSet(&seq_patternSet.trigCondition[3][2], 17, 5);
   seq_patternSet.seq_mainSteps[1][3][2]=(uint16_t)(1u<<1);
   seq_copyStep(2,3,17,33);
   check(!memcmp(&seq_patternSet.seq_subStepPattern[3][2][17],
@@ -55,7 +64,7 @@ int main(void){
   check(!memcmp(&seq_patternSet.seq_stepTiming[3][2][17],
       &seq_patternSet.seq_stepTiming[3][2][33],sizeof(Timing)),"Flam and Shift");
   check(seq_patternSet.flamProbability[3][2][33]==37,"Flam Probability");
-  check(seq_patternSet.trigCondition[3][2][33]==5,"Trig Condition");
+  check(trigTrackGet(&seq_patternSet.trigCondition[3][2], 33)==5,"Trig Condition");
   check(seq_patternSet.seq_mainSteps[2][3][2]&(1u<<1),"on bit across bars");
   seq_copyStep(2,3,32,33);
   check(!(seq_patternSet.seq_mainSteps[2][3][2]&(1u<<1)),"off bit across bars");
@@ -76,7 +85,7 @@ int main(void){
   check(seq_patternSet.seq_subStepPattern[63][2][17].note==60,"track note in slot 64");
   check(seq_patternSet.seq_stepTiming[63][2][17].flam==4,"track timing in slot 64");
   check(seq_patternSet.flamProbability[63][2][17]==37,"track Flam Probability in slot 64");
-  check(seq_patternSet.trigCondition[63][2][17]==5,"track Trig Condition in slot 64");
+  check(trigTrackGet(&seq_patternSet.trigCondition[63][2], 17)==5,"track Trig Condition in slot 64");
   check(seq_patternSet.seq_mainSteps[3][63][2]==seq_patternSet.seq_mainSteps[3][3][2],"track main steps in slot 64");
   printf("COPY IMPORT PASS %u assertions\n",checks);
   return 0;

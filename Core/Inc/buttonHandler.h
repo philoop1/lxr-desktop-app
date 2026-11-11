@@ -19,10 +19,6 @@
 #include "main.h"
 
 extern uint8_t buttonHandler_selectedStep;
-extern volatile uint16_t buttonHandler_originalParameter[2];	//saves parameter number for step automation reset (stgep assign)
-extern uint8_t buttonHandler_originalValue[2]; 
-extern uint8_t buttonHandler_resetLock1;
-extern uint8_t buttonHandler_resetLock2;
 
 uint8_t buttonHandler_isMidiDelayPage(void);
 void buttonHandler_refreshVoiceDisplay(void);
@@ -186,4 +182,8 @@ void buttonHandler_muteVoice(uint8_t voice, uint8_t isMuted);
 void buttonHandler_showMuteLEDs();
 //--------------------------------------------------------
 void buttonHandler_setRunStopState(uint8_t running);
+/* Held-step manual parameter locks. */
+uint8_t buttonHandler_lockParameter(uint16_t parameter,uint8_t value,uint8_t remove);
+uint8_t buttonHandler_lockValue(uint16_t parameter,uint8_t fallback);
+uint8_t buttonHandler_lockMemoryFull(void);
 #endif /* BUTTONHANDLER_H_ */

@@ -14,12 +14,16 @@
 
 
 #include "Soundengine/DSPAudio/Snare.h"
+#include "Soundengine/DSPAudio/FilterEnv.h" // 0.2.93
 #include "Soundengine/DSPAudio/squareRootLut.h"
 #include "Soundengine/DSPAudio/modulationNode.h"
 #include "Soundengine/TriggerOut.h"
 #include "Soundengine/MIDI/MidiVoiceControl.h"
 #include "IO/adcPots.h"
 #include "Soundengine/FxBus.h"
+// 0.2.67 hpd for the snare, see DrumVoice.c
+extern float drum_highGain[4];
+extern void drum_updateHighGainOsc(const uint8_t voiceNr,const OscInfo *osc);
 //instance of the snare voice
 INDTCMZ SnareVoice snareVoice;
 
@@ -166,6 +170,7 @@ IN_ITCM_RAM void Snare_calcAsync()
 
 	//calc the osc  vol eg
 	snareVoice.egValueOscVol = slopeEg2_calc(&snareVoice.oscVolEg);
+	if(fenv_on[3]) fenv_tick(3, snareVoice.egValueOscVol); // 0.2.93 filter env
 	snareVoice.noiseEgValue = snareVoice.noiseEnvelopeEnabled ?
 		slopeEg2_calc(&snareVoice.noiseVolEg) : 1.f;
 
@@ -191,12 +196,35 @@ IN_ITCM_RAM void Snare_calcAsync()
 	snareVoice.layerOsc.pitchMod=snareVoice.osc.pitchMod*(0.25f+snareVoice.layerFreqControl/33.9f);
 	osc_setFreq(&snareVoice.layerOsc);
 	osc_setFreq(&snareVoice.noiseOsc);
+	drum_updateHighGainOsc(3,&snareVoice.osc);
 
 
 }
 //---------------------------------------------------
+/* 0.2.102 silent-voice sleep (Mutador): body EG at 0 (and the noise EG when it
+ * runs its own) gives 0 in every sample. Skip the work, keep the phases and
+ * the fader smoothing moving, clear the filter once. */
+static uint8_t snare_sleeping;
 void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 {
+	const float faderTarget = adc_getFaderVolume(3);
+	if(snareVoice.egValueOscVol == 0.f &&
+		(!snareVoice.noiseEnvelopeEnabled || snareVoice.noiseEgValue == 0.f))
+	{
+		if(!snare_sleeping)
+		{
+			SVF_reset(&snareVoice.filter);
+			snare_sleeping = 1;
+		}
+		snareVoice.osc.phase += snareVoice.osc.phaseInc * size;
+		snareVoice.layerOsc.phase += snareVoice.layerOsc.phaseInc * size;
+		snareVoice.noiseOsc.phase += snareVoice.noiseOsc.phaseInc * size;
+		for(uint8_t i=0;i<size;i++) calcOnePole(&snareVoice.FaderVolumeFilter, faderTarget);
+		if(!snareVoice.noiseEnvelopeEnabled) snareVoice.combinedVolume = 0.f;
+		bufferTool_clearBuffer(buf,size);
+		return;
+	}
+	snare_sleeping = 0;
 	int16_t transBuf[size];
 	int16_t oscBuf[size];
 
@@ -281,14 +309,14 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 			const float noise=buf[j]*snareVoice.mix*noiseGain;
 			const float click=transBuf[j]*bodyGain;
 			buf[j]=level*(body+noise+click)*
-				calcOnePole(&snareVoice.FaderVolumeFilter,adc_getFaderVolume(3));
+				calcOnePole(&snareVoice.FaderVolumeFilter,faderTarget);
 		}
 		calcDistBlock(&snareVoice.distortion,buf,size);
 		return;
 	}
 	if(snareVoice.volumeMod)
 	{
-		snareVoice.combinedVolume = snareVoice.vol * snareVoice.velo * snareVoice.egValueOscVol ;
+		snareVoice.combinedVolume = snareVoice.vol * snareVoice.velo * snareVoice.egValueOscVol * drum_highGain[3];
 		//const float vol = ;
 
 		for(j=0;j<size;j++)
@@ -301,7 +329,7 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 			//add transient sample
 			//tmp	= __QADD16(transBuf[j],(int16_t)tmp);
 			tmp	+= transBuf[j];
-			buf[j] =   snareVoice.combinedVolume  * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, adc_getFaderVolume(3));
+			buf[j] =   snareVoice.combinedVolume  * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, faderTarget);
 
 #else
 
@@ -315,7 +343,7 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 	}
 	else
 	{
-		snareVoice.combinedVolume = snareVoice.vol * snareVoice.egValueOscVol;
+		snareVoice.combinedVolume = snareVoice.vol * snareVoice.egValueOscVol * drum_highGain[3];
 		//const float vol = snareVoice.combinedVolume * ;
 
 		for(j=0;j<size;j++)
@@ -326,7 +354,7 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 			//add transient sample
 			//tmp	= __QADD16(transBuf[j],(int16_t)tmp);
 			tmp	+= transBuf[j];
-			buf[j] =  snareVoice.combinedVolume * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, adc_getFaderVolume(3));
+			buf[j] =  snareVoice.combinedVolume * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, faderTarget);
 #else
 			//add filter to buffer
 			buf[j] *= snareVoice.mix;

@@ -31,6 +31,10 @@ struct { uint32_t ODR; } gpio;
 #define LED_43_Pin 1u
 uint8_t menu_getViewedPattern(void){return viewed;}
 uint8_t perf_getLoop(uint8_t *a,uint8_t *b){*a=lo;*b=hi;return loopOn;}
+/* 0.2.92 perf blink in pattern select: not pattern mode here */
+enum {SELECT_MODE_PATTERN=8,PATTERN_SAVE_PAGE=30,PATTERN_SAVE_PAGE_OK=31};
+uint8_t menu_activePage;
+uint8_t buttonHandler_getMode(void){return 0;}
 '''
 code += re.search(r'enum LedNumbers\s*\{.*?\};', header, re.S)[0] + '\n'
 for name in ['led_setValue', 'led_reset', 'led_toggleTemp', 'led_idx2StepLed',

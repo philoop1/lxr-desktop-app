@@ -22,6 +22,7 @@ add_library(lxr_platform OBJECT
     Startup/startup_stm32f765vgtx.s
     Src/main.c
     Src/stm32f7xx_it.c
+    Src/freezeDiag.c
     Src/stm32f7xx_hal_msp.c
     Src/system_stm32f7xx.c
     Src/syscalls.c
@@ -62,6 +63,7 @@ add_library(lxr_ui OBJECT
 add_library(lxr_preset OBJECT
     Src/Preset/initKit.c
     Src/Preset/presetManager.c
+    Src/Preset/StepLocks.c
 )
 
 # DSP building blocks, drum voices and master effects.
@@ -74,6 +76,7 @@ add_library(lxr_dsp OBJECT
     Src/Soundengine/DSPAudio/distortion.c
     Src/Soundengine/DSPAudio/dither.c
     Src/Soundengine/DSPAudio/DrumVoice.c
+    Src/Soundengine/DSPAudio/FilterEnv.c
     Src/Soundengine/DSPAudio/HiHat.c
     Src/Soundengine/DSPAudio/lfo.c
     Src/Soundengine/DSPAudio/mixer.c
@@ -99,6 +102,9 @@ add_library(lxr_dsp OBJECT
     Src/Soundengine/DSPAudio/FX/FxRamBuffer.c
     Src/Soundengine/DSPAudio/FX/Reverb.c
     Src/Soundengine/DSPAudio/FX/TapeDelay.c
+    Src/Soundengine/DSPAudio/FX/Phaser.c
+    Src/Soundengine/DSPAudio/FX/Flanger.c
+    Src/Soundengine/DSPAudio/FX/InsertFx.c
     Src/Soundengine/DSPAudio/FX/Ringmod.c
     Src/Soundengine/DSPAudio/FX/VerbTools/AllpassDelay.c
     Src/Soundengine/DSPAudio/FX/VerbTools/sinCos.c
@@ -172,6 +178,7 @@ set(LXR_ITCM_SOURCES
     Src/Soundengine/DSPAudio/Decay.c
     Src/Soundengine/DSPAudio/distortion.c
     Src/Soundengine/DSPAudio/DrumVoice.c
+    Src/Soundengine/DSPAudio/FilterEnv.c
     Src/Soundengine/DSPAudio/HiHat.c
     Src/Soundengine/DSPAudio/lfo.c
     Src/Soundengine/DSPAudio/mixer.c

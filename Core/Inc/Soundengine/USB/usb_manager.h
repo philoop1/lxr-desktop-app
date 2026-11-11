@@ -35,7 +35,8 @@ uint8_t usb_getMidi(MidiMsg* msg);
 /* Parses up to max queued USB MIDI messages. Reentry (TIM2 save interrupt
  * while the main loop is inside a handler) returns at once. */
 void usb_processMidiIn(uint8_t max);
-void usb_flushMidi();
+void usb_flushMidi(void);
+void usb_resetMidiQueues(void);
 
 #endif /* USB_MANAGER_H_ */
 

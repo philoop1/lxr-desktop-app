@@ -13,6 +13,7 @@
  */ 
 #include "frontPanelParser_ui.h"
 #include "menu/menu.h"
+#include "menu/CcNr2Text.h"
 #include <stdio.h>
 
 #include "ledHandler.h"
@@ -62,7 +63,7 @@ void frontParser_parseNrpn(uint8_t value)
 		if(lfoNr>5)lfoNr=5;
 
 		// value (might) represents an actual parameter number, we need to convert to index into modTargets
-		activeParameters[paramNr]=paramToModTarget[value];
+		activeParameters[paramNr]=modTargetFromParam(value,(uint8_t)(activeParameters[PAR_VOICE_LFO1+lfoNr]-1));	// 0.2.107
 		// this was the old code
 		//since the LFO target calculation from the index number needs to know about the menu structure (menuPages)
 		//we need to send back the right target param number to the cortex
@@ -78,7 +79,7 @@ void frontParser_parseNrpn(uint8_t value)
 		//**VELO receive nrpn translate to parameter. TODO this needs to be checked as well
 
 		// value (might) represents an actual parameter number, we need to convert to index into modTargets
-		activeParameters[paramNr]=paramToModTarget[value];
+		activeParameters[paramNr]=modTargetFromParam(value,(uint8_t)(paramNr-PAR_VEL_DEST_1));	// 0.2.107
 
 		// old code
 		//uint8_t param = parameter_values[frontParser_nrpnNr+128];

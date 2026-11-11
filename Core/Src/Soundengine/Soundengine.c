@@ -18,6 +18,7 @@
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/MIDI/Uart.h"
 #include "Soundengine/saveDiag.h"
+#include "Soundengine/cpuDiag.h"
 
 volatile SaveDiag saveDiag;
 
@@ -39,6 +40,29 @@ uint8_t soundengine_calcNextSampleBlock()
 	}
 
 	return 0;
+}
+
+void soundengine_serviceAudio(void)
+{
+#if CALC_SAMPLES_IN_INTERRUPT
+	/* same guard as soundengine_process: during a save TIM2 renders too */
+	__HAL_TIM_DISABLE_IT(&htim2, TIM_IT_UPDATE);
+	soundengine_calcNextSampleBlock();
+	/* 0.2.106 the step after the block: its work runs in the free time, not
+	 * between the DMA request and the ready block (sounds one block later) */
+	{ CPU_DIAG_SEQ_BEGIN(); // 0.2.104 peak diagnosis (d builds)
+	seq_tick();
+	CPU_DIAG_SEQ_END(); }
+	__HAL_TIM_SetCounter(&htim2, 1950);
+	__HAL_TIM_ENABLE_IT(&htim2, TIM_IT_UPDATE);
+#else
+	soundengine_calcNextSampleBlock();
+	/* 0.2.106 the step after the block: its work runs in the free time, not
+	 * between the DMA request and the ready block (sounds one block later) */
+	{ CPU_DIAG_SEQ_BEGIN(); // 0.2.104 peak diagnosis (d builds)
+	seq_tick();
+	CPU_DIAG_SEQ_END(); }
+#endif
 }
 
 void soundengine_init()
@@ -86,8 +110,12 @@ void soundengine_process()
 #if CALC_SAMPLES_IN_INTERRUPT
 	__HAL_TIM_DISABLE_IT(&htim2, TIM_IT_UPDATE);
 	//HAL_TIM_Base_Stop_IT(&htim2);
-	seq_tick();
 	soundengine_calcNextSampleBlock();
+	/* 0.2.106 the step after the block: its work runs in the free time, not
+	 * between the DMA request and the ready block (sounds one block later) */
+	{ CPU_DIAG_SEQ_BEGIN(); // 0.2.104 peak diagnosis (d builds)
+	seq_tick();
+	CPU_DIAG_SEQ_END(); }
 	__HAL_TIM_SetCounter(&htim2, 1950);
 	//HAL_TIM_Base_Start_IT(&htim2);
 	__HAL_TIM_ENABLE_IT(&htim2, TIM_IT_UPDATE);
@@ -95,8 +123,12 @@ void soundengine_process()
 	//generate next sample if no valid sample is present
 #if !CALC_SAMPLES_IN_INTERRUPT
 #if 1//#ifndef DEBUG
-		seq_tick();
 		soundengine_calcNextSampleBlock();
+		/* 0.2.106 the step after the block: its work runs in the free time, not
+		 * between the DMA request and the ready block (sounds one block later) */
+		{ CPU_DIAG_SEQ_BEGIN(); // 0.2.104 peak diagnosis (d builds)
+		seq_tick();
+		CPU_DIAG_SEQ_END(); }
 
 
 

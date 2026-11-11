@@ -70,7 +70,7 @@ code = r'''
 #include <math.h>
 #define USE_REVERB 0
 ''' + defines + r'''
-typedef struct {uint8_t waveform;float fmMod,pdKnee,pitchMod;uint32_t phase;} OscInfo;
+typedef struct {uint8_t waveform;float fmMod,pdKnee,pitchMod;uint32_t phase,phaseInc;} OscInfo;
 typedef struct {int dummy;} ResonantFilter;
 typedef struct {uint8_t waveform;float volume,pitch;} TransientGenerator;
 typedef struct {int dummy;} SlopeEg2;
@@ -97,6 +97,7 @@ void calcNextOscSampleBlock(OscInfo *o,int16_t *b,uint8_t n,float g,float pwm){(
 void calcNextOscSampleFmBlock(OscInfo *o,int16_t *m,int16_t *b,uint8_t n,float g,float pwm){(void)m;(void)pwm;calls[CALL_FM]++;seenFmMod=o->fmMod;for(uint8_t i=0;i<n;i++)b[i]=(int16_t)(1000*g);}
 void calcExpoFmBlock(OscInfo *o,int16_t *m,int16_t *b,uint8_t n,float pwm){(void)pwm;calls[CALL_EXPO]++;seenFmMod=o->fmMod;
  for(uint8_t i=0;i<n;i++){if(m[i]!=1000){puts("FAIL expo gets the layer osc at full level");exit(1);}b[i]=2000;}}
+float drum_highGain[4]={1.f,1.f,1.f,1.f};void drum_updateHighGainOsc(const uint8_t v,const OscInfo *o){(void)v;(void)o;}
 void calcPhaseDistBlock(OscInfo *o,int16_t *b,uint8_t n){calls[CALL_PD]++;seenFmMod=o->fmMod;for(uint8_t i=0;i<n;i++)b[i]=3000;}
 void transient_calcBlock(TransientGenerator *t,int16_t *b,uint8_t n){(void)t;for(uint8_t i=0;i<n;i++)b[i]=0;}
 float calcOnePole(OnePoleFilter *f,float v){(void)f;(void)v;return 1.f;}
@@ -104,6 +105,10 @@ float adc_getFaderVolume(uint8_t v){(void)v;return 1.f;}
 void calcDistBlock(Distortion *d,int16_t *b,uint8_t n){(void)d;(void)b;(void)n;}
 float DecayEg_calc(DecayEg *e){(void)e;return 0.5f;}
 float slopeEg2_calc(SlopeEg2 *e){(void)e;return 1.f;}
+/* 0.2.102 the sleep path of Snare_calcSyncBlock */
+static uint8_t snare_sleeping;void SVF_reset(ResonantFilter *f){(void)f;}
+static void bufferTool_clearBuffer(int16_t *b,uint8_t n){for(uint8_t i=0;i<n;i++)b[i]=0;}
+uint8_t fenv_on[6];void fenv_tick(uint8_t s,float a){(void)s;(void)a;}
 float SnapEg_calc(SnapEg *e,float p){(void)e;(void)p;return 0.f;}
 void osc_setFreq(OscInfo *o){(void)o;}
 static unsigned checks;

@@ -58,6 +58,14 @@
 #define MENU_FLAM_REPEATS 39
 #define MENU_FLAM_GRID 40
 #define MENU_FLAM_PITCH 41
+#define MENU_FLAM_STEPS 42	// 0.2.63, names from flamRepeatNames
+#define MENU_SEND_FX 43	// 0.2.79 send page snd
+#define MENU_FX_PAGE 44	// 0.2.81 FX page browse
+#define MENU_PH2_STAGES 45	// 0.2.82 phaser 2 stages
+#define MENU_DST_TYPE 46	// 0.2.83 dst shaper
+#define MENU_GLIDE_MODE 47	// 0.2.90 off/on/leg
+#define MENU_STEP_SLIDE 48	// 0.2.96 303 field: off/sld/acc (shows what the step keys edit)
+#define MENU_STEP_ACCENT 49	// 0.2.93 off/on
 
 //-----------------------------------------------------------------
 // Shared texts. Reduce mem usage by pooling common text
@@ -82,12 +90,19 @@ const char stepFlamNames[][4] =
 };
 const char flamRepeatNames[][4] =
 {
-	{12},
-	{"1"},{"2"},{"3"},{"4"},{"5"},{"6"},{"7"},{"8"},{"9"},{"10"},{"11"},{"12"}
+	{64},
+	{"1"},{"2"},{"3"},{"4"},{"5"},{"6"},{"7"},{"8"},{"9"},{"10"},{"11"},{"12"},
+	{"13"},{"14"},{"15"},{"16"},{"17"},{"18"},{"19"},{"20"},{"21"},{"22"},{"23"},{"24"},
+	{"25"},{"26"},{"27"},{"28"},{"29"},{"30"},{"31"},{"32"},{"33"},{"34"},{"35"},{"36"},
+	{"37"},{"38"},{"39"},{"40"},{"41"},{"42"},{"43"},{"44"},{"45"},{"46"},{"47"},{"48"},
+	{"49"},{"50"},{"51"},{"52"},{"53"},{"54"},{"55"},{"56"},{"57"},{"58"},{"59"},{"60"},
+	{"61"},{"62"},{"63"},{"64"}
 };
+/* 0.2.65: shown from slow to fast; menu_flamGridOrder maps to FlamPreset.grid */
 const char flamGridNames[][4] =
 {
-	{6},
+	{12},
+	{"/3"},{"t4"},{"/2"},{"t8"},{"1"},{"t16"},
 	{"x2"},{"x3"},{"x4"},{"x6"},{"x8"},{"x12"}
 };
 const char flamPitchNames[][4] =
@@ -183,15 +198,57 @@ const char ratioNames[][4] =
 	{"8:1"}
 };
 //-----------------------------------------------------------------
+const char sendFxNames[][4] =
+{
+	{4},		//number of entries
+	{"off"},
+	{"del"},
+	{"tpe"},
+	{"rev"}
+};
+//-----------------------------------------------------------------
+const char glideModeNames[][4]={{3},{"off"},{"on"},{"leg"}};
+const char stepSlideNames[][4]={{2},{"off"},{"on"}};
+const char step303Names[][4]={{3},{"off"},{"sld"},{"acc"}}; // 0.2.96
+const char fxPageNames[][4] =
+{
+	{7},		//number of entries; entry 1 is replaced by the running send effect
+	{"snd"},
+	{"dst"},
+	{"rng"},
+	{"cmp"},
+	{"pha"},
+	{"fln"},
+	{"ph2"}
+};
+//-----------------------------------------------------------------
+const char dstTypeNames[][4] =
+{
+	{3},		//number of entries
+	{"sft"},
+	{"hrd"},
+	{"fld"}
+};
+//-----------------------------------------------------------------
+const char ph2StageNames[][4] =
+{
+	{3},		//number of entries
+	{"4"},
+	{"8"},
+	{"12"}
+};
+//-----------------------------------------------------------------
 const char fxNames[][4] =
 {
-	{6},		//number of entries
+	{8},		//number of entries
 	{"off"},
 	{"drv"},
 	{"rng"},
 	{"cmp"},
 	{"del"},
-	{"tpe"}
+	{"tpe"},
+	{"rev"},	// 0.2.71, needs USE_REVERB in FxBus.h
+	{"pha"}		// 0.2.78 phaser
 };
 //-----------------------------------------------------------------
 const char distNames[][4] =
@@ -382,7 +439,7 @@ const char waveformNames[][4]  =
 //-----------------------------------------------------------------
 const char outputNames[][7]  =
 {
-	{7},		//number of entries
+	{13},		//number of entries
 	{"St1"}	,	//Stereo Out DAC 1
 	{"St2"}	,	//Stereo Out DAC 2
 	{"L1"}	,	//Mono Out Left DAC 1
@@ -390,6 +447,12 @@ const char outputNames[][7]  =
 	{"L2"}	,	//Mono Out Left DAC 2
 	{"R2"}	,	//Mono Out Right DAC 2
 	{"FX"}	,	//to FX Bus
+	{"dst"}	,	//0.2.79 inserts, then St1
+	{"rng"}	,
+	{"cmp"}	,
+	{"pha"}	,
+	{"fln"}	,	//0.2.82
+	{"ph2"}	,
 };
 //-----------------------------------------------------------------
 //output routing for FX processor, without FX target
@@ -617,9 +680,9 @@ const char shortNames[][4]  =
 	{"nsl"},
 	{"cof"},
 	{"cfn"},
-	{"slw"},
-	{"sla"},
-	{"slf"},
+	{"lwv"},
+	{"lmx"},
+	{"lfq"},
 	{"wmd"},
 	{"scl"},
 	{"rvl"},
@@ -636,6 +699,26 @@ const char shortNames[][4]  =
 	{"hm4"},
 	{"fvl"},
 	{"fla"},{"rep"},{"res"},{"fpt"},{"+1"},{"bb"},
+	{"stp"},
+	{"hpd"},
+	{"i1"},{"i2"},{"i3"},{"i4"},{"i5"},{"i6"},
+	{"ldl"},
+	{"mcp"},{"mrt"},{"mat"},{"mrl"},{"mth"},{"mgn"},{"mmx"},
+	{"ref"},
+	{"siz"},
+	{"dep"},
+	{"snd"},
+	{"fx"},
+	{"stg"},
+	{"bia"},
+	{"psl"},
+	{"gli"},
+	{"glt"},
+	{"303"},
+	{"env"},
+	{"fdc"},
+	{"acc"},
+	{"acc"},
 
 
 
@@ -852,6 +935,27 @@ const char longNames[][16] =
 	{"Flam Pitch"},
 	{"Flam Plus One"},
 	{"Flam Accelerate"},
+	{"Flam Steps"},
+	{"High Pitch Damp"},
+	{"Int Send Voice 1"},{"Int Send Voice 2"},{"Int Send Voice 3"},
+	{"Int Send Voice 4"},{"Int Send Voice 5"},{"Int Send Voice 6"},
+	{"Load Int Sends"},
+	{"Master Comp"},{"MComp Ratio"},{"MComp Attack"},{"MComp Release"},{"MComp Thresh"},{"MComp Gain"},{"MComp Mix"},
+	{"Reflections"},
+	{"Room Size"},
+	{"Depth"},
+	{"Send FX"},
+	{"FX Page"},
+	{"Stages"},
+	{"Bias"},
+	{"Out Level"},
+	{"Glide Mode"},
+	{"Glide Time"},
+	{"303 Sld/Acc"},
+	{"Filter Env"},
+	{"Filter Decay"},
+	{"Accent"},
+	{"Accent Step"},
 
 
 

@@ -511,9 +511,49 @@ enum ParamEnums
 	PAR_HUMANIZE1,PAR_HUMANIZE2,PAR_HUMANIZE3,PAR_HUMANIZE4, // 0.2.55, per groove lane, MUTA.CFG v5
 	PAR_STEP_FLAM_VELO, // 0.2.56 flam velocity curve 0..100, 50 = flat (shown -100..+100 %); 0.2.61 of the edited flam preset
 	PAR_FLAM_SLOT,PAR_FLAM_REPEATS,PAR_FLAM_GRID,PAR_FLAM_PITCH,PAR_FLAM_PLUS_ONE,PAR_FLAM_ACCEL, // 0.2.61 flam preset page
+	PAR_FLAM_STEPS, // 0.2.63 flam length 1..16 steps (value 0..15)
+	PAR_HIGH_DAMP, // 0.2.66 global: damping of high pitched drum voices 0..100 %, MUTA.CFG v6
+	PAR_INT_SEND1,PAR_INT_SEND2,PAR_INT_SEND3,PAR_INT_SEND4,PAR_INT_SEND5,PAR_INT_SEND6, // 0.2.68 sends into the internal FX bus, 0.2.70 stored in the pattern
+	PAR_LOAD_INT_SEND, // 0.2.70 global ldl: load i1..i6 on pattern change, MUTA.CFG v7
+	// 0.2.71 master compressor (SHIFT + Step 1), global, MUTA.CFG v8
+	PAR_MCOMP_ON,PAR_MCOMP_RATIO,PAR_MCOMP_ATTACK,PAR_MCOMP_RELEASE,PAR_MCOMP_THRESH,PAR_MCOMP_GAIN,PAR_MCOMP_MIX,
+	PAR_SEND_FX, // 0.2.79 send page snd: off/del/tpe/rev, mirrors PAR_FX_TYPE (not stored: the loaded type sets it)
+	PAR_FX_PAGE, // 0.2.81 FX page browse: 0 send, 1 dst, 2 rng, 3 cmp, 4 pha (not stored)
+	// 0.2.81 insert settings, kit block INS1, same order as InsertFxValueEnum
+	PAR_INS_DST_MIX,PAR_INS_DST_DRIVE,PAR_INS_DST_TONE,
+	PAR_INS_RNG_MIX,PAR_INS_RNG_FREQ,
+	PAR_INS_CMP_MIX,PAR_INS_CMP_THRESH,PAR_INS_CMP_RATIO,PAR_INS_CMP_ATTACK,PAR_INS_CMP_RELEASE,PAR_INS_CMP_GAIN,
+	PAR_INS_PHA_MIX,PAR_INS_PHA_RATE,PAR_INS_PHA_DEPTH,PAR_INS_PHA_FREQ,PAR_INS_PHA_FEEDBACK,
+	// 0.2.82 flanger and phaser 2, kit block INS2
+	PAR_INS_FLN_MIX,PAR_INS_FLN_RATE,PAR_INS_FLN_DEPTH,PAR_INS_FLN_TIME,PAR_INS_FLN_FEEDBACK,
+	PAR_INS_PH2_MIX,PAR_INS_PH2_RATE,PAR_INS_PH2_DEPTH,PAR_INS_PH2_FREQ,PAR_INS_PH2_FEEDBACK,PAR_INS_PH2_STAGES,
+	// 0.2.83 dst type, bias, out level, kit block INS3
+	PAR_INS_DST_TYPE,PAR_INS_DST_BIAS,PAR_INS_DST_OUT,
+	// 0.2.90 glide of voices 1-3: osc page 2nd screen, kit block GLD1, not morphed
+	PAR_GLIDE_MODE1,PAR_GLIDE_MODE2,PAR_GLIDE_MODE3,
+	PAR_GLIDE_TIME1,PAR_GLIDE_TIME2,PAR_GLIDE_TIME3,
+	PAR_STEP_SLIDE, // 0.2.90 step page sld (tracks 1-3), pattern block SLD1
+	PAR_AEF_AMT1,PAR_AEF_AMT2,PAR_AEF_AMT3, // 0.2.91 amp EG -> filter, filter page 2nd screen, kit block AEF1
+	// 0.2.93 filter env of all filters, kit block FEN1, same order as FilterEnv's extra index
+	PAR_AEF_AMT4,PAR_AEF_AMT5,PAR_AEF_AMT6,
+	PAR_FDC1,PAR_FDC2,PAR_FDC3,PAR_FDC4,PAR_FDC5,PAR_FDC6,
+	PAR_ACC_AMT1,PAR_ACC_AMT2,PAR_ACC_AMT3,PAR_ACC_AMT4,PAR_ACC_AMT5,PAR_ACC_AMT6,
+	PAR_STEP_ACCENT, // 0.2.93 step page acc (all tracks), pattern block ACC1
 
 	NUM_PARAMS	
 };
+
+/* 0.2.107 modulation-only targets on free numbers below 256 (no stored value,
+ * no parameterArray pointer): the node's target voice picks the voice. Same
+ * order as InsertFxModSlotEnum. */
+#define PAR_MODX_SND	PAR_UNUSED_1	// send of the voice into the internal FX bus
+#define PAR_MODX_IMIX	PAR_UNUSED_2	// dry/wet of the voice's insert
+#define PAR_MODX_I1		PAR_UNUSED_3	// insert settings by type
+#define PAR_MODX_I2		PAR_UNUSED_4
+#define PAR_MODX_I3		PAR_UNUSED_5
+#define PAR_MODX_I4		PAR_UNUSED_6
+#define PAR_MODX_FIRST	PAR_MODX_SND
+#define PAR_MODX_LAST	PAR_MODX_I4
 
 extern uint8_t parameterOrder[END_OF_SOUND_PARAMETERS];
 

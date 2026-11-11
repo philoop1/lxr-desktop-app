@@ -32,5 +32,9 @@
 
 void soundengine_init();
 void soundengine_process();
+/* 0.2.100 only the sequencer step and a due audio block: extra main-loop
+ * points so a block does not wait behind buttons, encoder and display.
+ * MIDI, USB and morph stay in soundengine_process (morph advances per call). */
+void soundengine_serviceAudio(void);
 uint8_t soundengine_calcNextSampleBlock();
 #endif /* INC_SOUNDENGINE_SOUNDENGINE_H_ */

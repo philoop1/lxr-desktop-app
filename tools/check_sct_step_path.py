@@ -50,12 +50,14 @@ void seq_triggerVoice(uint8_t t,uint8_t v,uint8_t n){(void)t;(void)v;(void)n;}
 void seq_addNote(uint8_t t,uint8_t v,uint8_t n){(void)t;(void)v;(void)n;}
 uint8_t menu_getActiveVoice(void){return 0;}
 uint8_t menu_getViewedPattern(void){return 0;}
-void menu_setShownPattern(uint8_t p){(void)p;}
+void menu_setShownPattern(uint8_t p){(void)p;}void menu_followPattern(uint8_t p){(void)p;}
 void led_clearSequencerLeds(void){}
 void led_updateSeqLeds(void){}
 void led_setActive_step(uint8_t s){(void)s;}
 void led_clearActive_step(void){}
+uint8_t seq_chaseStep(uint8_t t){return (uint8_t)seq_stepIndex[t];} /* 0.2.92 */
 void midiParser_checkMtc(void){}
+void mixer_setPerformanceGatePhase(uint8_t o){(void)o;}
 """
 TESTS = r"""
 static unsigned checks,failures,gRate,gLen;
@@ -128,7 +130,8 @@ int main(void)
 
 
 def extract(source: str, name: str) -> str:
-    match = re.search(r'^IN_ITCM_RAM void ' + name + r'\(\)\s*\{', source, re.M)
+    # 0.2.103 seq_nextStep moved to flash (marker commented out, comments stripped)
+    match = re.search(r'^(?:IN_ITCM_RAM )? ?void ' + name + r'\(\)\s*\{', source, re.M)
     assert match, name
     position, depth = match.end(), 1
     while depth:

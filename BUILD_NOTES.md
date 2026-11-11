@@ -21,12 +21,12 @@ cmake --preset release
 cmake --build --preset release
 ```
 
-The current archived build is Mutador 0.2.62; see the last entry of this
+The current archived build is Mutador 0.2.68; see the last entry of this
 file for its hash and test state. Physical-device validation of the 0.2
 series remains open.
 
 The update image is written under `build/release/` as
-`LXR_V2_V1.7_Mutador0.2.62.img`. The base version comes from
+`LXR_V2_V1.7_Mutador0.2.68.img`. The base version comes from
 `project(VERSION ...)` in `CMakeLists.txt`; the fork suffix is set separately
 there as `LXR_MUTADOR_VERSION`, which also sets the startup line. For a debug build, use the `debug` preset in both commands.
 
@@ -492,3 +492,15 @@ Mutador 0.2.60: project save keeps audio while the tmp folder is deleted, kit lo
 Mutador 0.2.61: flam presets per project. ARM GCC 14.3 release passed with no warnings. RAM 86.37%, ITCM 95.70%, DTCM 82.28%, FLASH 41.32%. Image 364128 bytes, SHA256 `B930C1FF309255CCDCBE667DE7C9C637DC63663F1DF5864CC59397276103D78C`. See session 035.
 
 Mutador 0.2.62: import page keeps audio during SD access. ARM GCC 14.3 release passed with no warnings. RAM 86.37%, ITCM 95.70%, DTCM 82.28%, FLASH 41.35%. Image 364360 bytes, SHA256 `B981B0339ED541A55D827BA09FCD17117A50F9DAC99C1DD5C6E042D54E351B0A`. See session 035.
+
+Mutador 0.2.63: long flams (stp), Step page scrolling. ARM GCC 14.3 release passed with no warnings. RAM 86.42%, ITCM 95.70%, FLASH 41.66%. Image 366704 bytes, SHA256 `24A0136F4B2830DE50EFA79ED49DE46756E499BEF9EA1E7A08E5EC69832CDD5F`. See session 035.
+
+Mutador 0.2.64: lki=aut loads only another kit, LXR1 import converts modulation. ARM GCC 14.3 release passed with no warnings. RAM 86.42%, ITCM 95.70%, DTCM 82.28%, FLASH 41.68%. Image 366804 bytes, SHA256 `082B4615C11C036E94ED802DC0B1DBD26D4E38A5B272B3C792F2C6E29BDEF86F`. See session 035.
+
+Mutador 0.2.65: slow flam grids (triplets). ARM GCC 14.3 release passed with no warnings. RAM 86.42%, ITCM 95.70%, DTCM 82.28%, FLASH 41.67%. Image 366756 bytes, SHA256 `4E34036088DC053AFD2A47491F683B18A2CEC6BCE6DDAEFCE689D9B1AF36AB36`. See session 035.
+
+Mutador 0.2.66: pattern edits kept on change, mfe on PERF, global hpd. ARM GCC 14.3 release passed with no warnings. RAM 86.42%, ITCM 97.41%, DTCM 82.28%, FLASH 41.74%. Image 367560 bytes, SHA256 `C03171BB3027C90F252BE4B4CE1B96C6699F79EB05753DA18F91A3A8E824DF3A`. See session 035.
+
+Mutador 0.2.67: hpd also on the snare. ARM GCC 14.3 release passed with no warnings. RAM 86.42%, ITCM 97.46%, DTCM 82.28%, FLASH 41.74%. Image 367580 bytes, SHA256 `8E64759F0DEF2431BE765E649FD48C85112FD74F86F4A770964353C10C6CA702`. See session 035.
+
+Mutador 0.2.68: internal FX sends i1-i6 on SHIFT + Step 6, SHIFT + Step 2/4 swapped. ARM GCC 14.3 release passed with no warnings. RAM 86.43%, ITCM 97.46%, DTCM 82.28%, FLASH 41.81%. Image 368068 bytes, SHA256 `59AFD3F0976EE762ADED6A0C4D4E4C8C4FB93FB1E91CB7AD04C3B7A6BF53836C`. See session 035.

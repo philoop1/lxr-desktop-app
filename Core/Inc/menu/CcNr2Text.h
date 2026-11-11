@@ -30,6 +30,14 @@ void paramToModTargetInit();
 // return the total number of mod targets that exist (all voices)
 uint8_t getNumModTargets();
 
+/* 0.2.107 the end of modTargets: one send target per voice (index = voice),
+ * then the insert targets imix, i1..i4 shared by all voices */
+#define MOD_TARGET_SND			236
+#define MOD_TARGET_INSERT		242
+#define MOD_TARGET_INSERT_SLOTS	5
+// reverse of modTargets[].param; voice 0 based (send targets), 0xff unknown
+uint8_t modTargetFromParam(uint8_t param,uint8_t voice);
+
 // returns 1 based index or 0 for invalid
 uint8_t voiceFromModTargValue(uint8_t val);
 
@@ -40,5 +48,7 @@ uint8_t getModTargetIdxFromGapIdx(uint8_t v, uint8_t gapidx);
 uint8_t getModTargetGapIndex(uint8_t modTargetIdx);
 uint8_t modTargetClampVoice(uint8_t voice,uint8_t target,int8_t direction);
 uint8_t modTargetFromFraction(uint8_t voice,float fraction);
+// 0.2.85: next target of a voice in display order (0 = off)
+uint8_t modTargetStepVoice(uint8_t voice,uint8_t target,int8_t inc);
 
 #endif /* CCNR2TEXT_H_ */

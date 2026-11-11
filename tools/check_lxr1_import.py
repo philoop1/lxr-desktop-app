@@ -2,6 +2,8 @@
 
 import struct
 from import_lxr1_patterns import convert, convert_kit, parameter_maps, LXR1_PATTERN_BYTES
+from import_lxr1_patterns import convert_lxr1_modulation, enum_values, lxr1_modulation_range, mod_targets
+import math
 from pathlib import Path
 
 
@@ -22,7 +24,7 @@ def first_step(image):
 for hits, timing in (((0,), 0x70), ((3,), 0xA0), ((0, 4), 0x71),
                      ((0, 2, 4, 6), 0x73), (tuple(range(8)), 0x75)):
     images, warnings = convert(sample(hits), ".pat")
-    assert len(images) == 8 and all(len(x) == 4574 for x in images)
+    assert len(images) == 8 and all(len(x) == 4462 and x[-341:] == b"CND3" + bytes(337) for x in images)
     step, byte = first_step(images[0])
     assert step == bytes((0x80 | 91, 100, 60, 255, 0, 255, 0)), hits  # LXR1 note 63 is LXR2 note 60 (0.2.52)
     assert byte == timing, hits
@@ -68,4 +70,58 @@ for track in range(7):
     words = struct.unpack_from("<28H", images[0], main_offset)
     assert words[track * 4] == 1 and sum(words) == 1, track
 
-print("LXR1 import: timing, one/four bars, kit, target map, truncation and track order checked")
+# 0.2.64: LXR1 modulation scales down from the set value, LXR2 swings around it.
+repo = Path(__file__).resolve().parents[1]
+enum = enum_values(repo / "Core/Inc/Parameters.h")
+targets = mod_targets(repo / "Core/Src/menu/Cc2Text.c")
+
+
+def lxr2_span(base, depth):
+    return min(127, max(0, base - depth)), min(127, max(0, base + depth))
+
+
+for amount in (1, 20, 64, 100, 127):
+    amt = amount / 127
+    for base in (0, 30, 64, 100, 127):
+        b2, d2 = lxr1_modulation_range("PAR_FILTER_FREQ_1", base, amount, False)
+        low, high = lxr2_span(b2, d2)
+        assert abs(high - base) <= 1 and abs(low - base * (1 - amt)) <= 1, (base, amount)
+        b2, d2 = lxr1_modulation_range("PAR_FINE1", base, amount, False)
+        low, high = lxr2_span(b2, d2)
+        assert abs(high - 63.5) <= 1 and abs(low - 63.5 * (1 - amt)) <= 1, (base, amount)
+        b2, d2 = lxr1_modulation_range("PAR_COARSE1", base, amount, False)
+        want = max(12 * math.log2(max(1 - amt, 2 ** -4)), -48)
+        if 0 <= base + want and base <= 127:
+            low, high = lxr2_span(b2, d2)
+            assert abs(high - base) <= 1 and abs(low - (base + want)) <= 1, (base, amount)
+        assert lxr1_modulation_range("PAR_PAN1", base, amount, True) == (base, round(amount / 2))
+        assert lxr1_modulation_range("PAR_PAN1", base, amount, False) == (round(base * (1 - amt / 2)), round(base * amt / 2))
+        for switch in ("PAR_OSC_WAVE_DRUM1", "PAR_FILTER_TYPE_1", "PAR_NONE", "PAR_FX_P1"):
+            assert lxr1_modulation_range(switch, base, amount, False) is None
+    assert lxr1_modulation_range("PAR_FILTER_FREQ_1", 90, 0, False) is None
+assert lxr1_modulation_range("PAR_COARSE1", 10, 127, False) == (5, 5)  # high end stays the set value near 0
+assert lxr1_modulation_range("PAR_FM_FREQ1", 0, 65, False) == (0, 0)
+probe = bytearray(count)
+probe[enum["PAR_COARSE1"]] = 64
+probe[enum["PAR_FILTER_FREQ_2"]] = 100
+probe[enum["PAR_VEL_DEST_1"]] = targets.index("PAR_COARSE1")
+probe[enum["PAR_VELO_MOD_AMT_1"]] = 127
+probe[enum["PAR_TARGET_LFO2"]] = targets.index("PAR_FILTER_FREQ_2")
+probe[enum["PAR_AMOUNT_LFO2"]] = 64
+probe[enum["PAR_TARGET_LFO3"]] = targets.index("PAR_COARSE1")
+probe[enum["PAR_AMOUNT_LFO3"]] = 32
+mod_notes = convert_lxr1_modulation(probe, enum, targets)
+assert probe[enum["PAR_COARSE1"]] == 40 and probe[enum["PAR_VELO_MOD_AMT_1"]] == 24, mod_notes  # -48 semitones at full depth
+assert probe[enum["PAR_FILTER_FREQ_2"]] == 75 and probe[enum["PAR_AMOUNT_LFO2"]] == 25, mod_notes
+assert probe[enum["PAR_AMOUNT_LFO3"]] != 32 and any("already moved" in n for n in mod_notes), mod_notes
+lxr1_coarse = next(old for old, new in target_map.items() if new == targets.index("PAR_COARSE1"))
+source_kit = bytearray(b"Example " + bytes(228))
+source_kit[8 + enum["PAR_COARSE1"]] = 70
+source_kit[8 + enum["PAR_VEL_DEST_1"]] = lxr1_coarse
+source_kit[8 + enum["PAR_VELO_MOD_AMT_1"]] = 64
+kit, notes = convert_kit(bytes(source_kit), ".snd", old_source)
+assert kit[8 + enum["PAR_VEL_DEST_1"]] == targets.index("PAR_COARSE1")
+assert kit[8 + enum["PAR_COARSE1"]] == 70 - 6 and kit[8 + enum["PAR_VELO_MOD_AMT_1"]] == 6, notes
+assert any("velocity 1 -> COARSE1" in n for n in notes), notes
+
+print("LXR1 import: timing, one/four bars, kit, target map, modulation range, truncation and track order checked")

@@ -45,6 +45,7 @@ void midiParser_setGlobalDecay(uint8_t value);
 void midiParser_setStepPerformance(uint16_t parameter,uint8_t value);
 void midiParser_setDelayParameter(uint16_t parameter,uint8_t value);
 void midiParser_setAccentParameter(uint16_t parameter,uint8_t value);
+uint8_t midiParser_velocityTick(void);	// 0.2.99 main loop: one pending velo destination per call
 uint8_t midiParser_applyPerformanceVelocity(uint8_t voice,uint8_t velocity,uint8_t note);
 void midiParser_setPitchBendRange(uint8_t value);
 

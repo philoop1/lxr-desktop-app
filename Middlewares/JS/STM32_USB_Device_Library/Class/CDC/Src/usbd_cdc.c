@@ -87,12 +87,9 @@
 
 //buffer for parsed midi messages
 MidiMsg usb_MidiMessages[USB_MIDI_INPUT_BUFFER_SIZE];
-uint8_t usb_MidiMessagesRead = 0;
-uint8_t usb_MidiMessagesWrite = 0;
-
-uint8_t  usb_MidiInBuff [TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS];
-uint8_t* usb_MidiInWrPtr = usb_MidiInBuff;
-uint8_t* usb_MidiInRdPtr = usb_MidiInBuff;
+volatile uint8_t usb_MidiMessagesRead;
+volatile uint8_t usb_MidiMessagesWrite;
+static USBD_HandleTypeDef *volatile pausedMidiRx;
 
 
 /**
@@ -740,6 +737,7 @@ static uint8_t  USBD_CDC_Init (USBD_HandleTypeDef *pdev, uint8_t cfgidx)
     ((USBD_CDC_ItfTypeDef *)pdev->pUserData)->Init();
 
     /* Init Xfer states */
+    pausedMidiRx = NULL;
     hcdc->TxState = 0U;
     hcdc->RxState = 0U;
 
@@ -770,6 +768,7 @@ static uint8_t  USBD_CDC_DeInit (USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 {
   uint8_t ret = 0U;
 
+  pausedMidiRx = NULL;
   /* Close EP IN */
   USBD_LL_CloseEP(pdev, CDC_IN_EP);
   pdev->ep_in[CDC_IN_EP & 0xFU].is_used = 0U;
@@ -921,6 +920,21 @@ static uint8_t  USBD_CDC_DataIn (USBD_HandleTypeDef *pdev, uint8_t epnum)
   }
 }
 
+/* Called with IRQs masked. Leave OUT unarmed (USB NAK) until even a full
+ * 64-byte FS packet fits; the host retains the next packet in the meantime. */
+void USBD_CDC_ResumeMidiRx(void)
+{
+  USBD_HandleTypeDef *pdev = pausedMidiRx;
+  const unsigned freeEvents = (usb_MidiMessagesRead - usb_MidiMessagesWrite - 1u)
+                              & USB_MIDI_INPUT_BUFFER_MASK;
+  if(pdev && freeEvents >= CDC_DATA_FS_OUT_PACKET_SIZE / sizeof(MidiDataUsb)) {
+    USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef *)pdev->pClassData;
+    pausedMidiRx = NULL;
+    if(hcdc)
+      ((USBD_CDC_ItfTypeDef *)pdev->pUserData)->Receive(hcdc->RxBuffer, &hcdc->RxLength);
+  }
+}
+
 /**
   * @brief  USBD_CDC_DataOut
   *         Data received on non-control Out endpoint
@@ -933,19 +947,19 @@ static uint8_t  USBD_CDC_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum)
   USBD_CDC_HandleTypeDef   *hcdc = (USBD_CDC_HandleTypeDef*) pdev->pClassData;
 
   /* Get the received data length */
-  hcdc->RxLength = USBD_LL_GetRxDataSize (pdev, epnum);
+
 
   /* USB data will be immediately processed, this allow next USB traffic being
   NAKed till the end of the application Xfer */
   if(pdev->pClassData != NULL)
   {
-    ((USBD_CDC_ItfTypeDef *)pdev->pUserData)->Receive(hcdc->RxBuffer, &hcdc->RxLength);
+    hcdc->RxLength = USBD_LL_GetRxDataSize(pdev, epnum);
 
 
     //process buffer
     MidiDataUsb usbData;
     usbData.cin = 1;
-	for(uint8_t i=0;i< hcdc->RxLength && usbData.cin!=0x00;i+=4)
+	for(uint32_t i=0; i+4u <= hcdc->RxLength && usbData.cin!=0x00; i+=4)
 	{
 		usbData.cin = hcdc->RxBuffer[i];
 		usbData.status = hcdc->RxBuffer[i+1];
@@ -1018,6 +1032,8 @@ static uint8_t  USBD_CDC_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum)
 
 		if(length != 0)
 		{
+			const uint8_t next = (usb_MidiMessagesWrite + 1u) & USB_MIDI_INPUT_BUFFER_MASK;
+			if(next == usb_MidiMessagesRead) break; /* Drop excess complete events. */
 			usb_MidiMessages[usb_MidiMessagesWrite].status	= usbData.status;
 			usb_MidiMessages[usb_MidiMessagesWrite].data1 	= usbData.data1;
 			usb_MidiMessages[usb_MidiMessagesWrite].data2 	= usbData.data2;
@@ -1029,11 +1045,16 @@ static uint8_t  USBD_CDC_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum)
 			usb_MidiMessages[usb_MidiMessagesWrite].bits.source = midiSourceUSB;
 
 			//increment and wrap write pointer
-			usb_MidiMessagesWrite++;
-			usb_MidiMessagesWrite &= USB_MIDI_INPUT_BUFFER_MASK;
+			__DMB();
+			usb_MidiMessagesWrite = next;
 		}
 	}
 
+    const uint32_t irq = __get_PRIMASK();
+    __disable_irq();
+    pausedMidiRx = pdev;
+    USBD_CDC_ResumeMidiRx();
+    __set_PRIMASK(irq);
     return USBD_OK;
   }
   else
@@ -1190,10 +1211,10 @@ uint8_t  USBD_CDC_TransmitPacket(USBD_HandleTypeDef *pdev)
       pdev->ep_in[CDC_IN_EP & 0xFU].total_length = hcdc->TxLength;
 
       /* Transmit next packet */
-      USBD_LL_Transmit(pdev, CDC_IN_EP, hcdc->TxBuffer,
-                       (uint16_t)hcdc->TxLength);
-
-      return USBD_OK;
+      const uint8_t result = USBD_LL_Transmit(pdev, CDC_IN_EP, hcdc->TxBuffer,
+                                              (uint16_t)hcdc->TxLength);
+      if(result != USBD_OK) hcdc->TxState = 0U;
+      return result;
     }
     else
     {

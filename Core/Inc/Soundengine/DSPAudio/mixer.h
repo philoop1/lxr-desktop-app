@@ -47,12 +47,29 @@ enum
 	MIXER_ROUTING_DAC2_L,
 	MIXER_ROUTING_DAC2_R,
 	MIXER_ROUTING_FX_BUS,
+	/* 0.2.79: insert effects; the voice then goes to St1 */
+	MIXER_ROUTING_INSERT_DIST,
+	MIXER_ROUTING_INSERT_RING,
+	MIXER_ROUTING_INSERT_COMP,
+	MIXER_ROUTING_INSERT_PHASER,
+	MIXER_ROUTING_INSERT_FLANGER,	// 0.2.82
+	MIXER_ROUTING_INSERT_PHASER2,	// 0.2.82
 };
+#define MIXER_ROUTING_INSERT_FIRST MIXER_ROUTING_INSERT_DIST
+#define MIXER_ROUTING_INSERT_LAST MIXER_ROUTING_INSERT_PHASER2
 
 void mixer_init();
 uint8_t mixer_handleVcaCc(uint8_t cc,uint8_t value);
 uint8_t mixer_handleFxSendCc(uint8_t cc,uint8_t value);
 void mixer_setFxSendMode(uint8_t mode);
+void mixer_setIntSend(uint8_t voice,uint8_t value);	// 0.2.68 internal FX send 0..127
+/* 0.2.83 performance gater (idea and timing from the LXR1 Mutador): while on,
+ * the master opens for the first and closes for the second half of every
+ * step, with a 32-sample ramp. PERF Step 16 toggles it, Pch CC 53 sets it. */
+void mixer_setPerformanceGateEnabled(uint8_t enabled);
+uint8_t mixer_getPerformanceGateEnabled(void);
+void mixer_setPerformanceGatePhase(uint8_t open);
+void mixer_applyPerformanceGate(int16_t *output, int16_t *output2, uint16_t frames);
 void mixer_setFxOutputMode(uint8_t mode);
 uint8_t mixer_getFxOutputMode(void);
 void  mixer_calcNextSampleBlock(int16_t* output,int16_t* output2);

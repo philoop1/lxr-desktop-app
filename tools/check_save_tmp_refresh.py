@@ -4,7 +4,7 @@
   so an older copy cannot overwrite it when the device starts.
 - tmp.pat stores the slot it was written for, not always the played pattern.
 - The I2S audio DMA interrupts run above the TIM2 save-time sample interrupt.
-- Both pattern save paths show the save timing display.
+- 0.2.83: the save and kit load measurement displays are gone again.
 - 0.2.60: the project save deletes the tmp folder before the save interrupt
   stops, a new project keeps audio running while it is deleted, and a kit load
   from the Load page shows the measurement after all parameters were sent.
@@ -41,10 +41,10 @@ def problems(src):
     m = re.search(r'preset_savePatternSD\(seqButtonPressed \+ 16 \* menu_activePatternBank\);(.*?)menu_activePage = PATTERN_SAVE_PAGE_OK;', button, re.S)
     if not m or 'preset_refreshTmpPat(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);' not in m.group(1):
         out.append('pattern save page does not refresh tmp.pat')
-    if not m or 'menu_showSaveDiag();' not in m.group(1):
-        out.append('pattern save page does not show the save timing')
-    if 'saveDiag_begin();\n\t\t\t\tseq_patternSet.shuffle[seqButtonPressed' not in button:
-        out.append('pattern save page does not start the measurement')
+    for name, text in (('menu', menu), ('button', button), ('main', main)):
+        for word in ('menu_showSaveDiag', 'saveDiag_begin', 'menu_kitLoadDiag'):
+            if word in text:
+                out.append(name + ' still has the measurement display (' + word + ')')
     m = re.search(r'static FRESULT preset_saveTmpPatNr\(uint8_t presetNr\)\n\{(.*?)\n\}', preset, re.S)
     if not m or 'f_write((FIL*)&SDFile,(void*)&presetNr,1,&bytesWritten);' not in m.group(1) \
             or 'menu_playedPattern' in m.group(1):
@@ -71,12 +71,6 @@ def problems(src):
     i = body.find('preset_clearTmpFolder();')
     if i < 0 or 'HAL_TIM_Base_Start_IT(&htim2);' not in body[:i] or 'HAL_TIM_Base_Stop_IT(&htim2);' not in body[i:]:
         out.append('new project deletes the tmp folder without the save interrupt')
-    m = re.search(r'case SAVE_TYPE_KIT:\n#if 1\n(.*?)break;', menu, re.S)
-    body = m.group(1) if m else ''
-    if 'saveDiag_begin();' not in body or 'menu_kitLoadDiag = 1;' not in body:
-        out.append('kit load does not start the measurement')
-    if 'menu_kitLoadDiagTick();' not in main or 'if(menu_kitLoadDiag && !preset_morphBusy())' not in menu:
-        out.append('kit load measurement is not shown after the parameters were sent')
     m = re.search(r'static void menu_handleTransfer\(int8_t inc,uint8_t clicked\)\n\{(.*?)\n\}', menu, re.S)
     body = m.group(1) if m else ''
     i, j, k = body.find('menu_transferSdBegin();'), body.find('menu_handleTransferSd(inc,clicked);'), body.find('menu_transferSdEnd(timerWasOn);')
@@ -100,14 +94,11 @@ MUTATIONS = {
     'menu-no-tmp-pat': ('menu', '\t\t\t\t\t\t\tpreset_refreshTmpPat(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);\n', ''),
     'kit-no-tmp': ('menu', '\t\t\t\t\t\t\tpreset_refreshTmpKit();\n', ''),
     'page-no-tmp-pat': ('button', '\t\t\t\tpreset_refreshTmpPat(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);\n', ''),
-    'page-no-diag': ('button', '\t\t\t\tpreset_refreshTmpPat(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);\n\t\t\t\tmenu_showSaveDiag();\n', '\t\t\t\tpreset_refreshTmpPat(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);\n'),
+    'page-diag-back': ('button', '\t\t\t\tpreset_refreshTmpPat(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);\n', '\t\t\t\tpreset_refreshTmpPat(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);\n\t\t\t\tmenu_showSaveDiag();\n'),
     'tmp-played-pattern': ('preset', 'f_write((FIL*)&SDFile,(void*)&presetNr,1,&bytesWritten);', 'f_write((FIL*)&SDFile,(void*)&menu_playedPattern,1,&bytesWritten);'),
     'refresh-keeps-timer': ('preset', '\tpreset_patDirty = 0;\n\tpreset_saveTmpPatNr(presetNr);', '\tpreset_saveTmpPatNr(presetNr);'),
-    'stop-before-clear': ('preset', '\tpreset_clearTmpFolder();\n#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ\n\t\t\tHAL_TIM_Base_Stop_IT(&htim2);\t//calc sample interrupt - prio 1\n#else\n\n#endif\n\n\treturn FR_OK;',
-                          '#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ\n\t\t\tHAL_TIM_Base_Stop_IT(&htim2);\t//calc sample interrupt - prio 1\n#else\n\n#endif\n\tpreset_clearTmpFolder();\n\n\treturn FR_OK;'),
+    'stop-before-clear': ('preset', '\tres = preset_clearTmpFolder();\ndone:', '\t/* missing tmp cleanup */\ndone:'),
     'new-project-unwrapped': ('preset', '\tif(!timerWasOn) HAL_TIM_Base_Start_IT(&htim2);\n', ''),
-    'kit-load-no-diag': ('menu', '\t\t\t\t\tmenu_kitLoadDiag = 1;\n', ''),
-    'kit-diag-too-early': ('menu', 'if(menu_kitLoadDiag && !preset_morphBusy())', 'if(menu_kitLoadDiag)'),
     'transfer-unwrapped': ('menu', '    const uint8_t timerWasOn=menu_transferSdBegin();\n    menu_handleTransferSd(inc,clicked);\n', '    const uint8_t timerWasOn=1;\n    menu_handleTransferSd(inc,clicked);\n'),
     'select-type-unwrapped': ('menu', '    menu_transfer.stage=2;\n    const uint8_t timerWasOn=menu_transferSdBegin();\n', '    menu_transfer.stage=2;\n    const uint8_t timerWasOn=1;\n'),
     'window-no-start': ('menu', '\tif(!timerWasOn) HAL_TIM_Base_Start_IT(&htim2);\n\treturn timerWasOn;', '\treturn timerWasOn;'),

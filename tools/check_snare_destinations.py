@@ -21,8 +21,11 @@ code+=r"""
 typedef struct {uint8_t nameIdx;uint16_t param;} ModTarg;
 typedef struct {uint8_t start,end;} ModTargetVoiceOffset;
 uint8_t voiceFromModTargValue(uint8_t);
+#define STATIC_ASSERT(c,m) typedef char static_assert_[(c)?1:-1]
 """
-code+='\n'.join(line for line in cc.splitlines() if not line.startswith('#include'))
+code+='\n'.join(re.findall(r'#define MOD_TARGET_\w+\s+\d+',read('Core/Inc/menu/CcNr2Text.h')))+'\n'  # 0.2.107
+code+='uint8_t modTargetFromParam(uint8_t param,uint8_t voice);\n'
+code+='\n'.join(line for line in cc.splitlines() if not line.startswith('#include')).replace('_Static_assert(','STATIC_ASSERT(')
 code+=r"""
 typedef union {uint32_t itg;float flt;} ptrValue;
 typedef struct {void *ptr;uint8_t type;} Parameter;
@@ -48,6 +51,7 @@ void midiParser_ccHandler(MidiMsg msg,uint8_t update,uint8_t isFloatModulator,fl
 parser=read('Core/Src/Soundengine/MIDI/MidiParser.c')
 a=parser.index('case PAR_SNARE_NOISE_ATTACK-128:');b=parser.index('case CC2_VOLUME_MOD_ON_OFF1:',a)
 code+=parser[a:b]+'}}\n'
+code+='static uint8_t modNode_targetVoice(const ModulationNode *vm){(void)vm;return 0;}\nvoid InsertFx_addMod(uint8_t v,uint8_t s,float o){(void)v;(void)s;(void)o;}\n'  # 0.2.107
 code+=function(read('Core/Src/Soundengine/DSPAudio/modulationNode.c'),'modNode_updateValue')
 # Exercise the production LFO/velocity CC destination handlers as well.
 for prefix in ['VOICE_LFO','TARGET_LFO','VEL_DEST_']:
@@ -72,7 +76,7 @@ code+=r"""
 static unsigned checks;
 void check(int ok,const char *msg){checks++;if(!ok){puts(msg);exit(1);}}
 int main(void){
- check(getNumModTargets()==242,"target count");
+ check(getNumModTargets()==247,"target count (0.2.107 + imix, i1..i4)");
  check(modTargetVoiceOffsets[3].start==116&&modTargetVoiceOffsets[3].end==152,"legacy snare indices");
  check(modTargets[153].param==PAR_COARSE5&&modTargets[191].param==PAR_COARSE6,"legacy cymbal and hat indices");
  for(unsigned i=229;i<=235;i++){
@@ -84,16 +88,17 @@ int main(void){
  check(modTargetClampVoice(3,153,1)==229,"encoder crosses extension gap forward");
  check(modTargetClampVoice(3,228,-1)==152,"encoder crosses extension gap backward");
  check(modTargetClampVoice(3,239,1)==239,"extension end clamp");
- check(modTargetClampVoice(3,236,1)==239&&modTargetClampVoice(3,238,-1)==235,"encoder reaches dry/wet");
+ check(modTargetClampVoice(3,236,1)==239&&modTargetClampVoice(3,238,-1)==235,"encoder reaches snd");
+ check(modTargetClampVoice(3,240,1)==MOD_TARGET_INSERT,"encoder past snd reaches the insert targets");
  for(unsigned v=0;v<6;v++){
   const unsigned wet=236+v,end=modTargetVoiceOffsets[v].end;
-  check(modTargets[wet].param==PAR_FX_DRY_WET&&voiceFromModTargValue(wet)==v+1,"dry/wet per voice");
-  check(modTargetFromFraction(v,1)==wet,"pot reaches dry/wet");
-  check(modTargetClampVoice(v,250,1)==wet,"dry/wet end clamp");
+  check(modTargets[wet].param==PAR_MODX_SND&&voiceFromModTargValue(wet)==v+1,"snd per voice");
+  check(modTargetFromFraction(v,1)==MOD_TARGET_INSERT+4,"pot reaches i4");
+  check(modTargetClampVoice(v,250,1)==MOD_TARGET_INSERT+4,"end clamp");
   if(v!=3)check(modTargetClampVoice(v,end+1,1)==wet&&modTargetClampVoice(v,wet-1,-1)==end,"encoder steps between list and dry/wet");
   for(unsigned o=0;o<6;o++)check(getModTargetIdxFromGapIdx(o,getModTargetGapIndex(wet))==236+o,"dry/wet survives a voice change");
  }
- check(modTargetFromFraction(3,0)==0&&modTargetFromFraction(3,1)==239&&modTargetFromFraction(3,0.96f)==235,"pot reaches extension");
+ check(modTargetFromFraction(3,0)==0&&modTargetFromFraction(3,1)==MOD_TARGET_INSERT+4&&modTargetFromFraction(3,0.87f)==235,"pot reaches extension");
  for(unsigned i=229;i<=235;i++){
   unsigned id=modTargets[i].param;
   parameterArray[id].ptr=&activeParameters[id];

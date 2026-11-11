@@ -14,6 +14,7 @@ the [changelog](../CHANGELOG.md); for developer build records, read the
 5. [MIDI and clock](chapters/05_midi_and_clock.md)
 6. [Firmware update](chapters/06_firmware_update.md)
 7. [Performance controls](chapters/07_performance.md)
+8. [Cheat sheet: button combinations](chapters/08_cheat_sheet.md)
 
 The source code establishes which features exist, but exact button sequences
 should be verified on an LXR V2 before they are added here. This manual

@@ -22,6 +22,7 @@ while 'switch(msg.data1)' in body:
     body=body[:begin]+body[pos:]
 code=r'''
 #include <stdint.h>
+#define FREEZE_MARK(f,v) ((void)0)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

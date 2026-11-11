@@ -61,18 +61,20 @@ void usb_stop()
 //-------------------------------------------------------------------------------
 void usb_tick()
 {
-	static volatile uint8_t busy;
-	if(busy) return;
-	busy = 1;
 	usb_flushMidi();
-	busy = 0;
 }
 //-------------------------------------------------------------------------------
 void usb_processMidiIn(uint8_t max)
 {
 	static volatile uint8_t busy;
-	if(busy) return;
+	const uint32_t irq = __get_PRIMASK();
+	__disable_irq();
+	if(busy) {
+		__set_PRIMASK(irq);
+		return;
+	}
 	busy = 1;
+	__set_PRIMASK(irq);
 	MidiMsg msg;
 	while(max-- && usb_getMidi(&msg)) midiParser_parseMidiMessage(msg);
 	busy = 0;
@@ -102,77 +104,60 @@ void usb_start()
 }
 #endif
 //-------------------------------------------------------------------------------
-/*
- * writes a byte to the Usb Tx buffer
- * Will be send out by the usb_flushMidi() call
- */
-void usb_sendByte(uint8_t byte)
+/* Publish complete USB-MIDI events from the main loop and timer ISR. */
+#define USB_TX_EVENTS (TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS / sizeof(MidiDataUsb))
+static MidiDataUsb txQueue[USB_TX_EVENTS];
+static unsigned txRead, txWrite;
+
+void usb_resetMidiQueues(void)
 {
-
-	*usb_MidiInWrPtr++ = byte;
-	if(usb_MidiInWrPtr >= (usb_MidiInBuff+(TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS)))
-	{
-		usb_MidiInWrPtr = usb_MidiInBuff;
-	}
-
+	const uint32_t irq = __get_PRIMASK();
+	__disable_irq();
+	txRead = txWrite = 0;
+	usb_MidiMessagesRead = usb_MidiMessagesWrite = 0;
+	__set_PRIMASK(irq);
 }
-//------------------------------------------------------------------------------
-/*
- * flush FIFO and send out next block of messages stored in the usb_MidiInBuff
- * called periodically by usb_tick()
- * TODO:  maybe there is a better way to call this automatically by the USB driver when it is ready to TX some more data?
- * probably using the USBD_CDC_TransmitPacket() callback
- */
-void usb_flushMidi()
-{
 
-	//TODO: is this right???
-	const uint8_t len = usb_MidiInWrPtr - usb_MidiInRdPtr;
-	if(len!=0)
-	//if((len != 0) && (USB_OTG_dev.dev.device_status != USB_OTG_SUSPENDED))
-	{
-
-	    /* Flush a Tx FIFO */
-	//    USB_FlushTxFifo (USB_OTG_FS, 15 ); //TODO is this needed? guess not
-	    // transmit next package
-	    // TODO clean up the USB-MIDI transmit buffer handling
-	    CDC_Transmit_FS(usb_MidiInRdPtr, len);
-
-		usb_MidiInRdPtr += len;
-		if(usb_MidiInRdPtr >= (usb_MidiInBuff+(TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS)))
-		{
-			usb_MidiInRdPtr = usb_MidiInBuff;
-		}
-		//usb_MidiInWrPtr=usb_MidiInRdPtr;
-	}
-
-}
-//------------------------------------------------------------------------------
 void usb_sendMidi(MidiMsg msg)
 {
-	//MIDI byte[0] = 4 bits cable number + 4 bits event type code
-	usb_sendByte(msg.status>>4);
-
-	//then the 3 midi message bytes
-	//USB MIDI msg has to be ALWAYS 4 bytes long
-	//even if it is just a single clock byte
-	usb_sendByte(msg.status);
-	usb_sendByte(msg.data1);
-	usb_sendByte(msg.data2);
+	const MidiDataUsb event = {msg.status >> 4, msg.status, msg.data1, msg.data2};
+	const uint32_t irq = __get_PRIMASK();
+	__disable_irq();
+	const unsigned next = (txWrite + 1u) % USB_TX_EVENTS;
+	if(next != txRead) {
+		txQueue[txWrite] = event;
+		txWrite = next;
+	}
+	__set_PRIMASK(irq);
 }
-//-------------------------------------------------------------------------------
+
+void usb_flushMidi(void)
+{
+	const uint32_t irq = __get_PRIMASK();
+	__disable_irq();
+	if(txRead != txWrite) {
+		unsigned count = (txRead < txWrite ? txWrite : USB_TX_EVENTS) - txRead;
+		const unsigned maxEvents = CDC_DATA_FS_IN_PACKET_SIZE / sizeof(MidiDataUsb);
+		if(count > maxEvents) count = maxEvents;
+		/* CDC copies accepted events into its dedicated in-flight buffer. */
+		if(CDC_Transmit_FS((uint8_t *)&txQueue[txRead], count * sizeof(MidiDataUsb)) == USBD_OK)
+			txRead = (txRead + count) % USB_TX_EVENTS;
+	}
+	__set_PRIMASK(irq);
+}
+
 uint8_t usb_getMidi(MidiMsg* msg)
 {
-	if(usb_MidiMessagesRead != usb_MidiMessagesWrite)
-	{
-		//we have unprocessed messages in the queue
+	const uint32_t irq = __get_PRIMASK();
+	__disable_irq();
+	if(usb_MidiMessagesRead != usb_MidiMessagesWrite) {
 		*msg = usb_MidiMessages[usb_MidiMessagesRead];
-
-		usb_MidiMessagesRead++;
-		usb_MidiMessagesRead &= USB_MIDI_INPUT_BUFFER_MASK;
-
-		return 1; //return OK
+		usb_MidiMessagesRead = (usb_MidiMessagesRead + 1u) & USB_MIDI_INPUT_BUFFER_MASK;
+		USBD_CDC_ResumeMidiRx();
+		__set_PRIMASK(irq);
+		return 1;
 	}
-return 0; //no messages
+	__set_PRIMASK(irq);
+	return 0; //no messages
 }
 

@@ -151,14 +151,14 @@ double slopeEg2_calcTime(uint8_t data2, double amount)
 
 }
 //--------------------------------------------------
-IN_ITCM_RAM void slopeEg2_setAttack(SlopeEg2* eg, uint8_t data2, uint8_t isSync)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void slopeEg2_setAttack(SlopeEg2* eg, uint8_t data2, uint8_t isSync)
 {
 	eg->attack = slopeEg2_calcTime(data2,TIME_K_ATTACK);
 	if(isSync)
 		eg->attack /= 16;
 };
 //--------------------------------------------------
-IN_ITCM_RAM void slopeEg2_setDecay(SlopeEg2* eg, uint8_t data2, uint8_t isSync)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void slopeEg2_setDecay(SlopeEg2* eg, uint8_t data2, uint8_t isSync)
 {
 	eg->decay = slopeEg2_calcTime(data2,TIME_K_DECAY);
 	if(isSync)
@@ -170,7 +170,7 @@ double slopeEg2_calcDecay(uint8_t data2)
 	return slopeEg2_calcTime(data2,TIME_K_DECAY);
 };
 //--------------------------------------------------
-IN_ITCM_RAM void slopeEg2_setSlope(SlopeEg2* eg, uint8_t data2)
+/*IN_ITCM_RAM 0.2.103 control rate, flash*/ void slopeEg2_setSlope(SlopeEg2* eg, uint8_t data2)
 {
 	const double amount 	 	= ((data2/127.f)-0.5f)*1.999f;
 	//negate the amount

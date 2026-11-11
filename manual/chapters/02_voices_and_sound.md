@@ -128,6 +128,13 @@ Their waveforms 6 and up become 38 and up, the crash 5 becomes 54, and
 coarse and fine move so each sample plays at its LXR1 pitch (about 31
 semitones up). The snare layer keeps its LXR2 pitch.
 
+The LXR1 velocity and LFO modulation only lower a value from its set value;
+the LXR2 moves it up and down. From 0.2.64 the import sets the base value to
+the middle of the LXR1 range and halves the depth, so the sound swings over
+the same span. Imported kits therefore show other base values than on the
+LXR1, and pitch modulation is only close, because the LXR1 scales the
+frequency and the LXR2 counts semitones.
+
 In 0.1.16 the same Snare page adds `slw` (second oscillator waveform),
 `sla` (layer amount), `slf` (frequency ratio) and `slm` (Mix/FM/Ring).
 From 0.1.19 the Snare layout follows Mutador: OSC first shows Coarse,

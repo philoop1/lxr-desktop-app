@@ -14,6 +14,7 @@
 #include "Soundengine/globals.h"
 #include "main.h"
 #include "Soundengine/saveDiag.h"
+#include "Soundengine/AudioCodecManager.h"
 
 DMA_InitTypeDef DMA_InitStructure;
 DMA_InitTypeDef DMA_InitStructure2;
@@ -136,6 +137,7 @@ IN_ITCM_RAM void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
 #if SWITCH_FLAG
 		   //now start next sample block calculation
 			 if(bCurrentSampleValid != SAMPLE_VALID) saveDiag_late();
+			 audioCodec_blockRequested(); // 0.2.98 CPU value and late blocks
 			 bCurrentSampleValid = 1-(dmaPtr&0x1);
 #if CALC_SAMPLES_IN_INTERRUPT
 			 __HAL_TIM_SetCounter(&htim2, 1450);

@@ -73,10 +73,14 @@ uint8_t midiParser_originalCcValues[255];
 static const uint8_t midiParser_decayParams[7]={VELOD1,VELOD2,VELOD3,VELOD4,VELOD5,VELOD6,VELOD6_OPEN};
 static uint8_t midiParser_globalDecay=63;
 static uint8_t midiParser_modVelocity[7],midiParser_modVelocityValid,midiParser_lastHatTrack=5;
+static uint8_t midiParser_velocityPending[7];
+uint8_t midiParser_velocityTick(void);
+#define ACC(p,v) do{midiParser_setAccentParameter(p,v);while(midiParser_velocityTick());}while(0)
 static const uint8_t midiParser_filterParams[6]={FILTER_FREQ_DRUM1,FILTER_FREQ_DRUM2,FILTER_FREQ_DRUM3,SNARE_FILTER_F,CYM_FIL_FREQ,HAT_FILTER_F};
 static const uint8_t midiParser_slopeParams[6]={VOL_SLOPE1,VOL_SLOPE2,VOL_SLOPE3,EG_SNARE1_SLOPE,CYM_SLOPE,VOL_SLOPE6};
 static void midiParser_refreshVelocityVoice(uint8_t track);
 uint8_t midiParser_applyPerformanceVelocity(uint8_t voice,uint8_t velocity,uint8_t note);
+void fenv_trigger(uint8_t voice,uint8_t vel){(void)voice;(void)vel;}
 static PerfGroove seq_groove;
 static float seq_shuffle;
 void trigger_setGrooveClock(uint8_t enabled){(void)enabled;}
@@ -156,6 +160,11 @@ void seq_recordAutomation(uint8_t t,uint8_t c,uint8_t v) {recordedTrack=t;record
 void seq_setNextPattern(uint8_t p) { if(p<64) pattern=p; }
 int seq_getExtSync(void) { return extSync; }
 uint8_t seq_isRunning(void) { return runState; }
+uint8_t drum_highDamp;
+void mixer_setIntSend(uint8_t v, uint8_t x) { (void)v; (void)x; }
+void mixer_setPerformanceGateEnabled(uint8_t e) { (void)e; }
+void seq_storeIntSend(uint8_t v, uint8_t x) { (void)v; (void)x; }
+void masterComp_set(uint8_t v, uint8_t x) { (void)v; (void)x; }
 void seq_setHumanize(uint8_t lane, uint8_t amount) { (void)lane; (void)amount; }
 void seq_sync(void) {}
 void sync_tickAtCycles(uint32_t cycles) {(void)cycles;}
@@ -392,9 +401,9 @@ int main(void) {
     for(v=0;v<3;v++)voiceArray[v].oscVolEg=60;
     snareVoice.oscVolEg=cymbalVoice.oscVolEg=60;hatVoice.decayClosed=hatVoice.decayOpen=60;
     for(v=0;v<7;v++)midiParser_applyPerformanceVelocity((uint8_t)v,127,60);
-    midiParser_setAccentParameter(PAR_PERF_VELO_DECAY,127);
+    ACC(PAR_PERF_VELO_DECAY,127);
     check(voiceArray[0].oscVolEg==60,"VLV neutral disables destinations",0,0,0);
-    midiParser_setAccentParameter(PAR_PERF_VELO_LEVEL,127);
+    ACC(PAR_PERF_VELO_LEVEL,127);
     check(voiceArray[0].oscVolEg==127&&hatVoice.decayOpen==127,"VDC full positive",0,0,0);
     applied[FILTER_FREQ_DRUM1]=77; midiParser_applyPerformanceVelocity(0,127,60);
     check(applied[FILTER_FREQ_DRUM1]==77,"neutral accent target preserves step automation",0,0,0);
@@ -402,24 +411,24 @@ int main(void) {
     check(voiceArray[0].oscVolEg==0,"GDC follows velocity decay layer",0,0,0);
     midiParser_setGlobalDecay(63);
     for(uint16_t p=PAR_PERF_VELO_SAMPLE_RATE;p<=PAR_PERF_VELO_DRIVE;p++)
-        midiParser_setAccentParameter(p,127);
+        ACC(p,127);
     check(applied[VOICE_DECIMATION1]==127&&applied[FILTER_FREQ_DRUM1]==127&&
         applied[VOL_SLOPE1]==127&&applied[MODAMNT1]==127&&applied[128+CC2_FILTER_DRIVE_1]==127,
         "all accent destinations enabled",0,0,0);
     check(midiParser_applyPerformanceVelocity(0,127,60)==127,"VCO note offset clamp",0,0,0);
-    midiParser_setAccentParameter(PAR_PERF_VELO_LEVEL,0);
+    ACC(PAR_PERF_VELO_LEVEL,0);
     check(applied[VOICE_DECIMATION1]==0&&voiceArray[0].oscVolEg==0,
         "negative VLV inverts destination depth",0,0,0);
-    midiParser_setAccentParameter(PAR_PERF_VELO_LEVEL,63);
+    ACC(PAR_PERF_VELO_LEVEL,63);
     check(applied[VOICE_DECIMATION1]==60&&applied[FILTER_FREQ_DRUM1]==60&&
         applied[128+CC2_FILTER_DRIVE_1]==60&&voiceArray[0].oscVolEg==60,
         "turning VLV off restores raw kit values",0,0,0);
     for(v=0;v<255;v++)check(midiParser_originalCcValues[v]==60,
         "accent preserves all source cache values",v,0,0);
     // The last triggered hat owns shared tone controls; amp decays stay separate.
-    midiParser_setAccentParameter(PAR_PERF_VELO_DECAY,127);
-    midiParser_setAccentParameter(PAR_PERF_VELO_SAMPLE_RATE,127);
-    midiParser_setAccentParameter(PAR_PERF_VELO_LEVEL,127);
+    ACC(PAR_PERF_VELO_DECAY,127);
+    ACC(PAR_PERF_VELO_SAMPLE_RATE,127);
+    ACC(PAR_PERF_VELO_LEVEL,127);
     midiParser_applyPerformanceVelocity(5,0,60);midiParser_applyPerformanceVelocity(6,127,60);
     check(hatVoice.decayClosed==60&&hatVoice.decayOpen==127&&applied[VOICE_DECIMATION6]==127,
         "independent hat decay/shared last-trigger rate",0,0,0);
@@ -544,7 +553,7 @@ functions += '\n'+function('midiParser_applyVelocityDepth',ref_parser).replace(
     'midiParser_applyVelocityDepth','ref_midiParser_applyVelocityDepth')
 functions += '\n'+(ROOT/'Core/Src/Soundengine/Sequencer/PerformanceSteps.c').read_text()
 functions += '\n'+(ROOT/'Core/Src/Soundengine/Sequencer/PerformanceScale.c').read_text()
-functions += '\n'+(ROOT/'Core/Src/menu/PerformanceControls.c').read_text()
+functions += '\n'+(ROOT/'Core/Src/menu/PerformanceControls.c').read_text()+'\n/* 0.2.79 send page snd */\nvoid FxBus_selectType(uint8_t t){(void)t;}\nuint8_t FxBus_sendType(uint8_t i){return i;}\nuint8_t InsertFx_setValue(uint8_t i,uint8_t v){(void)i;return v;}\n'
 functions += '\n'+(ROOT/'Core/Src/Soundengine/Sequencer/PerformanceGroove.c').read_text()
 functions += '\n'+(ROOT/'Core/Src/Soundengine/Sequencer/PerformanceDelay.c').read_text()
 seq_source=stripped('Core/Src/Soundengine/Sequencer/sequencer.c')
@@ -558,7 +567,7 @@ functions += '\n' + '\n'.join(function(n) for n in (
     'midiParser_decayDepth', 'midiParser_applyGlobalDecayParam', 'midiParser_setGlobalDecay',
     'midiParser_setStepPerformance',
     'midiParser_velocityLive','midiParser_velocityCc','midiParser_applyVelocityDestination','midiParser_refreshVelocityVoice',
-    'midiParser_refreshVelocityParameter','midiParser_setAccentParameter',
+    'midiParser_refreshVelocityParameter','midiParser_velocityTick','midiParser_setAccentParameter',
     'midiParser_applyPerformanceVelocity','midiParser_setDelayParameter','midiParser_needsOwnPch','midiParser_scaleCc','midiParser_menuCc','midiParser_extendedPerformanceCc',
     'midiParser_recalcGlobalPitch', 'midiParser_setGlobalPitch', 'midiParser_setPitchBendRange',
     'midiParser_setControlNotePitch', 'midiParser_applyVoicePitchBend',

@@ -14,6 +14,7 @@
 
 
 #include "Soundengine/DSPAudio/HiHat.h"
+#include "Soundengine/DSPAudio/FilterEnv.h" // 0.2.93
 #include "Soundengine/DSPAudio/squareRootLut.h"
 #include "Soundengine/DSPAudio/modulationNode.h"
 #include "Soundengine/TriggerOut.h"
@@ -146,6 +147,7 @@ IN_ITCM_RAM void HiHat_calcAsync( )
 {
 	//calc the osc  vol eg
 	hatVoice.egValueOscVol = slopeEg2_calc(&hatVoice.oscVolEg);
+	if(fenv_on[5]) fenv_tick(5, hatVoice.egValueOscVol); // 0.2.93 filter env
 
 	//turn off trigger signal if trigger gate mode is on and volume == 0
 	/*
@@ -179,8 +181,29 @@ IN_ITCM_RAM void HiHat_calcAsync( )
 
 }
 //---------------------------------------------------
+/* 0.2.102 silent-voice sleep (Mutador): EG at 0 gives 0 in every sample.
+ * Skip the work, keep the phases and the fader smoothing moving, clear the
+ * filter once. */
+static uint8_t hat_sleeping;
 void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 {
+	const float faderTarget = adc_getFaderVolume(5);
+	if(hatVoice.egValueOscVol == 0.f)
+	{
+		if(!hat_sleeping)
+		{
+			SVF_reset(&hatVoice.filter);
+			hat_sleeping = 1;
+		}
+		hatVoice.osc.phase += hatVoice.osc.phaseInc * size;
+		hatVoice.modOsc.phase += hatVoice.modOsc.phaseInc * size;
+		hatVoice.modOsc2.phase += hatVoice.modOsc2.phaseInc * size;
+		for(uint8_t i=0;i<size;i++) calcOnePole(&hatVoice.FaderVolumeFilter, faderTarget);
+		hatVoice.combinedVolume = 0.f;
+		bufferTool_clearBuffer(buf,size);
+		return;
+	}
+	hat_sleeping = 0;
 	//2 buffers for the mod oscs
 	int16_t mod1[size],mod2[size];
 	//calc next mod osc samples, scaled with mod amount
@@ -227,7 +250,7 @@ void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  hatVoice.combinedVolume * calcOnePole( &hatVoice.FaderVolumeFilter, adc_getFaderVolume(5));
+				buf[j] *=  hatVoice.combinedVolume * calcOnePole( &hatVoice.FaderVolumeFilter, faderTarget);
 			}
 #else
 		for(j=0;j<size;j++)
@@ -255,7 +278,7 @@ void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  hatVoice.combinedVolume * calcOnePole( &hatVoice.FaderVolumeFilter, adc_getFaderVolume(5));
+				buf[j] *=  hatVoice.combinedVolume * calcOnePole( &hatVoice.FaderVolumeFilter, faderTarget);
 			}
 #else
 		for(j=0;j<size;j++)
