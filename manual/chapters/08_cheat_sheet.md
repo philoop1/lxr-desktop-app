@@ -21,7 +21,7 @@ unless another time is given.
 | SHIFT + Step 6 | Internal FX sends `i1`-`i6` (0.2.68); stored per pattern from 0.2.70 |
 | SHIFT + Step 10 | Song mode |
 | SHIFT + Step 12 | CONFIG: Global and MIDI pages |
-| SHIFT + Step 13 | Reload: the current pattern and the kit return to their saved state |
+| SHIFT + Step 13 | Reload: the current kit returns to its state in the project (last save or load; unsaved sound edits are lost). The current pattern only restarts (at its next start while running); step edits stay. Other kits, patterns and the project are not reloaded |
 | SHIFT + Step 14 | Last step: set the track length with a Step button; press again for all tracks |
 | SHIFT + Step 15 | FX page of the selected FX type (off, dst, rng, cmp, del, tpe, rev) |
 | SHIFT + Step 16 | Pattern selection display |

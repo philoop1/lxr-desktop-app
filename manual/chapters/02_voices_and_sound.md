@@ -191,6 +191,49 @@ tape saturation and keep ringing (from 0.2.34).
 [Previous: Device and firmware](01_device_and_firmware.md) ·
 [Next: Sequencer and patterns](03_sequencer_and_patterns.md)
 
+## Effects and CPU load
+
+Mutador adds many sound tools on top of the original firmware: an insert
+effect on every voice (Dist, Ring, Comp, Phaser, Flanger, Phaser2), the send
+effects, the master compressor, filter envelopes, glide, samples and
+wavetables, plus many modulation targets. **They are a toolbox, not meant to
+be switched on all at the same time.**
+
+All of them are calculated by the same processor, block by block, and every
+block has a fixed time to be ready. Each insert and each send effect adds to
+that time. When too many run at once the block is not ready in time and you
+hear clicks or short dropouts. A few inserts on the voices that need them,
+together with the send effects, are fine; an insert on every voice plus
+reverb, delay and the master compressor can be too much, depending on the
+patterns and the modulation.
+
+To stay on the safe side:
+
+- Use inserts where they make a difference, not on every voice. An insert
+  only runs while a voice is routed to it; a voice on a normal output costs
+  nothing for inserts.
+- **Warning on the display (d firmware):** the firmware on the ready-made
+  card is a diagnosis build (its name ends in `d`, for example
+  `Mutador0.2.107d`). It shows a note for 6 seconds as soon as an audio block
+  needs 95 % of its time, before you hear clicks. The note starts with
+  `Sp95` (the peak in percent) or with `!` and a count when blocks were
+  already late:
+
+  ```
+  Sp95 W12 S08 R75
+  V52 M23 L-11 S..
+  ```
+
+  When it appears, you are at the limit: take an effect away before adding
+  the next one. Normal builds without `d` show no note.
+- **Watch the CPU value:** the Global page shows `cpu` (see
+  [Performance](07_performance.md)), the peak block time in percent of the
+  time available, updated every half second. The closer it gets to 100, the
+  closer you are to clicks. Check it after adding inserts or send effects.
+
+If you hear clicks or the note keeps coming, switch off the insert or send
+effect you added last, or move it to a voice that plays less often.
+
 ## Stray and Glide LFOs (0.1.22)
 
 The LFO Wave menu adds `str` and `gld` after the eight existing shapes.

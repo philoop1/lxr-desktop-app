@@ -15,6 +15,7 @@ the [changelog](../CHANGELOG.md); for developer build records, read the
 6. [Firmware update](chapters/06_firmware_update.md)
 7. [Performance controls](chapters/07_performance.md)
 8. [Cheat sheet: button combinations](chapters/08_cheat_sheet.md)
+9. [Making your own samples and wavetables](chapters/09_samples_and_wavetables.md)
 
 The source code establishes which features exist, but exact button sequences
 should be verified on an LXR V2 before they are added here. This manual
