@@ -48,10 +48,10 @@ void Flanger_setDepth(Flanger *f, float v)
 {
 	f->depth = fl_clamp01(v);
 }
-/* longest delay 0.25 .. 25 ms (0.2.86, was 16 ms): 0.25 * 100^v */
+/* longest delay 0.25 .. 50 ms (0.2.108, was 25 ms): 0.25 * 200^v */
 void Flanger_setTime(Flanger *f, float v)
 {
-	const float ms = 0.25f * exp2f(fl_clamp01(v) * 6.643856f);
+	const float ms = 0.25f * exp2f(fl_clamp01(v) * 7.643856f);
 	f->time = ms * 0.001f * FLANGER_FS;
 }
 /* 0 = -0.9, 0.5 = none, 1 = +0.9 */

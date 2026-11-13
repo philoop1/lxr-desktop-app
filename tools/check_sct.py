@@ -59,7 +59,7 @@ static void playback(unsigned rate,unsigned mode,const char *expected)
 /* Dropping a stored step and restoring its slot gives the source rhythm back. */
 static void inverse(unsigned mode)
 {
- static const uint8_t gapSlot[4]={0,3,1,2};
+ static const uint8_t gapSlot[4]={0,2,1,3};
  prepare(16,mode);
  for(unsigned step=0;step<4;step++)
   check(perf_scaleAllowed((uint8_t)step)==(step!=gapSlot[mode]),"3x drops the 4x gap slot",16,mode);
@@ -77,9 +77,9 @@ int main(void)
  }
  for(unsigned r=0;r<8;r++) {
   if(rates[r]%3u) {
-   playback(rates[r],1,"123");playback(rates[r],2,"134");playback(rates[r],3,"124");
+   playback(rates[r],1,"124");playback(rates[r],2,"134");playback(rates[r],3,"123");
   } else {
-   playback(rates[r],1,"123-");playback(rates[r],2,"1-23");playback(rates[r],3,"12-3");
+   playback(rates[r],1,"12-3");playback(rates[r],2,"1-23");playback(rates[r],3,"123-");
   }
  }
  for(unsigned mode=1;mode<4;mode++)inverse(mode);

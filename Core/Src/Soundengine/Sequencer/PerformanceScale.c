@@ -11,7 +11,8 @@ static uint8_t active=16,pending,requested=16;
 static int8_t speed,requestedSpeed;
 static uint8_t transform,transformRequested,transformPending,slot,gap;
 /* Step index dropped by 3a/b/c and slot left empty by 4a/b/c, indexed by sct. */
-static const uint8_t transformOffset[4]={0,3,1,2};
+/* Same letters as LXR1 Mutador 12a/12b/12c: a = 3rd, b = 2nd, c = 4th. */
+static const uint8_t transformOffset[4]={0,2,1,3};
 uint8_t perf_scaleIsTernary(void){return (uint8_t)(!(active%3u));}
 static uint8_t perf_scaleDropping(void){return (uint8_t)(transform && !perf_scaleIsTernary());}
 static uint8_t perf_scaleGapping(void){return (uint8_t)(transform && perf_scaleIsTernary());}

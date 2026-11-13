@@ -83,19 +83,20 @@ int main(void){
    /* every value is audible-safe: random settings on noise stay finite */
    for(int k=0;k<3000;k++){InsertFx_setValue((uint8_t)(k%INS_VALUE_COUNT),(uint8_t)(noise()&255));int16_t b[N];
      for(int i=0;i<N;i++)b[i]=noise();InsertFx_process((uint8_t)(k%6),(uint8_t)((k/7)%INSERT_FX_COUNT),b,N);check(rms(b)==rms(b),"random settings finite");}}
-  /* 0.2.82 flanger: depth 0, time 127 = 25 ms -> an impulse comes back after 1102.5 samples, mix 1 = half each */
+  /* 0.2.82 flanger: depth 0, time 127 = 50 ms (0.2.108) -> an impulse comes back after 2205 samples, mix 1 = half each */
   {InsertFx_init();InsertFx_setValue(INS_FLN_DEPTH,0);InsertFx_setValue(INS_FLN_TIME,127);InsertFx_setValue(INS_FLN_FEEDBACK,63);
    InsertFx_setValue(INS_FLN_MIX,127);
-   static int16_t y[2048];memset(y,0,sizeof y);y[0]=20000;
-   for(int k=0;k<2048/N;k++)InsertFx_process(0,INSERT_FX_FLANGER,y+k*N,N);
-   check(abs(y[0]-10000)<2,"dry half");int peak=0,at=0;for(int i=1;i<2048;i++)if(abs(y[i])>peak){peak=abs(y[i]);at=i;}
-   check(at==1102||at==1103,"25 ms delay");check(abs(y[1102])+abs(y[1103])>9000&&abs(y[1102])+abs(y[1103])<10100,"delayed half, interpolated");
-   for(int i=1;i<1097;i++)check(y[i]==0,"nothing before the delay");}
+   static int16_t y[4096];memset(y,0,sizeof y);y[0]=20000;
+   for(int k=0;k<4096/N;k++)InsertFx_process(0,INSERT_FX_FLANGER,y+k*N,N);
+   check(abs(y[0]-10000)<2,"dry half");int peak=0,at=0;for(int i=1;i<4096;i++)if(abs(y[i])>peak){peak=abs(y[i]);at=i;}
+   check(at>=2204&&at<=2206,"50 ms delay");check(abs(y[at])>9000&&abs(y[at-1])+abs(y[at])+abs(y[at+1])<10100,"delayed half");
+   for(int i=1;i<2200;i++)check(y[i]==0,"nothing before the delay");
+   check(FLANGER_BUFFER>=(unsigned)(FLANGER_MAX_MS*0.001f*FLANGER_FS)+3u,"buffer holds the longest time");}
   /* time 0 = 0.25 ms = 11 samples */
   {InsertFx_init();InsertFx_setValue(INS_FLN_DEPTH,0);InsertFx_setValue(INS_FLN_TIME,0);InsertFx_setValue(INS_FLN_FEEDBACK,63);
    int16_t y[64]={0};y[0]=20000;InsertFx_process(1,INSERT_FX_FLANGER,y,32);InsertFx_process(1,INSERT_FX_FLANGER,y+32,32);
    int at=0,peak=0;for(int i=1;i<64;i++)if(abs(y[i])>peak){peak=abs(y[i]);at=i;}check(at==11||at==12,"0.25 ms delay");}
-  /* flanger feedback: full positive and negative stays finite and bounded, the sweep never reads past 25 ms */
+  /* flanger feedback: full positive and negative stays finite and bounded, the sweep never reads past 50 ms */
   for(int fb=0;fb<128;fb+=127){InsertFx_init();InsertFx_setValue(INS_FLN_FEEDBACK,(uint8_t)fb);InsertFx_setValue(INS_FLN_RATE,127);
    InsertFx_setValue(INS_FLN_DEPTH,127);InsertFx_setValue(INS_FLN_TIME,127);
    for(int k=0;k<20000;k++){int16_t b[N];for(int i=0;i<N;i++)b[i]=noise();InsertFx_process(2,INSERT_FX_FLANGER,b,N);check(rms(b)==rms(b),"fln finite");}}

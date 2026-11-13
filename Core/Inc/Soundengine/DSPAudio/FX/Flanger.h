@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Flanger.h - Mutador 0.2.82 flanger "fln" (own code), mono, in place.
  *
- * A delay of up to 16 ms read with linear interpolation, swept by a triangle
+ * A delay of up to 50 ms (0.2.108) read with linear interpolation, swept by a triangle
  * LFO from the set time down towards zero, with feedback (positive or
  * negative). The output is dry plus delayed, so full mix gives the deepest
  * comb notches.
@@ -12,9 +12,9 @@
 #include <stdint.h>
 
 #define FLANGER_FS 44100.f
-#define FLANGER_MAX_MS 25.f
-/* 0.2.86: 25 ms = 1102.5 samples, plus room for the interpolation */
-#define FLANGER_BUFFER 1110u
+#define FLANGER_MAX_MS 50.f
+/* 0.2.108: 50 ms = 2205 samples, plus room for the interpolation (was 25 ms) */
+#define FLANGER_BUFFER 2215u
 #define FLANGER_FEEDBACK_MAX 0.9f
 
 typedef struct FlangerStruct

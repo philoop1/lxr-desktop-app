@@ -199,6 +199,9 @@ effects, the master compressor, filter envelopes, glide, samples and
 wavetables, plus many modulation targets. **They are a toolbox, not meant to
 be switched on all at the same time.**
 
+The Flanger's time reaches 50 ms from 0.2.109 (was 25 ms): low settings
+flange, the top of the knob gives chorus, doubling and a short slapback.
+
 All of them are calculated by the same processor, block by block, and every
 block has a fixed time to be ready. Each insert and each send effect adds to
 that time. When too many run at once the block is not ready in time and you
@@ -214,7 +217,7 @@ To stay on the safe side:
   nothing for inserts.
 - **Warning on the display (d firmware):** the firmware on the ready-made
   card is a diagnosis build (its name ends in `d`, for example
-  `Mutador0.2.107d`). It shows a note for 6 seconds as soon as an audio block
+  `Mutador0.2.109d`). It shows a note for 6 seconds as soon as an audio block
   needs 95 % of its time, before you hear clicks. The note starts with
   `Sp95` (the peak in percent) or with `!` and a count when blocks were
   already late:

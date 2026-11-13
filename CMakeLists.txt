@@ -27,7 +27,7 @@ project(LXR_V2_STM32F765
 
 # Keep the upstream base version while giving experimental fork images a
 # distinct update filename. Only one LXR*.img should be copied to an SD card.
-set(LXR_MUTADOR_VERSION "0.2.107")
+set(LXR_MUTADOR_VERSION "0.2.109")
 option(LXR_FREEZE_DIAG "Mutador freeze diagnosis build (watchdog, shows the freeze location at boot)" OFF)
 if(LXR_FREEZE_DIAG)
     string(APPEND LXR_MUTADOR_VERSION "d")

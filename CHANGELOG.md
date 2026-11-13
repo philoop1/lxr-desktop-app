@@ -6,6 +6,15 @@ are recorded here. The upstream project keeps its own Git history.
 
 ## Unreleased
 
+### Mutador 0.2.109 (hardware test pending)
+
+- Flanger insert (`fln`): the longest time goes to 50 ms (was 25 ms). The knob keeps its curve, so the short times stay as fine as before; at the top the flanger turns into chorus, doubling and a short slapback. Each voice's flanger line doubles, which takes about 13 KB more RAM (now 98 % used; the stack is in DTCM).
+- `sct` a/b/c now use the LXR1 Mutador letters: `3a` leaves out step 3, `3b` step 2, `3c` step 4; `4a/4b/4c` leave slot 3, 2 or 4 empty. Each pair stays an exact inverse and matches LXR1 `12a/12b/12c`. `a` and `c` swap their old meaning, `b` is unchanged; Pch CC 88-91 keep their positions.
+
+### Mutador 0.2.108 (withdrawn)
+
+- Tried a reverse delay `rvd` as the fourth send effect (tempo-synced like `tpe`). It loaded the CPU too much and was removed again in 0.2.109; `snd` stays `off/del/tpe/rev`.
+
 ### Mutador 0.2.68 (hardware test pending)
 
 - Internal FX sends: SHIFT + Step 6 opens `i1` to `i6`, one send per voice (0..127) into the internal FX bus, after the VCA and in parallel to the voice output, like an aux send to the delay. Set the FX `d/w` fully wet to hear only the effect. A voice whose output is `FX` is not sent twice; in `fxs=cfl` its dry signal goes to St1 and the internal send feeds the bus. The sends are live and not saved.
